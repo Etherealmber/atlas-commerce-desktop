@@ -8,7 +8,6 @@ name: Rust debug loop
 on:
   push:
     branches: [arena/fe5868a7-atlas-commerce-desktop]
-    paths: [.github/workflows/rust-debug.yml]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +15,7 @@ permissions:
 
 concurrency:
   group: rust-debug
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   diagnose:
