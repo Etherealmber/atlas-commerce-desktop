@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # rust-toolchain.toml pins the exact toolchain; the action honours it.
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -58,7 +58,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: GUI build dependencies
         if: runner.os == 'Linux'
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Generate the lockfile the scanner reads
         run: cargo generate-lockfile
       # One explicit input: the generated Cargo.lock. The action's default
