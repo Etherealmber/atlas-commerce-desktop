@@ -1,0 +1,68 @@
+name: Rust debug loop
+
+# Temporary diagnostics harness: runs the Rust toolchain where it exists
+# (GitHub Actions), pushes rustfmt fixes back to the triggering branch and
+# writes the compiler output to a branch readable through the API. Delete
+# once CI is green.
+
+on:
+  workflow_dispatch:
+    inputs:
+      push_fmt:
+        description: "Commit and push rustfmt changes to this branch"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: GUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev
+      - name: Resolve dependencies
+        run: cargo fetch
+      - name: Format
+        run: cargo fmt --all
+      - name: Push formatting fixes
+        if: inputs.push_fmt
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "style: rustfmt"
+            git push
+          else
+            echo "already formatted"
+          fi
+      - name: Compile and test (captured)
+        run: |
+          set +e
+          cargo test --workspace --no-run > compile.log 2>&1
+          echo "EXIT:$?" >> compile.log
+          cargo test --workspace >> test.log 2>&1
+          echo "EXIT:$?" >> test.log
+          cargo clippy --all-targets --all-features -- -D warnings > clippy.log 2>&1
+          echo "EXIT:$?" >> clippy.log
+          cargo doc --all-features --no-deps >> doc.log 2>&1
+          echo "EXIT:$?" >> doc.log
+          true
+      - name: Publish diagnostics branch
+        run: |
+          git checkout -b ci-debug-log
+          git add compile.log test.log clippy.log doc.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: rust diagnostics"
+          git push --force origin ci-debug-log

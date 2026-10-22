@@ -85,9 +85,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Generate the lockfile the scanner reads
         run: cargo generate-lockfile
+      # One explicit input: the generated Cargo.lock. The action's default
+      # shape pairs --recursive with a positional path; passing the flag
+      # alone errors, and a full-tree scan would also see the reference
+      # checkouts in CI.
       - name: OSV scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.0.0
+        uses: google/osv-scanner-action/osv-scanner-action@v2.7.0
         with:
           scan-args: |-
             --lockfile=Cargo.lock
-            --recursive
