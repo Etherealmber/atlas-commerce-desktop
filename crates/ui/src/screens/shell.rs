@@ -56,7 +56,7 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
     }
     let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
 
-    ui.allocate_ui_at_rect(
+    widgets::overlay_at(ui, 
         egui::Rect::from_min_size(
             rect.min + vec2(footprint.left.max(12.0), 0.0),
             vec2(
@@ -96,7 +96,7 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
             restore: &restore,
             close: &close,
         };
-        ui.allocate_ui_at_rect(
+        widgets::overlay_at(ui, 
             egui::Rect::from_min_size(
                 egui::pos2(rect.right() - footprint.right - 4.0, rect.top()),
                 vec2(footprint.right.max(120.0), TITLEBAR_HEIGHT),
@@ -182,14 +182,14 @@ fn rail_row(
     } else {
         palette.secondary
     };
-    ui.allocate_ui_at_rect(
+    widgets::overlay_at(ui, 
         egui::Rect::from_center_size(
             egui::pos2(rect.left() + 22.0, rect.center().y),
             Vec2::splat(20.0),
         ),
         |ui| icon(ui, which, tint, 19.0),
     );
-    ui.allocate_ui_at_rect(
+    widgets::overlay_at(ui, 
         egui::Rect::from_min_size(
             egui::pos2(rect.left() + 44.0, rect.top()),
             vec2(rect.width() - 52.0, rect.height()),
@@ -318,14 +318,14 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
     let Some(dialog) = app.confirm_dialog.clone() else {
         return;
     };
-    let screen = ui.ctx().screen_rect();
+    let screen = ui.ctx().input(|i| i.viewport_rect());
     let width = 420.0;
     let height = 210.0;
     let rect = egui::Rect::from_center_size(screen.center(), vec2(width, height));
 
     ui.painter()
         .rect_filled(screen, 0.0, Color32::from_black_alpha(140));
-    ui.allocate_ui_at_rect(rect, |ui| {
+    widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(vec2(width - 44.0, 0.0));
             ui.label(
@@ -381,9 +381,12 @@ fn run_confirm_action(app: &mut AtlasApp, action: ConfirmAction) {
             let Some(client) = app.client.clone() else {
                 return;
             };
-            let job = app
-                .runner
-                .spawn(async move { client.revoke_device(&fingerprint).await });
+            // Revoke, then reload the list in the same job slot so the
+            // removed device disappears on the next poll.
+            let job = app.runner.spawn(async move {
+                client.revoke_device(&fingerprint).await?;
+                client.devices().await
+            });
             app.devices.start(job);
             app.notice(t!(app.locale, "Device revoked.").into_owned());
         }

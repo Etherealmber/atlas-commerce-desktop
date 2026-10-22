@@ -405,9 +405,11 @@ impl AtlasApp {
                 let json = serde_json::to_vec_pretty(session).unwrap_or_default();
                 persist_private(path, json);
             }
-            None => std::thread::spawn(move || {
-                let _ = std::fs::remove_file(path);
-            }),
+            None => {
+                std::thread::spawn(move || {
+                    let _ = std::fs::remove_file(path);
+                });
+            }
         };
     }
 

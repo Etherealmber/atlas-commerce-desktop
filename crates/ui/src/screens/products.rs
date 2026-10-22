@@ -237,11 +237,11 @@ fn stock_pill(
 ) {
     if !product.tracks_inventory() {
         pill(
+            ui,
             t!(locale, "Not tracked").into_owned(),
             palette.surface_active,
             palette.secondary,
-        )
-        .show(ui);
+        );
         return;
     }
     let text = format!(
@@ -256,7 +256,7 @@ fn stock_pill(
     } else {
         (palette.accent.gamma_multiply(0.16), palette.accent)
     };
-    pill(text, fill, tint).show(ui);
+    pill(ui, text, fill, tint);
 }
 
 // ── Create product dialog ──────────────────────────────────────────────────
@@ -295,13 +295,13 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
 
-    let screen = ui.ctx().screen_rect();
+    let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 560.0));
     ui.painter()
         .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
 
     let locale = app.locale;
-    ui.allocate_ui_at_rect(rect, |ui| {
+    widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(vec2(476.0, 0.0));
             ui.label(
@@ -492,13 +492,13 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
 
-    let screen = ui.ctx().screen_rect();
+    let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(460.0, 360.0));
     ui.painter()
         .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
 
     let locale = app.locale;
-    ui.allocate_ui_at_rect(rect, |ui| {
+    widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(vec2(416.0, 0.0));
             ui.label(
@@ -540,7 +540,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     } else {
                         palette.surface
                     })
-                    .rounding(8.0);
+                    .corner_radius(8.0);
                     if ui.add(button).clicked() {
                         if let Some(dialog) = app.stock_dialog.as_mut() {
                             dialog.kind = kind;

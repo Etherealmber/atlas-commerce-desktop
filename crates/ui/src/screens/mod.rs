@@ -32,7 +32,7 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     if app.notices.is_empty() {
         return;
     }
-    let screen = ui.ctx().screen_rect();
+    let screen = ui.ctx().input(|i| i.viewport_rect());
     let max_width = (screen.width() * 0.42).clamp(220.0, 420.0);
     let mut y = screen.bottom() - 16.0;
     let toasts: Vec<String> = app.notices.clone();
@@ -40,7 +40,7 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         let frame = egui::Frame::NONE
             .fill(palette.overlay)
             .stroke(egui::Stroke::new(1.0, palette.outline))
-            .rounding(10.0)
+            .corner_radius(10.0)
             .inner_margin(egui::Margin::symmetric(14, 9));
         // Measure the toast first, then place it over the screen's
         // bottom-left corner without touching the in-flow cursor.
@@ -53,7 +53,7 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         let size = egui::vec2(width + 28.0, galley.size().y + 18.0);
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
-        ui.allocate_ui_at_rect(rect, |ui| {
+        crate::widgets::overlay_at(ui, rect, |ui| {
             frame.show(ui, |ui| {
                 ui.label(RichText::new(toast).color(palette.text).size(13.0));
             });
@@ -65,7 +65,11 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
 }
 
 /// A header row with an optional back chevron.
-pub fn back_header(ui: &mut Ui, title: &str, palette: &Palette) -> Option<Response> {
+pub fn back_header(
+    ui: &mut Ui,
+    title: impl AsRef<str>,
+    palette: &Palette,
+) -> Option<Response> {
     ui.horizontal(|ui| {
         let back = ui
             .add(
@@ -74,8 +78,8 @@ pub fn back_header(ui: &mut Ui, title: &str, palette: &Palette) -> Option<Respon
                     .stroke(egui::Stroke::NONE),
             )
             .on_hover_text("Retour");
-        ui.label(RichText::new(title).color(palette.text).size(18.0).strong());
-        back
+        ui.label(RichText::new(title.as_ref()).color(palette.text).size(18.0).strong());
+        Some(back)
     })
     .inner
 }

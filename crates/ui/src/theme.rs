@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use egui::{Color32, Rounding, Stroke, Style, Visuals};
+use egui::{Color32, CornerRadius, Stroke, Style, Visuals};
 use fastframe_theme::{Base, Palette as PaletteTrait, parse_palette};
 
 /// The app palette: the sixteen fastframe base colours plus the dark flag.
@@ -142,7 +142,7 @@ pub fn install_fonts_and_icons(ctx: &egui::Context) {
     fastframe_text::detect().apply_to(&mut fonts);
     ctx.set_fonts(fonts);
     egui_extras::install_image_loaders(ctx);
-    crate::icons::install(ctx);
+    fastframe_icons::install::<crate::icons::Icon>(ctx);
     fastframe_titlebar::install(ctx);
 }
 
@@ -179,24 +179,24 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
     visuals.popup_shadow.color = palette.shadow;
     visuals.striped = false;
 
-    let rounding = Rounding::same(8.0);
-    visuals.widgets.noninteractive.rounding = rounding;
+    let corner = CornerRadius::same(8);
+    visuals.widgets.noninteractive.corner_radius = corner;
     visuals.widgets.noninteractive.bg_fill = palette.surface;
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, palette.text);
 
-    visuals.widgets.inactive.rounding = rounding;
+    visuals.widgets.inactive.corner_radius = corner;
     visuals.widgets.inactive.bg_fill = palette.surface;
     visuals.widgets.inactive.weak_bg_fill = palette.surface;
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, palette.secondary);
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, palette.outline);
 
-    visuals.widgets.hovered.rounding = rounding;
+    visuals.widgets.hovered.corner_radius = corner;
     visuals.widgets.hovered.bg_fill = palette.surface_hover;
     visuals.widgets.hovered.weak_bg_fill = palette.surface_hover;
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, palette.text);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, palette.outline);
 
-    visuals.widgets.active.rounding = rounding;
+    visuals.widgets.active.corner_radius = corner;
     visuals.widgets.active.bg_fill = palette.surface_active;
     visuals.widgets.active.weak_bg_fill = palette.surface_active;
     visuals.widgets.active.fg_stroke = Stroke::new(1.0, palette.text);

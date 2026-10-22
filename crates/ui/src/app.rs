@@ -585,7 +585,7 @@ impl eframe::App for EframeShell {
         egui::Color32::from_rgb(0x09, 0x09, 0x0b).to_normalized_gamma_f32()
     }
 
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         if self.first_frame {
             self.first_frame = false;
             // macOS moves the status item onto the main window's AppKit loop.
@@ -613,15 +613,19 @@ impl eframe::App for EframeShell {
         if self.held.busy() {
             ctx.request_repaint_after(Duration::from_millis(250));
         }
+    }
 
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let palette = self.held.palette(&ctx);
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
                     .fill(palette.window)
-                    .inner_margin(egui::Margin::same(0.0)),
+                    .inner_margin(egui::Margin::same(0)),
             )
-            .show(ctx, |ui| {
-                self.held.draw(ui, ctx, &palette);
+            .show(ui, |ui| {
+                self.held.draw(ui, &ctx, &palette);
             });
     }
 

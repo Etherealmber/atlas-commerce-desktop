@@ -31,11 +31,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         let used = atlas_core::format::integer(policy.daily_used as i64);
         let limit = atlas_core::format::integer(policy.daily_limit as i64);
         pill(
+            ui,
             format!("{} {used}/{limit}", t!(app.locale, "Daily quota")),
             palette.surface_active,
             palette.secondary,
-        )
-        .show(ui);
+        );
         if policy.blocked {
             ui.add_space(8.0);
             info_banner(
@@ -111,7 +111,7 @@ fn chat_bubble(ui: &mut egui::Ui, palette: &Palette, message: &ChatMessage) {
     egui::Frame::NONE
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, palette.outline))
-        .rounding(12.0)
+        .corner_radius(12.0)
         .inner_margin(egui::Margin::symmetric(14, 10))
         .show(ui, |ui| {
             ui.set_min_width(120.0);

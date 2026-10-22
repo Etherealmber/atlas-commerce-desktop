@@ -125,16 +125,7 @@ fn metric_card(
     card(palette).show(ui, |ui| {
         ui.set_min_size(vec2(168.0, 92.0));
         ui.horizontal(|ui| {
-            icon(
-                ui,
-                which,
-                if warn {
-                    palette.warning
-                } else {
-                    palette.accent
-                },
-                20.0,
-            );
+            icon(ui, which, if warn { palette.warning } else { palette.accent }, 20.0);
             ui.label(RichText::new(label).color(palette.secondary).size(12.5));
         });
         ui.add_space(8.0);
@@ -178,24 +169,25 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         pill(
-            format!(
-                "{} {}",
-                number(unpaid.count as f64),
-                t!(app.locale, "invoices")
-            ),
+            ui,
+            format!("{} {}", number(unpaid.count as f64), t!(app.locale, "invoices")),
             palette.surface_active,
             palette.secondary,
-        )
-        .show(ui);
+        );
     });
 }
 
-fn stat_row(ui: &mut egui::Ui, palette: &Palette, label: &str, value: &str) {
+fn stat_row(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    label: impl AsRef<str>,
+    value: impl AsRef<str>,
+) {
     ui.horizontal(|ui| {
         ui.set_width(ui.available_width());
-        ui.label(RichText::new(label).color(palette.secondary).size(13.0));
+        ui.label(RichText::new(label.as_ref()).color(palette.secondary).size(13.0));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(value).color(palette.text).strong().size(13.5));
+            ui.label(RichText::new(value.as_ref()).color(palette.text).strong().size(13.5));
         });
     });
     ui.add_space(6.0);
@@ -323,7 +315,7 @@ pub fn status_pill(ui: &mut egui::Ui, palette: &Palette, status: &str) {
         "overdue" | "en_retard" => (palette.danger.gamma_multiply(0.18), palette.danger),
         _ => (palette.surface_active, palette.secondary),
     };
-    pill(status_label(status), fill, text).show(ui);
+    pill(ui, status_label(status), fill, text);
 }
 
 fn status_label(status: &str) -> String {

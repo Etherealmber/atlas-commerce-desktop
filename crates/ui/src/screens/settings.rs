@@ -7,8 +7,8 @@ use egui::{Context, RichText};
 use fastframe_autostart::{Autostart, Start, State as AutostartState};
 
 use crate::dialogs::{Confirm, ConfirmAction};
-use crate::i18n::Locale;
 use crate::icons::Icon;
+use crate::i18n::Locale;
 use crate::state::{AtlasApp, Screen};
 use crate::theme::Palette;
 use crate::widgets::{
@@ -40,12 +40,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Pale
 // ── Appearance ─────────────────────────────────────────────────────────────
 
 fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(
-        ui,
-        palette,
-        Icon::Palette,
-        t!(app.locale, "Appearance").as_ref(),
-    );
+    section(ui, palette, Icon::Palette, t!(app.locale, "Appearance").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(label(ui, t!(app.locale, "Language").as_ref(), palette));
@@ -66,7 +61,7 @@ fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 } else {
                     palette.surface
                 })
-                .rounding(8.0);
+                .corner_radius(8.0);
                 if ui.add(button).clicked() {
                     app.settings.language = locale.tag().to_owned();
                     app.locale = locale;
@@ -99,7 +94,7 @@ fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 } else {
                     palette.surface
                 })
-                .rounding(8.0);
+                .corner_radius(8.0);
                 if ui.add(button).clicked() {
                     app.settings.theme = mode;
                     app.save_settings();
@@ -123,23 +118,14 @@ fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── General ────────────────────────────────────────────────────────────────
 
 fn general(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(
-        ui,
-        palette,
-        Icon::Settings,
-        t!(app.locale, "General").as_ref(),
-    );
+    section(ui, palette, Icon::Settings, t!(app.locale, "General").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
         if toggle_row(
             ui,
             palette,
-            t!(
-                app.locale,
-                "Keep running in the notification area when closed"
-            )
-            .as_ref(),
+            t!(app.locale, "Keep running in the notification area when closed").as_ref(),
             &mut app.settings.close_to_tray,
         ) {
             app.save_settings();
@@ -220,7 +206,7 @@ fn general(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 } else {
                     palette.surface
                 })
-                .rounding(8.0);
+                .corner_radius(8.0);
                 if ui.add(button).clicked() {
                     app.settings.poll_interval_secs = seconds;
                     app.save_settings();
@@ -232,7 +218,11 @@ fn general(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn apply_autostart(enabled: bool, hidden: bool) {
     let target = if enabled {
-        Some(if hidden { Start::Hidden } else { Start::Window })
+        Some(if hidden {
+            Start::Hidden
+        } else {
+            Start::Window
+        })
     } else {
         None
     };
@@ -248,12 +238,7 @@ fn apply_autostart(enabled: bool, hidden: bool) {
 // ── Servers ────────────────────────────────────────────────────────────────
 
 fn servers(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(
-        ui,
-        palette,
-        Icon::Server,
-        t!(app.locale, "Servers").as_ref(),
-    );
+    section(ui, palette, Icon::Server, t!(app.locale, "Servers").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let entries = app.server_store.saved.clone();
@@ -277,20 +262,16 @@ fn servers(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .strong()
                             .size(13.5),
                     );
-                    ui.label(
-                        RichText::new(entry.url.clone())
-                            .color(palette.dim)
-                            .size(11.5),
-                    );
+                    ui.label(RichText::new(entry.url.clone()).color(palette.dim).size(11.5));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if is_selected {
                         pill(
+                            ui,
                             t!(app.locale, "Active").into_owned(),
                             palette.accent.gamma_multiply(0.18),
                             palette.accent,
-                        )
-                        .show(ui);
+                        );
                     } else if secondary_button(ui, t!(app.locale, "Use"), palette) {
                         switch_server(app, entry.url.clone());
                     }
@@ -343,12 +324,7 @@ fn switch_server(app: &mut AtlasApp, url: String) {
 // ── Trusted devices ────────────────────────────────────────────────────────
 
 fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(
-        ui,
-        palette,
-        Icon::ShieldCheck,
-        t!(app.locale, "Security").as_ref(),
-    );
+    section(ui, palette, Icon::ShieldCheck, t!(app.locale, "Security").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(
@@ -359,13 +335,9 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.horizontal(|ui| {
             let fingerprint = app.identity.fingerprint();
             let short = fingerprint.chars().take(16).collect::<String>();
-            ui.monospace(
-                RichText::new(format!("{short}…"))
-                    .color(palette.text)
-                    .size(12.5),
-            );
+            ui.monospace(RichText::new(format!("{short}…")).color(palette.text).size(12.5));
             if secondary_button(ui, t!(app.locale, "Copy"), palette) {
-                ui.ctx().copy_text(fingerprint);
+                ui.ctx().copy_text(fingerprint.to_owned());
             }
         });
 
@@ -416,24 +388,29 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         }
                         if device.current {
                             pill(
+                                ui,
                                 t!(app.locale, "This device").into_owned(),
                                 palette.accent.gamma_multiply(0.18),
                                 palette.accent,
-                            )
-                            .show(ui);
+                            );
                         }
                     });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Top), |ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         if !device.current
                             && danger_button(ui, t!(app.locale, "Revoke"), palette, true)
                         {
                             app.confirm_dialog = Some(Confirm {
                                 title: t!(app.locale, "Revoke device?").into_owned(),
-                                body: t!(app.locale, "That device will have to sign in again.")
-                                    .into_owned(),
+                                body: t!(
+                                    app.locale,
+                                    "That device will have to sign in again."
+                                )
+                                .into_owned(),
                                 confirm_label: t!(app.locale, "Revoke").into_owned(),
                                 danger: true,
-                                action: ConfirmAction::RevokeDevice(device.revoke_id().to_owned()),
+                                action: ConfirmAction::RevokeDevice(
+                                    device.revoke_id().to_owned(),
+                                ),
                             });
                         }
                     });
@@ -447,12 +424,7 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── Self-update ────────────────────────────────────────────────────────────
 
 fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(
-        ui,
-        palette,
-        Icon::Download,
-        t!(app.locale, "Updates").as_ref(),
-    );
+    section(ui, palette, Icon::Download, t!(app.locale, "Updates").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         if toggle_row(
@@ -486,7 +458,12 @@ fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
         if app.update.checking {
             super::spinner(ui, palette);
-        } else if primary_button(ui, t!(app.locale, "Check for updates now"), palette, true) {
+        } else if primary_button(
+            ui,
+            t!(app.locale, "Check for updates now"),
+            palette,
+            true,
+        ) {
             app.check_for_updates(false);
         }
 
@@ -508,7 +485,12 @@ fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 palette,
             );
             if app.update.progress.is_none()
-                && primary_button(ui, t!(app.locale, "Download and install"), palette, true)
+                && primary_button(
+                    ui,
+                    t!(app.locale, "Download and install"),
+                    palette,
+                    true,
+                )
             {
                 app.start_update_download();
             }
@@ -556,7 +538,7 @@ fn channel_button(
     } else {
         palette.surface
     })
-    .rounding(8.0);
+    .corner_radius(8.0);
     if ui.add(button).clicked() {
         app.settings.update_channel = channel;
         app.save_settings();
@@ -605,24 +587,39 @@ fn about(app: &AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
 
 // ── Small shared bits ──────────────────────────────────────────────────────
 
-fn section(ui: &mut egui::Ui, palette: &Palette, which: Icon, title: &str) {
+fn section(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    which: Icon,
+    title: impl AsRef<str>,
+) {
     ui.horizontal(|ui| {
         icon(ui, which, palette.accent, 18.0);
-        ui.label(RichText::new(title).color(palette.text).strong().size(15.5));
+        ui.label(
+            RichText::new(title.as_ref())
+                .color(palette.text)
+                .strong()
+                .size(15.5),
+        );
     });
     ui.add_space(6.0);
 }
 
-fn label(_ui: &egui::Ui, text: &str, palette: &Palette) -> RichText {
-    RichText::new(text).color(palette.secondary).size(12.5)
+fn label(_ui: &egui::Ui, text: impl AsRef<str>, palette: &Palette) -> RichText {
+    RichText::new(text.as_ref()).color(palette.secondary).size(12.5)
 }
 
 /// A label with a right-aligned checkbox. Returns whether the value changed.
-fn toggle_row(ui: &mut egui::Ui, palette: &Palette, text: &str, value: &mut bool) -> bool {
+fn toggle_row(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    text: impl AsRef<str>,
+    value: &mut bool,
+) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.set_width(ui.available_width());
-        ui.label(RichText::new(text).color(palette.text).size(13.5));
+        ui.label(RichText::new(text.as_ref()).color(palette.text).size(13.5));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let response = ui.checkbox(value, "");
             if response.changed() {

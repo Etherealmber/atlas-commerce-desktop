@@ -78,7 +78,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 .strong(),
         )
         .fill(palette.accent)
-        .rounding(10.0)
+        .corner_radius(10.0)
         .min_size(egui::vec2(240.0, 42.0));
         if ui.add(button).clicked() {
             app.screen = Screen::ServerSetup;
@@ -157,7 +157,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                             palette.outline
                                         },
                                     ))
-                                    .rounding(10.0)
+                                    .corner_radius(10.0)
                                     .inner_margin(egui::Margin::symmetric(12, 10))
                                     .show(ui, |ui| {
                                         ui.horizontal(|ui| {
@@ -185,7 +185,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                                 .color(palette.secondary),
                                                             )
                                                             .fill(palette.surface)
-                                                            .rounding(8.0),
+                                                            .corner_radius(8.0),
                                                         )
                                                         .clicked()
                                                     {
@@ -414,7 +414,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 } else {
                                     palette.surface
                                 })
-                                .rounding(9.0);
+                                .corner_radius(9.0);
                                 let response = ui.add(button);
                                 icon(ui, icon_kind, tint, 15.0);
                                 if response.clicked() {
@@ -480,7 +480,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .add(
                         egui::Button::new(eye.image(palette.secondary, 17.0))
                             .fill(palette.surface)
-                            .rounding(8.0),
+                            .corner_radius(8.0),
                     )
                     .on_hover_text(t!(app.locale, "Show password"))
                     .clicked()

@@ -2,8 +2,8 @@
 //! Quick sales follow the worker contract: `quick_sale: true`,
 //! `doc_kind: "quick_sale"`, no VAT, and an idempotency key per attempt.
 
-use atlas_api::ApiError;
 use atlas_api::models::{CreatedInvoice, QuickSale, QuickSaleItem};
+use atlas_api::ApiError;
 use atlas_core::format::{money, short_date};
 use atlas_core::jobs::Job;
 use egui::RichText;
@@ -222,11 +222,7 @@ fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .iter()
                 .map(|product| {
                     if product.sku.as_deref().is_some_and(|sku| !sku.is_empty()) {
-                        format!(
-                            "{} ({})",
-                            product.name,
-                            product.sku.as_deref().unwrap_or_default()
-                        )
+                        format!("{} ({})", product.name, product.sku.as_deref().unwrap_or_default())
                     } else {
                         product.name.clone()
                     }
@@ -291,9 +287,11 @@ fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     );
                     if ui
                         .add(
-                            egui::Button::new(RichText::new("×").color(palette.danger).strong())
-                                .fill(palette.surface)
-                                .rounding(8.0),
+                            egui::Button::new(
+                                RichText::new("×").color(palette.danger).strong(),
+                            )
+                            .fill(palette.surface)
+                            .corner_radius(8.0),
                         )
                         .clicked()
                     {

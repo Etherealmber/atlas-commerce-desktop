@@ -6,7 +6,7 @@ fastframe_icons::icons! {
     /// The complete icon set of Atlas Commerce Desktop.
     pub enum Icon {
         prefix: "atlas-icon-",
-        directory: "assets/icons/",
+        directory: "../assets/icons/",
 
         // ── Shared Lucide set (compile-time checked names) ──
         ArrowLeft => lucide "arrow-left",
