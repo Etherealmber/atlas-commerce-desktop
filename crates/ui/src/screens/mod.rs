@@ -69,11 +69,9 @@ pub fn back_header(ui: &mut Ui, title: &str, palette: &Palette) -> Option<Respon
     ui.horizontal(|ui| {
         let back = ui
             .add(
-                egui::Button::new(
-                    egui::RichText::new("‹").color(palette.secondary).size(22.0),
-                )
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::NONE),
+                egui::Button::new(egui::RichText::new("‹").color(palette.secondary).size(22.0))
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::NONE),
             )
             .on_hover_text("Retour");
         ui.label(RichText::new(title).color(palette.text).size(18.0).strong());

@@ -2,8 +2,8 @@
 //! The worker contract is read-only here apart from `POST /api/products`
 //! and `POST /api/products/:id/adjust-stock`.
 
-use atlas_api::models::{Product, StockAdjust};
 use atlas_api::ApiError;
+use atlas_api::models::{Product, StockAdjust};
 use atlas_core::format::number;
 use atlas_core::jobs::Job;
 use egui::{RichText, vec2};
@@ -126,7 +126,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     if app.products.loading && app.products.data.is_none() {
         super::spinner(ui, palette);
-    } else if app.products.data.as_ref().is_none_or(|items| items.is_empty()) {
+    } else if app
+        .products
+        .data
+        .as_ref()
+        .is_none_or(|items| items.is_empty())
+    {
         empty_state(
             ui,
             Icon::Package,
@@ -327,11 +332,35 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if let Some(editor) = app.product_editor.as_mut() {
                 labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
                 labelled_field(ui, t!(locale, "SKU"), &mut editor.sku, palette, false);
-                labelled_field(ui, t!(locale, "Barcode"), &mut editor.barcode, palette, false);
-                labelled_field(ui, t!(locale, "Category"), &mut editor.category, palette, false);
+                labelled_field(
+                    ui,
+                    t!(locale, "Barcode"),
+                    &mut editor.barcode,
+                    palette,
+                    false,
+                );
+                labelled_field(
+                    ui,
+                    t!(locale, "Category"),
+                    &mut editor.category,
+                    palette,
+                    false,
+                );
                 labelled_field(ui, t!(locale, "Unit"), &mut editor.unit, palette, false);
-                labelled_field(ui, t!(locale, "Price (MAD)"), &mut editor.price, palette, false);
-                labelled_field(ui, t!(locale, "Initial stock"), &mut editor.stock, palette, false);
+                labelled_field(
+                    ui,
+                    t!(locale, "Price (MAD)"),
+                    &mut editor.price,
+                    palette,
+                    false,
+                );
+                labelled_field(
+                    ui,
+                    t!(locale, "Initial stock"),
+                    &mut editor.stock,
+                    palette,
+                    false,
+                );
                 labelled_field(
                     ui,
                     t!(locale, "Low stock threshold"),
@@ -347,12 +376,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
             ui.add_space(10.0);
             widgets::dialog_actions(ui, |ui| {
-                let save = primary_button(
-                    ui,
-                    t!(locale, "Save"),
-                    palette,
-                    !saving && !name_empty,
-                );
+                let save = primary_button(ui, t!(locale, "Save"), palette, !saving && !name_empty);
                 let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
                 if cancel {
                     if dirty {
@@ -489,7 +513,11 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .as_ref()
                 .map(|dialog| dialog.product_name.clone())
                 .unwrap_or_default();
-            ui.label(RichText::new(product_name).color(palette.secondary).size(13.0));
+            ui.label(
+                RichText::new(product_name)
+                    .color(palette.secondary)
+                    .size(13.0),
+            );
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
@@ -523,7 +551,13 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
             ui.add_space(8.0);
             if let Some(dialog) = app.stock_dialog.as_mut() {
-                labelled_field(ui, t!(locale, "Quantity"), &mut dialog.quantity, palette, false);
+                labelled_field(
+                    ui,
+                    t!(locale, "Quantity"),
+                    &mut dialog.quantity,
+                    palette,
+                    false,
+                );
                 labelled_field(
                     ui,
                     t!(locale, "Reason (optional)"),
@@ -552,12 +586,8 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
             ui.add_space(10.0);
             widgets::dialog_actions(ui, |ui| {
-                let confirm = primary_button(
-                    ui,
-                    t!(locale, "Apply"),
-                    palette,
-                    !saving && !quantity_empty,
-                );
+                let confirm =
+                    primary_button(ui, t!(locale, "Apply"), palette, !saving && !quantity_empty);
                 let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
                 if cancel {
                     app.stock_dialog = None;

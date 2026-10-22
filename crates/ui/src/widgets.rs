@@ -150,12 +150,10 @@ pub fn empty_state(ui: &mut egui::Ui, which: Icon, title: &str, hint: &str, pale
 
 /// A clickable row (used by lists and menus).
 pub fn row_button(ui: &mut egui::Ui, palette: &Palette, height: f32) -> egui::Response {
-    let response = ui.allocate_response(
-        egui::vec2(ui.available_width(), height),
-        Sense::click(),
-    );
+    let response = ui.allocate_response(egui::vec2(ui.available_width(), height), Sense::click());
     if response.hovered() {
-        ui.painter().rect_filled(response.rect, 8.0, palette.surface_hover);
+        ui.painter()
+            .rect_filled(response.rect, 8.0, palette.surface_hover);
     }
     response
 }

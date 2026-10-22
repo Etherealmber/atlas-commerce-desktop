@@ -5,7 +5,7 @@
 //! - [`build_updater`] hands the rest (checksum verification, helper install
 //!   with rollback, AppImage replacement) to `fastframe-update`.
 
-use atlas_core::update_feed::{UpdateManifest, MANIFEST_ASSET};
+use atlas_core::update_feed::{MANIFEST_ASSET, UpdateManifest};
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig, Updater};
 use serde::Deserialize;
 
@@ -27,12 +27,7 @@ pub const CONFIG: UpdateConfig = UpdateConfig {
     // The release workflow lists the AppImage in checksums.txt, so an
     // AppImage install may replace itself on the next release.
     appimage: true,
-    ..UpdateConfig::new(
-        REPOSITORY,
-        APP_NAME,
-        SLUG,
-        env!("CARGO_PKG_VERSION"),
-    )
+    ..UpdateConfig::new(REPOSITORY, APP_NAME, SLUG, env!("CARGO_PKG_VERSION"))
 };
 
 #[derive(Deserialize)]
@@ -57,7 +52,10 @@ struct Asset {
 /// Network or parse failures, as French messages.
 pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, String> {
     let client = reqwest::Client::builder()
-        .user_agent(concat!("atlas-commerce-desktop/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!(
+            "atlas-commerce-desktop/",
+            env!("CARGO_PKG_VERSION")
+        ))
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|error| format!("Client HTTP impossible : {error}"))?;

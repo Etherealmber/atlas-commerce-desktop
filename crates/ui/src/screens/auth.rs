@@ -4,17 +4,17 @@
 
 use std::time::Duration;
 
+use atlas_api::ApiError;
 use atlas_api::models::LoginResponse;
 use atlas_api::probe;
-use atlas_api::ApiError;
 use atlas_core::{ServerUrl, VerifyLink};
 use egui::{Color32, RichText};
 
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Screen};
+use crate::t;
 use crate::theme::Palette;
 use crate::widgets::*;
-use crate::t;
 
 // ── Splash ────────────────────────────────────────────────────────────────
 
@@ -141,7 +141,8 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             let saved = app.server_store.saved.clone();
                             let mut forget: Option<String> = None;
                             for entry in &saved {
-                                let selected = app.server_store.selected_url() == Some(entry.url.as_str());
+                                let selected =
+                                    app.server_store.selected_url() == Some(entry.url.as_str());
                                 egui::Frame::NONE
                                     .fill(if selected {
                                         palette.accent.gamma_multiply(0.14)
@@ -178,8 +179,10 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                     if ui
                                                         .add(
                                                             egui::Button::new(
-                                                                RichText::new(t!(app.locale, "Forget"))
-                                                                    .color(palette.secondary),
+                                                                RichText::new(t!(
+                                                                    app.locale, "Forget"
+                                                                ))
+                                                                .color(palette.secondary),
                                                             )
                                                             .fill(palette.surface)
                                                             .rounding(8.0),
@@ -268,7 +271,11 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 } else {
                                     palette.danger
                                 };
-                                ui.label(RichText::new(report.message.clone()).color(color).size(12.5));
+                                ui.label(
+                                    RichText::new(report.message.clone())
+                                        .color(color)
+                                        .size(12.5),
+                                );
                                 if report.ok {
                                     ui.label(
                                         RichText::new(format!(
@@ -287,7 +294,11 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             }
                             if let Some(error) = &app.server_form.saved_error {
                                 ui.add_space(6.0);
-                                ui.label(RichText::new(error.clone()).color(palette.danger).size(12.5));
+                                ui.label(
+                                    RichText::new(error.clone())
+                                        .color(palette.danger)
+                                        .size(12.5),
+                                );
                             }
                         });
 
@@ -374,7 +385,11 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     |ui| {
                         // Tabs.
                         ui.horizontal(|ui| {
-                            let tab = if app.qr.active { LoginTab::Qr } else { LoginTab::Password };
+                            let tab = if app.qr.active {
+                                LoginTab::Qr
+                            } else {
+                                LoginTab::Password
+                            };
                             for (candidate, label, icon_kind) in [
                                 (LoginTab::Password, t!(app.locale, "Password"), Icon::Lock),
                                 (LoginTab::Qr, t!(app.locale, "Phone QR"), Icon::QrCode),
@@ -456,7 +471,11 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .margin(egui::Margin::symmetric(10, 8))
                     .clip_text(true);
                 ui.add_sized([ui.available_width() - 38.0, 34.0], edit);
-                let eye = if app.login.show_password { Icon::EyeOff } else { Icon::Eye };
+                let eye = if app.login.show_password {
+                    Icon::EyeOff
+                } else {
+                    Icon::Eye
+                };
                 if ui
                     .add(
                         egui::Button::new(eye.image(palette.secondary, 17.0))
@@ -573,10 +592,9 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     t!(app.locale, "Login refused on the phone.").into_owned(),
                     palette.danger,
                 ),
-                "expired" | "consumed" if app.qr.expired => (
-                    t!(app.locale, "Code expired.").into_owned(),
-                    palette.danger,
-                ),
+                "expired" | "consumed" if app.qr.expired => {
+                    (t!(app.locale, "Code expired.").into_owned(), palette.danger)
+                }
                 _ => (
                     t!(app.locale, "Waiting for the phone…").into_owned(),
                     palette.secondary,
@@ -641,8 +659,10 @@ fn start_login(app: &mut AtlasApp) {
     }
     app.login.busy = true;
     app.login.error = None;
-    app.login.job_login =
-        Some(app.runner.spawn(async move { client.login(&username, &password).await }));
+    app.login.job_login = Some(
+        app.runner
+            .spawn(async move { client.login(&username, &password).await }),
+    );
 }
 
 fn start_otp(app: &mut AtlasApp) {
@@ -653,7 +673,8 @@ fn start_otp(app: &mut AtlasApp) {
     let password = app.login.password.clone();
     let otp: String = app.login.otp.chars().filter(char::is_ascii_digit).collect();
     if otp.len() < 4 {
-        app.login.error = Some(t!(app.locale, "Enter the complete code received by e-mail.").into_owned());
+        app.login.error =
+            Some(t!(app.locale, "Enter the complete code received by e-mail.").into_owned());
         return;
     }
     app.login.busy = true;
@@ -788,7 +809,9 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                     if let Some(token) = complete.token {
                         app.enter_session(
                             token,
-                            complete.username.unwrap_or_else(|| "utilisateur".to_owned()),
+                            complete
+                                .username
+                                .unwrap_or_else(|| "utilisateur".to_owned()),
                             complete.role.unwrap_or_else(|| "user".to_owned()),
                             complete.display_name.unwrap_or_default(),
                             complete.avatar_url.unwrap_or_default(),
@@ -806,27 +829,25 @@ fn handle_login_response(app: &mut AtlasApp, result: Result<LoginResponse, ApiEr
     match result {
         Ok(response) if response.success && response.needs_otp => {
             app.login.needs_otp = true;
-            app.login.notice = Some(
-                response
-                    .message
-                    .unwrap_or_else(|| t!(app.locale, "A verification code was sent by e-mail.").into_owned()),
-            );
+            app.login.notice = Some(response.message.unwrap_or_else(|| {
+                t!(app.locale, "A verification code was sent by e-mail.").into_owned()
+            }));
         }
         Ok(response) if response.success => {
             if let Some(token) = response.token {
                 app.enter_session(
                     token,
-                    response.username.unwrap_or_else(|| app.login.username.clone()),
+                    response
+                        .username
+                        .unwrap_or_else(|| app.login.username.clone()),
                     response.role.unwrap_or_else(|| "user".to_owned()),
                     response.display_name.unwrap_or_default(),
                     String::new(),
                 );
             } else {
-                app.login.error = Some(
-                    response
-                        .message
-                        .unwrap_or_else(|| t!(app.locale, "Incomplete login — try again.").into_owned()),
-                );
+                app.login.error = Some(response.message.unwrap_or_else(|| {
+                    t!(app.locale, "Incomplete login — try again.").into_owned()
+                }));
             }
         }
         Ok(response) => {
@@ -869,17 +890,29 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         );
         ui.add_space(6.0);
         ui.label(
-            RichText::new(format!("v{} → v{}", env!("CARGO_PKG_VERSION"), manifest.version))
-                .color(palette.dim)
-                .size(12.5),
+            RichText::new(format!(
+                "v{} → v{}",
+                env!("CARGO_PKG_VERSION"),
+                manifest.version
+            ))
+            .color(palette.dim)
+            .size(12.5),
         );
         if !manifest.notes.is_empty() {
             ui.add_space(10.0);
-            ui.label(RichText::new(manifest.notes.clone()).color(palette.secondary).size(13.0));
+            ui.label(
+                RichText::new(manifest.notes.clone())
+                    .color(palette.secondary)
+                    .size(13.0),
+            );
         }
         if let Some(error) = &app.update.error {
             ui.add_space(10.0);
-            ui.label(RichText::new(error.clone()).color(palette.danger).size(12.5));
+            ui.label(
+                RichText::new(error.clone())
+                    .color(palette.danger)
+                    .size(12.5),
+            );
         }
         ui.add_space(20.0);
         if primary_button(
@@ -892,11 +925,7 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         }
         ui.add_space(8.0);
         if let Some((received, total)) = app.update.progress {
-            let percent = if total > 0 {
-                received * 100 / total
-            } else {
-                0
-            };
+            let percent = if total > 0 { received * 100 / total } else { 0 };
             ui.label(
                 RichText::new(format!("{} %", percent))
                     .color(palette.dim)
@@ -905,5 +934,3 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         }
     });
 }
-
-

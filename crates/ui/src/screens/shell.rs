@@ -59,7 +59,10 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
     ui.allocate_ui_at_rect(
         egui::Rect::from_min_size(
             rect.min + vec2(footprint.left.max(12.0), 0.0),
-            vec2(rect.width() - footprint.left - footprint.right - 24.0, TITLEBAR_HEIGHT),
+            vec2(
+                rect.width() - footprint.left - footprint.right - 24.0,
+                TITLEBAR_HEIGHT,
+            ),
         ),
         |ui| {
             ui.horizontal_centered(|ui| {
@@ -162,8 +165,7 @@ fn rail_row(
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     if is_active {
-        ui.painter()
-            .rect_filled(rect, 10.0, palette.surface_active);
+        ui.painter().rect_filled(rect, 10.0, palette.surface_active);
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
                 egui::pos2(rect.left() + 2.0, rect.center().y - 10.0),
@@ -173,8 +175,7 @@ fn rail_row(
             palette.accent,
         );
     } else if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 10.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
     }
     let tint = if is_active {
         palette.accent
@@ -197,7 +198,11 @@ fn rail_row(
             ui.horizontal_centered(|ui| {
                 ui.label(
                     RichText::new(label)
-                        .color(if is_active { palette.text } else { palette.secondary })
+                        .color(if is_active {
+                            palette.text
+                        } else {
+                            palette.secondary
+                        })
                         .size(14.0)
                         .strong(),
                 );
@@ -213,11 +218,9 @@ fn badge(ui: &egui::Ui, row: &egui::Response, palette: &Palette, count: i64) {
     } else {
         count.to_string()
     };
-    let galley = ui.painter().layout_no_wrap(
-        text,
-        egui::FontId::proportional(11.5),
-        palette.on_accent,
-    );
+    let galley =
+        ui.painter()
+            .layout_no_wrap(text, egui::FontId::proportional(11.5), palette.on_accent);
     let width = (galley.size().x + 12.0).max(20.0);
     let rect = egui::Rect::from_min_size(
         egui::pos2(row.rect.right() - width - 8.0, row.rect.center().y - 9.0),
@@ -225,7 +228,10 @@ fn badge(ui: &egui::Ui, row: &egui::Response, palette: &Palette, count: i64) {
     );
     ui.painter().rect_filled(rect, 9.0, palette.accent);
     ui.painter().galley(
-        egui::pos2(rect.center().x - galley.size().x / 2.0, rect.center().y - galley.size().y / 2.0),
+        egui::pos2(
+            rect.center().x - galley.size().x / 2.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
         galley,
         palette.on_accent,
     );
@@ -329,7 +335,11 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     .size(17.0),
             );
             ui.add_space(8.0);
-            ui.label(RichText::new(dialog.body.clone()).color(palette.secondary).size(13.5));
+            ui.label(
+                RichText::new(dialog.body.clone())
+                    .color(palette.secondary)
+                    .size(13.5),
+            );
             ui.add_space(16.0);
             widgets::dialog_actions(ui, |ui| {
                 let confirmed = if dialog.danger {

@@ -110,9 +110,7 @@ impl AtlasApp {
         let Some(client) = self.client.clone() else {
             return;
         };
-        let job = self
-            .runner
-            .spawn(async move { client.nav_badges().await });
+        let job = self.runner.spawn(async move { client.nav_badges().await });
         self.nav_badges.start(job);
     }
 
@@ -154,8 +152,7 @@ impl AtlasApp {
         self.update.stage = "Téléchargement…".to_owned();
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             tokio::task::spawn_blocking(move || {
-                let updater =
-                    crate::update::build_updater().map_err(|error| error.to_string())?;
+                let updater = crate::update::build_updater().map_err(|error| error.to_string())?;
                 let release = updater
                     .check()
                     .map_err(|error| error.to_string())?
@@ -355,9 +352,7 @@ impl AtlasApp {
                 .is_some_and(|error| error.is_session_expired(true))
         });
         if expired {
-            self.notice(
-                "Votre session a expiré. Veuillez vous reconnecter.".to_owned(),
-            );
+            self.notice("Votre session a expiré. Veuillez vous reconnecter.".to_owned());
             self.sign_out();
         }
     }
@@ -503,10 +498,7 @@ impl AtlasApp {
 
 impl Resident for AtlasApp {
     fn closed(&self) -> fastframe_shell::Closed {
-        if self.wants_quit
-            || !self.tray_available
-            || !self.settings.close_to_tray
-        {
+        if self.wants_quit || !self.tray_available || !self.settings.close_to_tray {
             fastframe_shell::Closed::Quit
         } else {
             fastframe_shell::Closed::Hide

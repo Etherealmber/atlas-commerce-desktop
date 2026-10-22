@@ -17,19 +17,10 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Notifications"), palette);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(
-                ui,
-                t!(app.locale, "Refresh"),
-                palette,
-                !app.alerts.loading,
-            ) {
+            if primary_button(ui, t!(app.locale, "Refresh"), palette, !app.alerts.loading) {
                 app.load_alerts();
             }
-            if secondary_button(
-                ui,
-                t!(app.locale, "Open settings"),
-                palette,
-            ) {
+            if secondary_button(ui, t!(app.locale, "Open settings"), palette) {
                 app.go(crate::state::Route::Settings);
             }
         });

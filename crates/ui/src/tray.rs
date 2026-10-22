@@ -73,12 +73,14 @@ impl TrayHandle {
 
     /// Refreshes the menu labels after a language change.
     pub fn set_labels(&mut self, locale: Locale) {
-        self.tray.set_label(ID_SHOW, t!(locale, "Show window").into_owned());
+        self.tray
+            .set_label(ID_SHOW, t!(locale, "Show window").into_owned());
         self.tray
             .set_label(ID_STATS, t!(locale, "Quick stats").into_owned());
         self.tray
             .set_label(ID_QUIT, t!(locale, "Quit").into_owned());
-        self.tray.set_tooltip(t!(locale, "Atlas Commerce Desktop").into_owned());
+        self.tray
+            .set_tooltip(t!(locale, "Atlas Commerce Desktop").into_owned());
     }
 
     /// Enables or disables the quick-stats entry (no session = no stats).

@@ -25,10 +25,8 @@ use theme::Palette;
 /// The brand mark: a rounded amber square carrying a dark "A". Drawn with
 /// the painter so no image asset is needed before fonts are ready.
 pub fn brand(ui: &mut egui::Ui, palette: &Palette, size: f32) {
-    let (rect, _) =
-        ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
-    ui.painter()
-        .rect_filled(rect, size * 0.24, palette.accent);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
+    ui.painter().rect_filled(rect, size * 0.24, palette.accent);
     let galley = ui.painter().layout_no_wrap(
         "A".to_owned(),
         egui::FontId::proportional(size * 0.62),

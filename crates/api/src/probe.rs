@@ -6,9 +6,9 @@
 
 use atlas_core::servers::ServerUrl;
 
+use crate::ApiClient;
 use crate::error::ApiError;
 use crate::models::{Canary, Envelope, Health};
-use crate::ApiClient;
 
 /// The probe outcome, with French guidance for every failure mode.
 #[derive(Debug, Clone)]

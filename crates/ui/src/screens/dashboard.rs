@@ -125,7 +125,16 @@ fn metric_card(
     card(palette).show(ui, |ui| {
         ui.set_min_size(vec2(168.0, 92.0));
         ui.horizontal(|ui| {
-            icon(ui, which, if warn { palette.warning } else { palette.accent }, 20.0);
+            icon(
+                ui,
+                which,
+                if warn {
+                    palette.warning
+                } else {
+                    palette.accent
+                },
+                20.0,
+            );
             ui.label(RichText::new(label).color(palette.secondary).size(12.5));
         });
         ui.add_space(8.0);
@@ -169,7 +178,11 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         pill(
-            format!("{} {}", number(unpaid.count as f64), t!(app.locale, "invoices")),
+            format!(
+                "{} {}",
+                number(unpaid.count as f64),
+                t!(app.locale, "invoices")
+            ),
             palette.surface_active,
             palette.secondary,
         )
