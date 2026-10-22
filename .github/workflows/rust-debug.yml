@@ -6,15 +6,17 @@ name: Rust debug loop
 # once CI is green.
 
 on:
+  push:
+    branches: [arena/fe5868a7-atlas-commerce-desktop]
+    paths: [.github/workflows/rust-debug.yml]
   workflow_dispatch:
-    inputs:
-      push_fmt:
-        description: "Commit and push rustfmt changes to this branch"
-        type: boolean
-        default: true
 
 permissions:
   contents: write
+
+concurrency:
+  group: rust-debug
+  cancel-in-progress: false
 
 jobs:
   diagnose:
@@ -36,7 +38,6 @@ jobs:
       - name: Format
         run: cargo fmt --all
       - name: Push formatting fixes
-        if: inputs.push_fmt
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
