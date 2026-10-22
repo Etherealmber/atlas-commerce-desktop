@@ -1,19 +1,146 @@
 name: Release
 
+# Two entry points, one pipeline:
+#   * push of a v* tag (automation path),
+#   * workflow_dispatch from the Actions tab: pick the source repository
+#     (defaults to the official one), type the version and, optionally, the
+#     release notes. With no notes the release body is generated from the
+#     commits and merged pull requests. Every platform is built in one run.
+#
+# The workflow never runs `git push`: a dispatched release creates its tag
+# through the GitHub releases API. Build output travels as artifacts and the
+# final assets are attached to the GitHub Release.
+
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Dépôt source (owner/name ou URL GitHub complète)"
+        required: true
+        default: "Etherealmber/atlas-commerce-desktop"
+      version:
+        description: "Version à publier, avec ou sans « v » (ex. 0.2.0 ou v0.2.0)"
+        required: true
+      notes:
+        description: "Notes de version (laisser vide pour une génération automatique)"
+        type: string
+        required: false
+        default: ""
+      prerelease:
+        description: "Publier comme pré-version (canal pré-release de l'application)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  prepare:
+    name: prepare release
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      repo: ${{ steps.meta.outputs.repo }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      notes_mode: ${{ steps.meta.outputs.notes_mode }}
+      existing_tag: ${{ steps.meta.outputs.existing_tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve release metadata
+        id: meta
+        env:
+          INPUT_REPOSITORY: ${{ inputs.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+          INPUT_NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            raw_repo="$INPUT_REPOSITORY"
+            raw_version="$INPUT_VERSION"
+          else
+            raw_repo="$GITHUB_REPOSITORY"
+            raw_version="$GITHUB_REF_NAME"
+          fi
+
+          # Accept owner/name, full HTTPS URLs and SSH-style references.
+          repo="${raw_repo#https://github.com/}"
+          repo="${repo#git@github.com:}"
+          repo="${repo%.git}"
+          if ! printf '%s' "$repo" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            echo "::error::Dépôt invalide : $raw_repo (attendu owner/name ou une URL GitHub)"
+            exit 1
+          fi
+
+          tag="v${raw_version#v}"
+          version="${tag#v}"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "::error::Version invalide : $raw_version (attendu par ex. 0.2.0, v0.2.0 ou v0.2.0-rc.1)"
+            exit 1
+          fi
+
+          # A suffix (v0.2.0-rc.1) always means pre-release; the manual toggle
+          # can additionally mark an ordinary version as pre-release.
+          case "$tag" in *-*) suffix_pre=true ;; *) suffix_pre=false ;; esac
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_PRERELEASE" = "true" ]; then
+            prerelease=true
+          else
+            prerelease="$suffix_pre"
+          fi
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_NOTES" ]; then
+            notes_mode=custom
+          else
+            notes_mode=auto
+          fi
+
+          if gh api "repos/$repo/git/ref/tags/$tag" >/dev/null 2>&1; then
+            existing_tag=true
+          else
+            existing_tag=false
+          fi
+
+          {
+            echo "## Préparation de la release"
+            echo
+            echo "| Paramètre | Valeur |"
+            echo "| --- | --- |"
+            echo "| Dépôt source | \`$repo\` |"
+            echo "| Tag | \`$tag\` |"
+            echo "| Version | \`$version\` |"
+            echo "| Pré-version | $prerelease |"
+            echo "| Notes de version | $([ "$notes_mode" = custom ] && echo "fournies manuellement" || echo "génération automatique") |"
+            echo "| Tag déjà présent | $existing_tag |"
+            echo "| Déclencheur | $GITHUB_EVENT_NAME |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "repo=$repo"
+            echo "prerelease=$prerelease"
+            echo "notes_mode=$notes_mode"
+            echo "existing_tag=$existing_tag"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: build (${{ matrix.target }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_REPO: ${{ needs.prepare.outputs.repo }}
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +165,8 @@ jobs:
             package-target: windows-arm64
     steps:
       - uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -79,22 +208,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          name="atlas-commerce-desktop-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="atlas-commerce-desktop-${RELEASE_TAG}-${{ matrix.target }}"
           mkdir -p "dist/$name"
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "${runner.os}" = "Windows" ]; then
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop.exe" "dist/$name/"
           else
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop" "dist/$name/"
           fi
           cp README.md LICENSE "dist/$name/"
           cp packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
-          if [ "${{ runner.os }}" = "Linux" ]; then
+          if [ "${runner.os}" = "Linux" ]; then
             # Desktop integration for package builds and hand-installs.
             cp --parents packaging/applications/atlas-commerce-desktop.desktop \
               packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
           fi
           cd dist
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "${runner.os}" = "Windows" ]; then
             7z a "$name.zip" "$name"
           else
             tar czf "$name.tar.gz" "$name"
@@ -103,11 +232,11 @@ jobs:
       # AppImage + zsync, stable releases only: the update information
       # inside the AppImage points at the newest stable release's .zsync.
       - uses: ruby/setup-ruby@v1
-        if: runner.os == 'Linux' && !contains(github.ref_name, '-')
+        if: runner.os == 'Linux' && !contains(env.RELEASE_TAG, '-')
         with:
           ruby-version: '3.4'
       - name: AppImage
-        if: runner.os == 'Linux' && !contains(github.ref_name, '-')
+        if: runner.os == 'Linux' && !contains(env.RELEASE_TAG, '-')
         run: |
           set -euo pipefail
           sudo apt-get install -y --no-install-recommends \
@@ -118,7 +247,7 @@ jobs:
             aarch64-unknown-linux-gnu) id=appimage-arm64 ;;
             *) echo "No AppImage target for ${{ matrix.target }}" >&2; exit 1 ;;
           esac
-          native-packages build --version "${GITHUB_REF_NAME#v}" --target "$id" \
+          native-packages build --version "$RELEASE_VERSION" --target "$id" \
             --defer-recipes --output "$RUNNER_TEMP/appimage"
           cp "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage \
              "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage.zsync dist/
@@ -128,7 +257,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $version = $env:RELEASE_VERSION
           $arch = "${{ matrix.target }}".Split("-")[0]
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
@@ -151,7 +280,7 @@ jobs:
           $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
           gem install native-packages --version 0.10.0 --no-document
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $version = $env:RELEASE_VERSION
           $payload = "dist\msi-input-${{ matrix.target }}"
           New-Item -ItemType Directory -Force $payload | Out-Null
           $files = "target\${{ matrix.target }}\release\atlas-commerce-desktop.exe", "README.md", "LICENSE", "packaging\windows\atlas-commerce-desktop-installer.txt"
@@ -161,6 +290,25 @@ jobs:
             --defer-recipes --output $packages
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item "$packages\packages\${{ matrix.package-target }}\msi\*.msi" dist\
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Build ${{ matrix.target }} (${{ matrix.os }})"
+            echo
+            echo "Tag \`$RELEASE_TAG\` — version \`$RELEASE_VERSION\`"
+            echo
+            echo "### Artefacts produits (\`dist/\`)"
+            echo '```'
+            ls -lh dist 2>/dev/null || echo "(dist absent)"
+            echo '```'
+            echo "### Empreintes SHA-256"
+            echo '```'
+            (cd dist && sha256sum * 2>/dev/null) || echo "(non disponible)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -173,11 +321,16 @@ jobs:
             dist/*.AppImage
             dist/*.AppImage.zsync
           if-no-files-found: error
+          retention-days: 30
 
   macos:
     name: macOS universal app
+    needs: prepare
     runs-on: macos-latest
     env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_REPO: ${{ needs.prepare.outputs.repo }}
       # Complete Apple credentials enable signing and notarization. Without
       # them the bundle is ad-hoc signed, which arm64 still requires to run.
       APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
@@ -188,6 +341,8 @@ jobs:
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -211,59 +366,129 @@ jobs:
       - name: App bundle
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
           mkdir -p dist/macos-input
           bash packaging/macos/bundle.sh universal/atlas-commerce-desktop \
-            "dist/macos-input/Atlas Commerce Desktop.app" "$version"
+            "dist/macos-input/Atlas Commerce Desktop.app" "$RELEASE_VERSION"
           cp README.md LICENSE dist/macos-input/
       - name: Package, sign and notarize macOS app
         run: |
           set -euo pipefail
           native-packages build \
-            --version "${GITHUB_REF_NAME#v}" --target macos-universal --defer-recipes \
+            --version "$RELEASE_VERSION" --target macos-universal --defer-recipes \
             --output "$RUNNER_TEMP/macos-packages"
           cp "$RUNNER_TEMP/macos-packages/packages/macos-universal/dmg/"*.dmg dist/
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## macOS universal (aarch64 + x86_64)"
+            echo
+            echo "Tag \`$RELEASE_TAG\` — version \`$RELEASE_VERSION\`"
+            echo
+            echo "### Binaire universel"
+            echo '```'
+            file universal/atlas-commerce-desktop 2>/dev/null || true
+            lipo -info universal/atlas-commerce-desktop 2>/dev/null || true
+            echo '```'
+            echo "### Artefacts produits (\`dist/\`)"
+            echo '```'
+            ls -lh dist 2>/dev/null || echo "(dist absent)"
+            echo '```'
+            echo "### Empreintes SHA-256"
+            echo '```'
+            (cd dist && sha256sum * 2>/dev/null) || echo "(non disponible)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-universal
           path: dist/*.dmg
           if-no-files-found: error
+          retention-days: 30
 
   publish:
     name: GitHub release
-    needs: [build, macos]
+    needs: [prepare, build, macos]
     if: ${{ !cancelled() && needs.build.result == 'success' && needs.macos.result == 'success' }}
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_REPO: ${{ needs.prepare.outputs.repo }}
+      RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      NOTES_MODE: ${{ needs.prepare.outputs.notes_mode }}
+      EXISTING_TAG: ${{ needs.prepare.outputs.existing_tag }}
+      INPUT_NOTES: ${{ inputs.notes }}
     # Publishing waits for maintainer approval; only this job reads the
-    # signing key, and only for v* tags.
+    # signing key.
     environment: release-signing
     steps:
       - uses: actions/checkout@v7
         with:
+          repository: ${{ needs.prepare.outputs.repo }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          if [ "$NOTES_MODE" = custom ]; then
+            printf '%s\n' "$INPUT_NOTES" > RELEASE_NOTES.md
+            echo "Notes personnalisées écrites ($(wc -l < RELEASE_NOTES.md) lignes)"
+          else
+            echo "Aucune note fournie : elles seront générées par GitHub à partir des commits et des PR fusionnées."
+          fi
+      - name: Create or open the GitHub Release (creates the tag via API, no git push)
+        run: |
+          set -euo pipefail
+          args=(--repo "$RELEASE_REPO" --title "Atlas Commerce Desktop $RELEASE_TAG")
+          if [ "$RELEASE_PRERELEASE" = true ]; then
+            args+=(--prerelease)
+          fi
+          if [ "$EXISTING_TAG" != true ]; then
+            # A dispatch run has no tag yet: --target creates it on this commit.
+            args+=(--target "$GITHUB_SHA")
+          fi
+          if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+            echo "La release $RELEASE_TAG existe déjà : mise à jour."
+            if [ "$NOTES_MODE" = custom ]; then
+              gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --notes-file RELEASE_NOTES.md
+            fi
+          else
+            if [ "$NOTES_MODE" = custom ]; then
+              gh release create "$RELEASE_TAG" "${args[@]}" --notes-file RELEASE_NOTES.md
+            else
+              gh release create "$RELEASE_TAG" "${args[@]}" --generate-notes
+            fi
+          fi
       - name: Source archive
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 \
-            "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" \
-            --output "dist/atlas-commerce-desktop-${GITHUB_REF_NAME}-source.tar.gz"
+          out="dist/atlas-commerce-desktop-${RELEASE_TAG}-source.tar.gz"
+          # On a dispatch run the tag was just created through the API, so the
+          # canonical source archive is now reachable. Fall back to a local
+          # archive if the CDN lags.
+          if ! curl --fail --location --retry 3 \
+              "https://github.com/${RELEASE_REPO}/archive/refs/tags/${RELEASE_TAG}.tar.gz" \
+              --output "$out"; then
+            echo "Téléchargement de l'archive du tag impossible, archive locale."
+            tar --exclude='.git' --exclude='target' --exclude='dist' \
+              -czf "$out" .
+          fi
       - name: Update manifest (update.json)
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
           published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # Mandatory updates are opted into per release by editing this
           # asset on GitHub; tags carry ordinary, optional updates.
           cat > dist/update.json <<EOF
           {
-          "version": "$version",
+          "version": "$RELEASE_VERSION",
           "mandatory": false,
           "minimum_version": null,
-          "notes": "Atlas Commerce Desktop $version",
+          "notes": "Atlas Commerce Desktop $RELEASE_VERSION",
           "published_at": "$published_at"
           }
           EOF
@@ -294,12 +519,31 @@ jobs:
             --key-env ATLAS_UPDATE_SIGNING_KEY
           native-packages verify-checksums dist/checksums.txt \
             --public-key assets/update-public-key.hex
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          name: Atlas Commerce Desktop ${{ github.ref_name }}
-          generate_release_notes: true
-          # A tag with a suffix (v0.2.0-rc.1) is a pre-release: it stays
-          # off "latest", so the app's update check never offers it unless
-          # the user opted into the pre-release channel.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+      - name: Attach all assets
+        run: gh release upload "$RELEASE_TAG" --repo "$RELEASE_REPO" dist/* --clobber
+      - name: Job summary
+        if: always()
+        run: |
+          url="https://github.com/${RELEASE_REPO}/releases/tag/${RELEASE_TAG}"
+          {
+            echo "## Publication de la release $RELEASE_TAG"
+            echo
+            echo "| Paramètre | Valeur |"
+            echo "| --- | --- |"
+            echo "| Dépôt | \`$RELEASE_REPO\` |"
+            echo "| Pré-version | $RELEASE_PRERELEASE |"
+            echo "| Notes | $([ "$NOTES_MODE" = custom ] && echo "fournies manuellement" || echo "générées automatiquement") |"
+            echo "| Signature du manifeste | $([ "${{ vars.UPDATE_SIGNING_ENABLED }}" = true ] && echo "signé Ed25519" || echo "checksums seuls") |"
+            echo "| Lien | [$url]($url) |"
+            echo
+            echo "### Assets publiés"
+            echo
+            echo "| Fichier | Taille | SHA-256 |"
+            echo "| --- | --- | --- |"
+            cd dist
+            while IFS='  ' read -r hash file; do
+              [ -f "$file" ] || continue
+              size=$(du -h "$file" | cut -f1)
+              echo "| \`$file\` | $size | \`${hash:0:16}…\` |"
+            done < checksums.txt
+          } >> "$GITHUB_STEP_SUMMARY"

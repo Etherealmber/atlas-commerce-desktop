@@ -34,11 +34,25 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 
 ## Release flow (`release.yml`)
 
-1. Push a tag `vX.Y.Z` (a suffix such as `-rc.1` marks a pre-release).
+Two entry points run the same pipeline, which never executes `git push`:
+a manual run creates its tag through the GitHub releases API.
+
+- **Manual run** — Actions → *Release* → *Run workflow*. Inputs:
+  - `repository`: source repo as `owner/name` or a full GitHub URL
+    (defaults to `Etherealmber/atlas-commerce-desktop`);
+  - `version`: e.g. `0.2.0` or `v0.2.0` (a suffix such as `-rc.1` marks a
+    pre-release, optionally forced with the `prerelease` toggle);
+  - `notes`: optional release notes; when left empty GitHub generates
+    them from commits and merged pull requests.
+- **Tag push** — pushing `vX.Y.Z` triggers the identical pipeline.
+
+1. The `prepare` job validates the version, normalises the tag, resolves
+   pre-release status and notes mode, and records everything in its job
+   summary.
 2. The matrix builds `x86_64`/`aarch64` Linux archives, Windows zip +
    Inno Setup installer + WiX MSI, and a universal macOS DMG from a
    `lipo` binary.
-3. Stable tags additionally build AppImages with `.zsync` update
+3. Stable versions additionally build AppImages with `.zsync` update
    information pointing at the newest stable GitHub release.
 4. The `publish` job (environment `release-signing`) collects every
    artifact, adds the source archive, writes `update.json`, and generates
@@ -46,8 +60,18 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 5. When `UPDATE_SIGNING_ENABLED` is set, the checksums are signed with
    `ATLAS_UPDATE_SIGNING_KEY` and verified against
    `assets/update-public-key.hex`.
-6. `softprops/action-gh-release` publishes everything; suffixed tags are
-   marked as pre-releases and never replace `latest`.
+6. The GitHub CLI creates the release (with `--generate-notes` or the
+   supplied notes) and uploads all assets; pre-releases never replace
+   `latest`, so the app's stable update channel never offers them.
+
+## Build summaries and artifacts
+
+No workflow commits or pushes back to a branch. Each job appends a
+Markdown report to the GitHub Actions *job summary* (toolchain, test
+results, produced files, SHA-256 fingerprints) and uploads its captured
+logs and packages as run artifacts: `quality-logs`, `test-logs-<os>`,
+`vulnerability-logs` under CI, per-target archives and `macos-universal`
+under releases, and the packaging validation logs.
 
 ## Application identity
 
