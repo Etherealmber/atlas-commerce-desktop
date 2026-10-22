@@ -1,43 +1,14 @@
 # OSV-Scanner configuration for the Atlas Commerce desktop workspace.
 #
-# Every entry below is an `informational = "unmaintained"` RUSTSEC notice on a
-# transitive dependency: none of them describe an exploitable vulnerability
-# and no patched release exists. They are scoped per advisory ID so any new
-# (security) advisory still fails the scan. Each exception carries a reason
-# and an expiry one year out, after which the entry must be re-evaluated.
+# Every entry below is an `informational = "unmaintained"` RUSTSEC notice on
+# a transitive, Linux-only dependency: it does not describe an exploitable
+# vulnerability and no patched release exists. Exceptions are scoped per
+# advisory ID so any new (security) advisory still fails the scan, and each
+# one expires a year after addition so the decision is re-evaluated.
 #
 # The file sits next to Cargo.lock at the repository root, which is where
-# osv-scanner's automatic configuration discovery looks for it.
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2020-0054" # directories 6.0.0
-ignoreUntil = 2027-10-23
-reason = """
-Transitive dependency pulled in by the pinned fastframe v0.14.0 crates
-(fastframe-dirs, fastframe-fonts, fastframe-instance, fastframe-notifications,
-fastframe-theme, fastframe-titlebar). Unmaintained notice with no patched
-release; the advisory itself was withdrawn upstream on 2021-04-19. Re-evaluate
-when fastframe migrates to directories-next.
-"""
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2025-0007" # ring 0.17.14
-ignoreUntil = 2027-10-23
-reason = """
-Transitive TLS crypto provider reached through rustls/reqwest
-(fastframe-update, quinn-proto). Unmaintained notice, withdrawn upstream on
-2025-02-22, with no patched release. Tracked for migration to the rustls
-aws-lc-rs crypto provider.
-"""
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2022-0048" # xml-rs 0.8.29
-ignoreUntil = 2027-10-23
-reason = """
-Transitive dependency of gl_generator, a legacy OpenGL binding generator in
-the eframe/glow graphics stack. Unmaintained notice, withdrawn upstream on
-2023-05-04; build-time only, never reached at runtime.
-"""
+# osv-scanner's automatic configuration discovery looks for it. A config-less
+# run of the same lockfile reports exactly these three IDs and nothing else.
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0370" # zvariant 5.15.1
