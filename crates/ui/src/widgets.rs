@@ -19,12 +19,7 @@ pub fn overlay_at<R>(
 }
 
 /// A compact status pill such as the web app's stock badges.
-pub fn pill(
-    ui: &mut egui::Ui,
-    text: impl AsRef<str>,
-    fill: Color32,
-    text_color: Color32,
-) {
+pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color: Color32) {
     egui::Frame::NONE
         .fill(fill)
         .corner_radius(999.0)
@@ -52,13 +47,17 @@ pub fn primary_button(
     palette: &Palette,
     enabled: bool,
 ) -> bool {
-    let button = egui::Button::new(RichText::new(text.as_ref()).color(palette.on_accent).strong())
-        .fill(if enabled {
-            palette.accent
-        } else {
-            palette.surface_active
-        })
-        .corner_radius(8.0);
+    let button = egui::Button::new(
+        RichText::new(text.as_ref())
+            .color(palette.on_accent)
+            .strong(),
+    )
+    .fill(if enabled {
+        palette.accent
+    } else {
+        palette.surface_active
+    })
+    .corner_radius(8.0);
     ui.add_enabled(enabled, button).clicked()
 }
 
@@ -108,7 +107,11 @@ pub fn error_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palet
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 icon(ui, Icon::CircleAlert, palette.danger, 18.0);
-                ui.label(RichText::new(message.as_ref()).color(palette.text).size(13.5));
+                ui.label(
+                    RichText::new(message.as_ref())
+                        .color(palette.text)
+                        .size(13.5),
+                );
             });
         });
 }
@@ -123,14 +126,23 @@ pub fn info_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palett
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 icon(ui, Icon::Info, palette.accent, 18.0);
-                ui.label(RichText::new(message.as_ref()).color(palette.text).size(13.5));
+                ui.label(
+                    RichText::new(message.as_ref())
+                        .color(palette.text)
+                        .size(13.5),
+                );
             });
         });
 }
 
 /// A page/section title with an optional icon.
 pub fn page_title(ui: &mut egui::Ui, title: impl AsRef<str>, palette: &Palette) {
-    ui.heading(RichText::new(title.as_ref()).color(palette.text).size(22.0).strong());
+    ui.heading(
+        RichText::new(title.as_ref())
+            .color(palette.text)
+            .size(22.0)
+            .strong(),
+    );
 }
 
 /// A labelled single-line field.
@@ -142,7 +154,11 @@ pub fn labelled_field(
     password: bool,
 ) {
     ui.vertical(|ui| {
-        ui.label(RichText::new(label.as_ref()).color(palette.secondary).size(12.5));
+        ui.label(
+            RichText::new(label.as_ref())
+                .color(palette.secondary)
+                .size(12.5),
+        );
         let edit = egui::TextEdit::singleline(value)
             .margin(egui::Margin::symmetric(10, 8))
             .clip_text(true);
@@ -181,7 +197,11 @@ pub fn empty_state(
         ui.add_space(28.0);
         icon(ui, which, palette.dim, 40.0);
         ui.add_space(10.0);
-        ui.label(RichText::new(title.as_ref()).color(palette.secondary).strong());
+        ui.label(
+            RichText::new(title.as_ref())
+                .color(palette.secondary)
+                .strong(),
+        );
         ui.add_space(4.0);
         ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
     });
@@ -189,8 +209,7 @@ pub fn empty_state(
 
 /// A clickable row (used by lists and menus).
 pub fn row_button(ui: &mut egui::Ui, palette: &Palette, height: f32) -> egui::Response {
-    let response =
-        ui.allocate_response(egui::vec2(ui.available_width(), height), Sense::click());
+    let response = ui.allocate_response(egui::vec2(ui.available_width(), height), Sense::click());
     if response.hovered() {
         ui.painter()
             .rect_filled(response.rect, 8.0, palette.surface_hover);

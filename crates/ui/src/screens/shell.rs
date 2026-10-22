@@ -56,7 +56,8 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
     }
     let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
 
-    widgets::overlay_at(ui, 
+    widgets::overlay_at(
+        ui,
         egui::Rect::from_min_size(
             rect.min + vec2(footprint.left.max(12.0), 0.0),
             vec2(
@@ -96,7 +97,8 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
             restore: &restore,
             close: &close,
         };
-        widgets::overlay_at(ui, 
+        widgets::overlay_at(
+            ui,
             egui::Rect::from_min_size(
                 egui::pos2(rect.right() - footprint.right - 4.0, rect.top()),
                 vec2(footprint.right.max(120.0), TITLEBAR_HEIGHT),
@@ -182,14 +184,16 @@ fn rail_row(
     } else {
         palette.secondary
     };
-    widgets::overlay_at(ui, 
+    widgets::overlay_at(
+        ui,
         egui::Rect::from_center_size(
             egui::pos2(rect.left() + 22.0, rect.center().y),
             Vec2::splat(20.0),
         ),
         |ui| icon(ui, which, tint, 19.0),
     );
-    widgets::overlay_at(ui, 
+    widgets::overlay_at(
+        ui,
         egui::Rect::from_min_size(
             egui::pos2(rect.left() + 44.0, rect.top()),
             vec2(rect.width() - 52.0, rect.height()),

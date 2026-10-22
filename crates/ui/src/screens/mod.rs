@@ -65,11 +65,7 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
 }
 
 /// A header row with an optional back chevron.
-pub fn back_header(
-    ui: &mut Ui,
-    title: impl AsRef<str>,
-    palette: &Palette,
-) -> Option<Response> {
+pub fn back_header(ui: &mut Ui, title: impl AsRef<str>, palette: &Palette) -> Option<Response> {
     ui.horizontal(|ui| {
         let back = ui
             .add(
@@ -78,7 +74,12 @@ pub fn back_header(
                     .stroke(egui::Stroke::NONE),
             )
             .on_hover_text("Retour");
-        ui.label(RichText::new(title.as_ref()).color(palette.text).size(18.0).strong());
+        ui.label(
+            RichText::new(title.as_ref())
+                .color(palette.text)
+                .size(18.0)
+                .strong(),
+        );
         Some(back)
     })
     .inner

@@ -7,8 +7,8 @@ use egui::{Context, RichText};
 use fastframe_autostart::{Autostart, Start, State as AutostartState};
 
 use crate::dialogs::{Confirm, ConfirmAction};
-use crate::icons::Icon;
 use crate::i18n::Locale;
+use crate::icons::Icon;
 use crate::state::{AtlasApp, Screen};
 use crate::theme::Palette;
 use crate::widgets::{
@@ -40,7 +40,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Pale
 // ── Appearance ─────────────────────────────────────────────────────────────
 
 fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(ui, palette, Icon::Palette, t!(app.locale, "Appearance").as_ref());
+    section(
+        ui,
+        palette,
+        Icon::Palette,
+        t!(app.locale, "Appearance").as_ref(),
+    );
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(label(ui, t!(app.locale, "Language").as_ref(), palette));
@@ -118,14 +123,23 @@ fn appearance(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── General ────────────────────────────────────────────────────────────────
 
 fn general(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(ui, palette, Icon::Settings, t!(app.locale, "General").as_ref());
+    section(
+        ui,
+        palette,
+        Icon::Settings,
+        t!(app.locale, "General").as_ref(),
+    );
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
         if toggle_row(
             ui,
             palette,
-            t!(app.locale, "Keep running in the notification area when closed").as_ref(),
+            t!(
+                app.locale,
+                "Keep running in the notification area when closed"
+            )
+            .as_ref(),
             &mut app.settings.close_to_tray,
         ) {
             app.save_settings();
@@ -218,11 +232,7 @@ fn general(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn apply_autostart(enabled: bool, hidden: bool) {
     let target = if enabled {
-        Some(if hidden {
-            Start::Hidden
-        } else {
-            Start::Window
-        })
+        Some(if hidden { Start::Hidden } else { Start::Window })
     } else {
         None
     };
@@ -238,7 +248,12 @@ fn apply_autostart(enabled: bool, hidden: bool) {
 // ── Servers ────────────────────────────────────────────────────────────────
 
 fn servers(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(ui, palette, Icon::Server, t!(app.locale, "Servers").as_ref());
+    section(
+        ui,
+        palette,
+        Icon::Server,
+        t!(app.locale, "Servers").as_ref(),
+    );
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let entries = app.server_store.saved.clone();
@@ -262,7 +277,11 @@ fn servers(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .strong()
                             .size(13.5),
                     );
-                    ui.label(RichText::new(entry.url.clone()).color(palette.dim).size(11.5));
+                    ui.label(
+                        RichText::new(entry.url.clone())
+                            .color(palette.dim)
+                            .size(11.5),
+                    );
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if is_selected {
@@ -324,7 +343,12 @@ fn switch_server(app: &mut AtlasApp, url: String) {
 // ── Trusted devices ────────────────────────────────────────────────────────
 
 fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(ui, palette, Icon::ShieldCheck, t!(app.locale, "Security").as_ref());
+    section(
+        ui,
+        palette,
+        Icon::ShieldCheck,
+        t!(app.locale, "Security").as_ref(),
+    );
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(
@@ -335,7 +359,11 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.horizontal(|ui| {
             let fingerprint = app.identity.fingerprint();
             let short = fingerprint.chars().take(16).collect::<String>();
-            ui.monospace(RichText::new(format!("{short}…")).color(palette.text).size(12.5));
+            ui.monospace(
+                RichText::new(format!("{short}…"))
+                    .color(palette.text)
+                    .size(12.5),
+            );
             if secondary_button(ui, t!(app.locale, "Copy"), palette) {
                 ui.ctx().copy_text(fingerprint.to_owned());
             }
@@ -401,16 +429,11 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         {
                             app.confirm_dialog = Some(Confirm {
                                 title: t!(app.locale, "Revoke device?").into_owned(),
-                                body: t!(
-                                    app.locale,
-                                    "That device will have to sign in again."
-                                )
-                                .into_owned(),
+                                body: t!(app.locale, "That device will have to sign in again.")
+                                    .into_owned(),
                                 confirm_label: t!(app.locale, "Revoke").into_owned(),
                                 danger: true,
-                                action: ConfirmAction::RevokeDevice(
-                                    device.revoke_id().to_owned(),
-                                ),
+                                action: ConfirmAction::RevokeDevice(device.revoke_id().to_owned()),
                             });
                         }
                     });
@@ -424,7 +447,12 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── Self-update ────────────────────────────────────────────────────────────
 
 fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section(ui, palette, Icon::Download, t!(app.locale, "Updates").as_ref());
+    section(
+        ui,
+        palette,
+        Icon::Download,
+        t!(app.locale, "Updates").as_ref(),
+    );
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         if toggle_row(
@@ -458,12 +486,7 @@ fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
         if app.update.checking {
             super::spinner(ui, palette);
-        } else if primary_button(
-            ui,
-            t!(app.locale, "Check for updates now"),
-            palette,
-            true,
-        ) {
+        } else if primary_button(ui, t!(app.locale, "Check for updates now"), palette, true) {
             app.check_for_updates(false);
         }
 
@@ -485,12 +508,7 @@ fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 palette,
             );
             if app.update.progress.is_none()
-                && primary_button(
-                    ui,
-                    t!(app.locale, "Download and install"),
-                    palette,
-                    true,
-                )
+                && primary_button(ui, t!(app.locale, "Download and install"), palette, true)
             {
                 app.start_update_download();
             }
@@ -587,12 +605,7 @@ fn about(app: &AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
 
 // ── Small shared bits ──────────────────────────────────────────────────────
 
-fn section(
-    ui: &mut egui::Ui,
-    palette: &Palette,
-    which: Icon,
-    title: impl AsRef<str>,
-) {
+fn section(ui: &mut egui::Ui, palette: &Palette, which: Icon, title: impl AsRef<str>) {
     ui.horizontal(|ui| {
         icon(ui, which, palette.accent, 18.0);
         ui.label(
@@ -606,7 +619,9 @@ fn section(
 }
 
 fn label(_ui: &egui::Ui, text: impl AsRef<str>, palette: &Palette) -> RichText {
-    RichText::new(text.as_ref()).color(palette.secondary).size(12.5)
+    RichText::new(text.as_ref())
+        .color(palette.secondary)
+        .size(12.5)
 }
 
 /// A label with a right-aligned checkbox. Returns whether the value changed.

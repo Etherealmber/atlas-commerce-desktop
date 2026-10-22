@@ -125,7 +125,16 @@ fn metric_card(
     card(palette).show(ui, |ui| {
         ui.set_min_size(vec2(168.0, 92.0));
         ui.horizontal(|ui| {
-            icon(ui, which, if warn { palette.warning } else { palette.accent }, 20.0);
+            icon(
+                ui,
+                which,
+                if warn {
+                    palette.warning
+                } else {
+                    palette.accent
+                },
+                20.0,
+            );
             ui.label(RichText::new(label).color(palette.secondary).size(12.5));
         });
         ui.add_space(8.0);
@@ -170,24 +179,32 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
     ui.horizontal(|ui| {
         pill(
             ui,
-            format!("{} {}", number(unpaid.count as f64), t!(app.locale, "invoices")),
+            format!(
+                "{} {}",
+                number(unpaid.count as f64),
+                t!(app.locale, "invoices")
+            ),
             palette.surface_active,
             palette.secondary,
         );
     });
 }
 
-fn stat_row(
-    ui: &mut egui::Ui,
-    palette: &Palette,
-    label: impl AsRef<str>,
-    value: impl AsRef<str>,
-) {
+fn stat_row(ui: &mut egui::Ui, palette: &Palette, label: impl AsRef<str>, value: impl AsRef<str>) {
     ui.horizontal(|ui| {
         ui.set_width(ui.available_width());
-        ui.label(RichText::new(label.as_ref()).color(palette.secondary).size(13.0));
+        ui.label(
+            RichText::new(label.as_ref())
+                .color(palette.secondary)
+                .size(13.0),
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(value.as_ref()).color(palette.text).strong().size(13.5));
+            ui.label(
+                RichText::new(value.as_ref())
+                    .color(palette.text)
+                    .strong()
+                    .size(13.5),
+            );
         });
     });
     ui.add_space(6.0);
