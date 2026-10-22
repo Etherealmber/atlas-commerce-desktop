@@ -238,7 +238,7 @@ fn stock_pill(
     if !product.tracks_inventory() {
         pill(
             ui,
-            t!(locale, "Not tracked").into_owned(),
+            t!(locale, "Not tracked"),
             palette.surface_active,
             palette.secondary,
         );
@@ -263,30 +263,31 @@ fn stock_pill(
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Poll the save job first, so a result applies this frame.
-    if let Some(editor) = app.product_editor.as_mut() {
-        if let Some(job) = &editor.job {
-            if let Some(result) = job.poll() {
-                editor.job = None;
-                editor.saving = false;
-                match result {
-                    Ok(_) => {
-                        app.product_editor = None;
-                        app.notice(t!(app.locale, "Product created.").into_owned());
-                        app.load_products();
-                        return;
-                    }
-                    Err(error) => {
-                        if error.code.as_deref() == Some("DUPLICATE_PRODUCT") {
-                            editor.force_duplicate = true;
-                            editor.error = Some(t!(
-                                app.locale,
-                                "A similar product already exists. Save again to create it anyway."
-                            )
-                            .into_owned());
-                        } else {
-                            editor.error = Some(error.message);
-                        }
-                    }
+    if let Some(editor) = app.product_editor.as_mut()
+        && let Some(job) = &editor.job
+        && let Some(result) = job.poll()
+    {
+        editor.job = None;
+        editor.saving = false;
+        match result {
+            Ok(_) => {
+                app.product_editor = None;
+                app.notice(t!(app.locale, "Product created.").into_owned());
+                app.load_products();
+                return;
+            }
+            Err(error) => {
+                if error.code.as_deref() == Some("DUPLICATE_PRODUCT") {
+                    editor.force_duplicate = true;
+                    editor.error = Some(
+                        t!(
+                            app.locale,
+                            "A similar product already exists. Save again to create it anyway."
+                        )
+                        .into_owned(),
+                    );
+                } else {
+                    editor.error = Some(error.message);
                 }
             }
         }
@@ -471,21 +472,20 @@ fn submit_product(app: &mut AtlasApp) {
 // ── Stock adjustment dialog ─────────────────────────────────────────────────
 
 fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    if let Some(dialog) = app.stock_dialog.as_mut() {
-        if let Some(job) = &dialog.job {
-            if let Some(result) = job.poll() {
-                dialog.job = None;
-                dialog.saving = false;
-                match result {
-                    Ok(_) => {
-                        app.stock_dialog = None;
-                        app.notice(t!(app.locale, "Stock updated.").into_owned());
-                        app.load_products();
-                        return;
-                    }
-                    Err(error) => dialog.error = Some(error.message),
-                }
+    if let Some(dialog) = app.stock_dialog.as_mut()
+        && let Some(job) = &dialog.job
+        && let Some(result) = job.poll()
+    {
+        dialog.job = None;
+        dialog.saving = false;
+        match result {
+            Ok(_) => {
+                app.stock_dialog = None;
+                app.notice(t!(app.locale, "Stock updated.").into_owned());
+                app.load_products();
+                return;
             }
+            Err(error) => dialog.error = Some(error.message),
         }
     }
     if app.stock_dialog.is_none() {
@@ -541,10 +541,10 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         palette.surface
                     })
                     .corner_radius(8.0);
-                    if ui.add(button).clicked() {
-                        if let Some(dialog) = app.stock_dialog.as_mut() {
-                            dialog.kind = kind;
-                        }
+                    if ui.add(button).clicked()
+                        && let Some(dialog) = app.stock_dialog.as_mut()
+                    {
+                        dialog.kind = kind;
                     }
                 }
             });

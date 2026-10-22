@@ -184,7 +184,9 @@ fn main() -> eframe::Result<()> {
         shell = shell.idle(fastframe_tray::idle);
     }
 
-    let mut receipt = receipt;
+    // The run closure is `FnMut` and runs again whenever the window is
+    // recreated, so the one-shot receipt sits behind interior mutability.
+    let receipt = std::cell::RefCell::new(receipt);
 
     shell.run(move |lease| {
         let custom_titlebar = lease.peek(|app| app.settings.custom_titlebar);
@@ -194,7 +196,7 @@ fn main() -> eframe::Result<()> {
             options,
             Box::new(move |cc| {
                 let mut window = EframeShell::new(lease, &cc.egui_ctx);
-                if let Some(receipt) = receipt.take() {
+                if let Some(receipt) = receipt.borrow_mut().take() {
                     window = window.with_receipt(receipt);
                 }
                 Ok(Box::new(window))

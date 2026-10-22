@@ -248,7 +248,7 @@ fn draw_user_card(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let host = app
         .server_store
         .selected_url()
-        .map(|url| atlas_core::ServerUrl::host(url))
+        .map(atlas_core::ServerUrl::host)
         .unwrap_or_else(|| "—".to_owned());
     widgets::card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());

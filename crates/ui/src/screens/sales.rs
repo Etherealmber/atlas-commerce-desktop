@@ -83,23 +83,23 @@ fn poll_sale_job(app: &mut AtlasApp) {
     let Some(draft) = app.quick_sale.as_mut() else {
         return;
     };
-    if let Some(job) = &draft.job {
-        if let Some(result) = job.poll() {
-            draft.job = None;
-            draft.saving = false;
-            match result {
-                Ok(invoice) => {
-                    let number = invoice.number.unwrap_or_else(|| format!("#{}", invoice.id));
-                    app.notice(format!(
-                        "{} ({number})",
-                        t!(app.locale, "Quick sale recorded.")
-                    ));
-                    app.quick_sale = Some(QuickSaleDraft::default());
-                    app.load_invoices();
-                    app.load_dashboard();
-                }
-                Err(error) => draft.error = Some(error.message),
+    if let Some(job) = &draft.job
+        && let Some(result) = job.poll()
+    {
+        draft.job = None;
+        draft.saving = false;
+        match result {
+            Ok(invoice) => {
+                let number = invoice.number.unwrap_or_else(|| format!("#{}", invoice.id));
+                app.notice(format!(
+                    "{} ({number})",
+                    t!(app.locale, "Quick sale recorded.")
+                ));
+                app.quick_sale = Some(QuickSaleDraft::default());
+                app.load_invoices();
+                app.load_dashboard();
             }
+            Err(error) => draft.error = Some(error.message),
         }
     }
 }

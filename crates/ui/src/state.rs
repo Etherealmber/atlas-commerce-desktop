@@ -53,24 +53,24 @@ impl<T> Cache<T> {
 
     /// Polls the job once; returns true when it finished this frame.
     pub fn poll(&mut self) -> bool {
-        if let Some(job) = &self.job {
-            if let Some(result) = job.poll() {
-                self.job = None;
-                self.loading = false;
-                self.last_updated = Some(Instant::now());
-                match result {
-                    Ok(data) => {
-                        self.data = Some(data);
-                        self.last_error = None;
-                        self.error = None;
-                    }
-                    Err(error) => {
-                        self.error = Some(error.message.clone());
-                        self.last_error = Some(error);
-                    }
+        if let Some(job) = &self.job
+            && let Some(result) = job.poll()
+        {
+            self.job = None;
+            self.loading = false;
+            self.last_updated = Some(Instant::now());
+            match result {
+                Ok(data) => {
+                    self.data = Some(data);
+                    self.last_error = None;
+                    self.error = None;
                 }
-                return true;
+                Err(error) => {
+                    self.error = Some(error.message.clone());
+                    self.last_error = Some(error);
+                }
             }
+            return true;
         }
         false
     }
@@ -274,6 +274,10 @@ pub struct AtlasApp {
 impl AtlasApp {
     /// Builds the app from already-loaded on-disk state.
     #[must_use]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "single composition root wiring every process service into the app"
+    )]
     pub fn new(
         paths: AppPaths,
         runner: JobRunner,

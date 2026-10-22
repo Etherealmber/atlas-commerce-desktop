@@ -79,7 +79,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     let label = super::severity_label(alert.severity.as_deref());
-                    pill(ui, label.to_owned(), tint.gamma_multiply(0.16), tint);
+                    pill(ui, label, tint.gamma_multiply(0.16), tint);
                 });
             });
         });

@@ -11,11 +11,13 @@ use crate::widgets::{card, empty_state, icon, info_banner, page_title, pill, pri
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session.
-    if app.agent.policy.is_none() && app.agent.job_policy.is_none() && app.client.is_some() {
-        if let Some(client) = app.client.clone() {
-            app.agent.job_policy =
-                Some(app.runner.spawn(async move { client.agent_policy().await }));
-        }
+    if app.agent.policy.is_none()
+        && app.agent.job_policy.is_none()
+        && app.client.is_some()
+        && let Some(client) = app.client.clone()
+    {
+        app.agent.job_policy =
+            Some(app.runner.spawn(async move { client.agent_policy().await }));
     }
 
     ui.add_space(8.0);

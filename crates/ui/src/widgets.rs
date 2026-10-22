@@ -88,7 +88,6 @@ pub fn danger_button(
 }
 
 /// A surface card with the palette's outline.
-#[must_use]
 pub fn card(palette: &Palette) -> egui::Frame {
     egui::Frame::NONE
         .fill(palette.surface)
@@ -176,7 +175,6 @@ pub fn dialog_actions(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui)) {
 }
 
 /// A modal-ish centered frame used by every dialog.
-#[must_use]
 pub fn dialog_frame(palette: &Palette) -> egui::Frame {
     egui::Frame::NONE
         .fill(palette.overlay)

@@ -161,19 +161,19 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
         ui,
         palette,
         t!(app.locale, "Open"),
-        &money(unpaid.open, currency),
+        money(unpaid.open, currency),
     );
     stat_row(
         ui,
         palette,
         t!(app.locale, "Overdue"),
-        &money(unpaid.overdue, currency),
+        money(unpaid.overdue, currency),
     );
     stat_row(
         ui,
         palette,
         t!(app.locale, "Total due"),
-        &money(unpaid.total, currency),
+        money(unpaid.total, currency),
     );
     ui.add_space(8.0);
     ui.horizontal(|ui| {

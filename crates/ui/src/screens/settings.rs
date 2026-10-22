@@ -287,7 +287,7 @@ fn servers(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if is_selected {
                         pill(
                             ui,
-                            t!(app.locale, "Active").into_owned(),
+                            t!(app.locale, "Active"),
                             palette.accent.gamma_multiply(0.18),
                             palette.accent,
                         );
@@ -417,7 +417,7 @@ fn devices(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         if device.current {
                             pill(
                                 ui,
-                                t!(app.locale, "This device").into_owned(),
+                                t!(app.locale, "This device"),
                                 palette.accent.gamma_multiply(0.18),
                                 palette.accent,
                             );
@@ -499,7 +499,7 @@ fn updates(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.add_space(10.0);
             info_banner(
                 ui,
-                &format!(
+                format!(
                     "{} : v{} — {}",
                     t!(app.locale, "Latest version"),
                     manifest.version,
@@ -595,10 +595,10 @@ fn about(app: &AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
             .size(12.5),
         );
         ui.add_space(8.0);
-        if secondary_button(ui, t!(app.locale, "Open project repository"), palette) {
-            if let Err(error) = open::that(REPOSITORY_URL) {
-                log::warn!("could not open repository: {error}");
-            }
+        if secondary_button(ui, t!(app.locale, "Open project repository"), palette)
+            && let Err(error) = open::that(REPOSITORY_URL)
+        {
+            log::warn!("could not open repository: {error}");
         }
     });
 }

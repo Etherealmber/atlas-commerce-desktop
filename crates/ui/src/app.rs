@@ -368,19 +368,19 @@ impl AtlasApp {
             .iter()
             .filter(|alert| alert.severity.as_deref() == Some("high"))
             .count();
-        if high > self.notification_state.last_high_severity_count {
-            if let Some(client) = &self.notifications {
-                let newest = alerts
-                    .iter()
-                    .find(|alert| alert.severity.as_deref() == Some("high"));
-                if let Some(alert) = newest {
-                    let notification =
-                        fastframe_notifications::Notification::new("Alerte stock Atlas Commerce")
-                            .body(alert.label.clone())
-                            .category("stock");
-                    if let Err(error) = client.show(notification) {
-                        log::warn!("notification failed: {error:?}");
-                    }
+        if high > self.notification_state.last_high_severity_count
+            && let Some(client) = &self.notifications
+        {
+            let newest = alerts
+                .iter()
+                .find(|alert| alert.severity.as_deref() == Some("high"));
+            if let Some(alert) = newest {
+                let notification =
+                    fastframe_notifications::Notification::new("Alerte stock Atlas Commerce")
+                        .body(alert.label.clone())
+                        .category("stock");
+                if let Err(error) = client.show(notification) {
+                    log::warn!("notification failed: {error:?}");
                 }
             }
         }

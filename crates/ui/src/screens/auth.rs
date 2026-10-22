@@ -61,7 +61,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         ui.add_space(ui.available_height() * 0.2);
         crate::brand(ui, palette, 48.0);
         ui.add_space(20.0);
-        page_title(ui, &t!(app.locale, "Welcome to Atlas Commerce"), palette);
+        page_title(ui, t!(app.locale, "Welcome to Atlas Commerce"), palette);
         ui.add_space(10.0);
         ui.label(
             RichText::new(t!(
@@ -99,11 +99,11 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
 
 pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
     // Poll the probe.
-    if let Some(job) = &app.server_form.probe_job {
-        if let Some(report) = job.poll() {
-            app.server_form.probe_report = Some(report);
-            app.server_form.probe_job = None;
-        }
+    if let Some(job) = &app.server_form.probe_job
+        && let Some(report) = job.poll()
+    {
+        app.server_form.probe_report = Some(report);
+        app.server_form.probe_job = None;
     }
 
     egui::ScrollArea::vertical()
@@ -113,7 +113,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 ui.add_space(if embedded { 12.0 } else { 40.0 });
                 icon(ui, Icon::Server, palette.accent, 30.0);
                 ui.add_space(10.0);
-                page_title(ui, &t!(app.locale, "Choose your server"), palette);
+                page_title(ui, t!(app.locale, "Choose your server"), palette);
                 ui.add_space(4.0);
                 ui.label(
                     RichText::new(t!(
@@ -227,7 +227,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             ui.add_space(8.0);
                             labelled_field(
                                 ui,
-                                &t!(app.locale, "Label (optional)"),
+                                t!(app.locale, "Label (optional)"),
                                 &mut app.server_form.custom_label,
                                 palette,
                                 false,
@@ -235,7 +235,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             ui.add_space(8.0);
                             labelled_field(
                                 ui,
-                                &t!(app.locale, "Server address (https://…)"),
+                                t!(app.locale, "Server address (https://…)"),
                                 &mut app.server_form.custom_url,
                                 palette,
                                 false,
@@ -307,7 +307,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             let valid = app.server_store.selected_url().is_some();
                             if primary_button(
                                 ui,
-                                &t!(app.locale, "Save and continue"),
+                                t!(app.locale, "Save and continue"),
                                 palette,
                                 valid,
                             ) {
@@ -369,7 +369,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.add_space(ui.available_height() * 0.08);
                 crate::brand(ui, palette, 40.0);
                 ui.add_space(12.0);
-                page_title(ui, &t!(app.locale, "Sign in"), palette);
+                page_title(ui, t!(app.locale, "Sign in"), palette);
                 let host = app
                     .server_store
                     .selected_url()
@@ -453,7 +453,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
         labelled_field(
             ui,
-            &t!(app.locale, "Username"),
+            t!(app.locale, "Username"),
             &mut app.login.username,
             palette,
             false,
@@ -494,7 +494,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.add_space(8.0);
             labelled_field(
                 ui,
-                &t!(app.locale, "E-mail verification code (6 digits)"),
+                t!(app.locale, "E-mail verification code (6 digits)"),
                 &mut app.login.otp,
                 palette,
                 false,
@@ -514,10 +514,10 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         dialog_actions(ui, |ui| {
             let busy = app.login.busy;
             if app.login.needs_otp {
-                if primary_button(ui, &t!(app.locale, "Verify"), palette, !busy) {
+                if primary_button(ui, t!(app.locale, "Verify"), palette, !busy) {
                     start_otp(app);
                 }
-            } else if primary_button(ui, &t!(app.locale, "Sign in"), palette, !busy) {
+            } else if primary_button(ui, t!(app.locale, "Sign in"), palette, !busy) {
                 start_login(app);
             }
         });
@@ -609,7 +609,7 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             }
             ui.add_space(10.0);
-            if secondary_button(ui, &t!(app.locale, "New code"), palette) {
+            if secondary_button(ui, t!(app.locale, "New code"), palette) {
                 start_qr_session(app);
             }
         });
@@ -734,92 +734,88 @@ fn start_qr_poll(app: &mut AtlasApp) {
 
 pub fn poll_login_jobs(app: &mut AtlasApp) {
     // Login (password).
-    if let Some(job) = &app.login.job_login {
-        if let Some(result) = job.poll() {
-            app.login.job_login = None;
-            app.login.busy = false;
-            handle_login_response(app, result);
-        }
+    if let Some(job) = &app.login.job_login
+        && let Some(result) = job.poll()
+    {
+        app.login.job_login = None;
+        app.login.busy = false;
+        handle_login_response(app, result);
     }
     // OTP.
-    if let Some(job) = &app.login.job_otp {
-        if let Some(result) = job.poll() {
-            app.login.job_otp = None;
-            app.login.busy = false;
-            handle_login_response(app, result);
-        }
+    if let Some(job) = &app.login.job_otp
+        && let Some(result) = job.poll()
+    {
+        app.login.job_otp = None;
+        app.login.busy = false;
+        handle_login_response(app, result);
     }
     // One-tap link.
-    if let Some(job) = &app.login.job_link {
-        if let Some(result) = job.poll() {
-            app.login.job_link = None;
-            app.login.busy = false;
-            app.login.notice = None;
-            handle_login_response(app, result);
-        }
+    if let Some(job) = &app.login.job_link
+        && let Some(result) = job.poll()
+    {
+        app.login.job_link = None;
+        app.login.busy = false;
+        app.login.notice = None;
+        handle_login_response(app, result);
     }
     // QR session creation.
-    if let Some(job) = &app.qr.job_create {
-        if let Some(result) = job.poll() {
-            app.qr.job_create = None;
-            match result {
-                Ok(session) => {
-                    app.qr.token = session.token;
-                    app.qr.qr_url = session.qr_url;
-                    app.qr.next_poll = None;
-                }
-                Err(error) => app.notice(error.message),
+    if let Some(job) = &app.qr.job_create
+        && let Some(result) = job.poll()
+    {
+        app.qr.job_create = None;
+        match result {
+            Ok(session) => {
+                app.qr.token = session.token;
+                app.qr.qr_url = session.qr_url;
+                app.qr.next_poll = None;
             }
+            Err(error) => app.notice(error.message),
         }
     }
     // QR status.
-    if let Some(job) = &app.qr.job_status {
-        if let Some(result) = job.poll() {
-            app.qr.job_status = None;
-            match result {
-                Ok(status) => {
-                    app.qr.status = status.status.clone();
-                    if let Some(name) = status.display_name.or(status.username) {
-                        app.qr.account = name;
-                    }
-                    if matches!(status.status.as_str(), "expired" | "denied") {
-                        app.qr.expired = true;
-                    }
-                    if status.status == "approved" {
-                        // PC fingerprint completes the one-time exchange.
-                        if let Some(client) = app.client.clone() {
-                            let token = app.qr.token.clone();
-                            app.qr.job_complete = Some(
-                                app.runner
-                                    .spawn(async move { client.qr_complete(&token).await }),
-                            );
-                        }
-                    }
+    if let Some(job) = &app.qr.job_status
+        && let Some(result) = job.poll()
+    {
+        app.qr.job_status = None;
+        match result {
+            Ok(status) => {
+                app.qr.status = status.status.clone();
+                if let Some(name) = status.display_name.or(status.username) {
+                    app.qr.account = name;
                 }
-                Err(error) => log::warn!("qr status poll failed: {}", error.message),
+                if matches!(status.status.as_str(), "expired" | "denied") {
+                    app.qr.expired = true;
+                }
+                if status.status == "approved"
+                    && let Some(client) = app.client.clone()
+                {
+                    // PC fingerprint completes the one-time exchange.
+                    let token = app.qr.token.clone();
+                    app.qr.job_complete =
+                        Some(app.runner.spawn(async move { client.qr_complete(&token).await }));
+                }
             }
+            Err(error) => log::warn!("qr status poll failed: {}", error.message),
         }
     }
     // QR completion.
-    if let Some(job) = &app.qr.job_complete {
-        if let Some(result) = job.poll() {
-            app.qr.job_complete = None;
-            match result {
-                Ok(complete) => {
-                    if let Some(token) = complete.token {
-                        app.enter_session(
-                            token,
-                            complete
-                                .username
-                                .unwrap_or_else(|| "utilisateur".to_owned()),
-                            complete.role.unwrap_or_else(|| "user".to_owned()),
-                            complete.display_name.unwrap_or_default(),
-                            complete.avatar_url.unwrap_or_default(),
-                        );
-                    }
+    if let Some(job) = &app.qr.job_complete
+        && let Some(result) = job.poll()
+    {
+        app.qr.job_complete = None;
+        match result {
+            Ok(complete) => {
+                if let Some(token) = complete.token {
+                    app.enter_session(
+                        token,
+                        complete.username.unwrap_or_else(|| "utilisateur".to_owned()),
+                        complete.role.unwrap_or_else(|| "user".to_owned()),
+                        complete.display_name.unwrap_or_default(),
+                        complete.avatar_url.unwrap_or_default(),
+                    );
                 }
-                Err(error) => app.notice(error.message),
             }
+            Err(error) => app.notice(error.message),
         }
     }
     // Probe is polled in draw_server_setup.
@@ -874,7 +870,7 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         ui.add_space(16.0);
         page_title(
             ui,
-            &t!(app.locale, "A required update is available"),
+            t!(app.locale, "A required update is available"),
             palette,
         );
         ui.add_space(8.0);
@@ -917,7 +913,7 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         ui.add_space(20.0);
         if primary_button(
             ui,
-            &t!(app.locale, "Update now"),
+            t!(app.locale, "Update now"),
             palette,
             app.update.progress.is_none(),
         ) {
@@ -925,7 +921,7 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         }
         ui.add_space(8.0);
         if let Some((received, total)) = app.update.progress {
-            let percent = if total > 0 { received * 100 / total } else { 0 };
+            let percent = (received * 100).checked_div(total).unwrap_or(0);
             ui.label(
                 RichText::new(format!("{} %", percent))
                     .color(palette.dim)

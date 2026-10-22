@@ -32,11 +32,8 @@ pub const CONFIG: UpdateConfig = UpdateConfig {
 
 #[derive(Deserialize)]
 struct ReleaseListing {
-    tag_name: String,
     #[serde(default)]
     draft: bool,
-    #[serde(default)]
-    prerelease: bool,
     assets: Vec<Asset>,
 }
 
