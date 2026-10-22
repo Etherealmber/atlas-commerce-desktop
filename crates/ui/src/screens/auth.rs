@@ -791,8 +791,10 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                 {
                     // PC fingerprint completes the one-time exchange.
                     let token = app.qr.token.clone();
-                    app.qr.job_complete =
-                        Some(app.runner.spawn(async move { client.qr_complete(&token).await }));
+                    app.qr.job_complete = Some(
+                        app.runner
+                            .spawn(async move { client.qr_complete(&token).await }),
+                    );
                 }
             }
             Err(error) => log::warn!("qr status poll failed: {}", error.message),
@@ -808,7 +810,9 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                 if let Some(token) = complete.token {
                     app.enter_session(
                         token,
-                        complete.username.unwrap_or_else(|| "utilisateur".to_owned()),
+                        complete
+                            .username
+                            .unwrap_or_else(|| "utilisateur".to_owned()),
                         complete.role.unwrap_or_else(|| "user".to_owned()),
                         complete.display_name.unwrap_or_default(),
                         complete.avatar_url.unwrap_or_default(),

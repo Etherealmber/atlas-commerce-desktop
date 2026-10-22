@@ -16,8 +16,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         && app.client.is_some()
         && let Some(client) = app.client.clone()
     {
-        app.agent.job_policy =
-            Some(app.runner.spawn(async move { client.agent_policy().await }));
+        app.agent.job_policy = Some(app.runner.spawn(async move { client.agent_policy().await }));
     }
 
     ui.add_space(8.0);
