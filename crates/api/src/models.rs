@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize)]
 pub struct Envelope<T> {
     pub success: bool,
-    #[serde(default)]
+    // `Option` fields are implicitly absent-equals-`None`; an explicit
+    // `default` here would force a spurious `T: Default` bound.
     pub data: Option<T>,
     #[serde(default)]
     pub meta: Option<serde_json::Value>,
@@ -532,10 +533,18 @@ pub struct AgentPolicy {
     pub daily_used: u64,
     #[serde(rename = "weeklyUsed", default)]
     pub weekly_used: u64,
-    #[serde(rename = "dailyLimit", default = "25000")]
+    #[serde(rename = "dailyLimit", default = "default_daily_limit")]
     pub daily_limit: u64,
-    #[serde(rename = "weeklyLimit", default = "100000")]
+    #[serde(rename = "weeklyLimit", default = "default_weekly_limit")]
     pub weekly_limit: u64,
+}
+
+const fn default_daily_limit() -> u64 {
+    25_000
+}
+
+const fn default_weekly_limit() -> u64 {
+    100_000
 }
 
 #[cfg(test)]

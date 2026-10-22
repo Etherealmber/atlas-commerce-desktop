@@ -261,10 +261,10 @@ mod tests {
 
     #[test]
     fn json_palettes_round_trip_through_the_fastframe_parser() {
-        let json = r#"{
+        let json = r##"{
             "base": "dark",
             "colors": { "accent": "#14b8a6", "panel": "#101014" }
-        }"#;
+        }"##;
         let palette = load_custom(json).expect("the palette parses");
         assert!(palette.dark);
         assert_eq!(palette.accent, hex(0x14, 0xb8, 0xa6));
@@ -275,8 +275,8 @@ mod tests {
 
     #[test]
     fn invalid_palette_files_are_rejected() {
-        assert!(load_custom(r#"{"colors":{"nope":"#fff"}}"#).is_err());
-        assert!(load_custom(r#"{"colors":{"accent":"blue"}}"#).is_err());
+        assert!(load_custom(r##"{"colors":{"nope":"#fff"}}"##).is_err());
+        assert!(load_custom(r##"{"colors":{"accent":"blue"}}"##).is_err());
     }
 
     #[test]

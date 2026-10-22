@@ -8,6 +8,7 @@ use atlas_core::servers::ServerUrl;
 
 use crate::error::ApiError;
 use crate::models::{Canary, Envelope, Health};
+use crate::ApiClient;
 
 /// The probe outcome, with French guidance for every failure mode.
 #[derive(Debug, Clone)]
@@ -86,7 +87,10 @@ pub async fn probe_normalized(base: &str, fingerprint: &str, user_agent: &str) -
                         429 => "Serveur joignable mais temporairement limité (429). Patientez puis réessayez.".to_owned(),
                         code if (500..600).contains(&code) =>
                             "Site temporairement indisponible (erreur 5xx). Vérifiez votre déploiement.".to_owned(),
-                        _ => format!("Connexion refusée ({code}). Vérifiez l'adresse saisie."),
+                        _ => format!(
+                            "Connexion refusée ({}). Vérifiez l'adresse saisie.",
+                            status.as_u16()
+                        ),
                     },
                 };
             }

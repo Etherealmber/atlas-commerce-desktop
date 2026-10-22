@@ -63,7 +63,7 @@ impl ApiClient {
             .json(sale)
             .send()
             .await
-            .map_err(crate::error::ApiError::transport)?;
+            .map_err(|error| crate::error::ApiError::transport(error.to_string()))?;
         self.unwrap_envelope(response).await
     }
 
