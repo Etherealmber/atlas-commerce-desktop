@@ -161,6 +161,9 @@ fn main() -> eframe::Result<()> {
     app.tray_available = tray_available;
     app.autostart_state = autostart_state;
     app.notifications = notifications;
+    // The receipt lives on the app (Spotifast's pattern): it is taken once
+    // by the first window's first frame, surviving hide-to-tray recreations.
+    app.update_receipt = receipt;
     if let Some(message) = launch_error {
         app.notice(format!("Mise à jour : {message}"));
     }
@@ -184,23 +187,13 @@ fn main() -> eframe::Result<()> {
         shell = shell.idle(fastframe_tray::idle);
     }
 
-    // The run closure is `FnMut` and runs again whenever the window is
-    // recreated, so the one-shot receipt sits behind interior mutability.
-    let receipt = std::cell::RefCell::new(receipt);
-
     shell.run(move |lease| {
         let custom_titlebar = lease.peek(|app| app.settings.custom_titlebar);
         let options = native_options(custom_titlebar);
         eframe::run_native(
             APP_NAME,
             options,
-            Box::new(move |cc| {
-                let mut window = EframeShell::new(lease, &cc.egui_ctx);
-                if let Some(receipt) = receipt.borrow_mut().take() {
-                    window = window.with_receipt(receipt);
-                }
-                Ok(Box::new(window))
-            }),
+            Box::new(move |cc| Ok(Box::new(EframeShell::new(lease, &cc.egui_ctx)))),
         )
     })
 }

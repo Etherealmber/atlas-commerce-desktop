@@ -56,9 +56,11 @@ jobs:
           echo "EXIT:$?" >> compile.log
           cargo test --workspace > test.log 2>&1
           echo "EXIT:$?" >> test.log
-          cargo clippy --all-targets --all-features -- -D warnings > clippy.log 2>&1
+          cargo clippy --all-targets -- -D warnings > clippy.log 2>&1
           echo "EXIT:$?" >> clippy.log
-          cargo doc --all-features --no-deps > doc.log 2>&1
+          cargo clippy --all-targets --all-features -- -D warnings >> clippy.log 2>&1
+          echo "EXIT:$?" >> clippy.log
+          RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps > doc.log 2>&1
           echo "EXIT:$?" >> doc.log
           true
       - name: Publish diagnostics branch

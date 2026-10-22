@@ -550,8 +550,6 @@ impl Resident for AtlasApp {
 /// The eframe app owning the shell-held [`AtlasApp`].
 pub struct EframeShell {
     pub held: Held<AtlasApp>,
-    /// The update handoff receipt, acknowledged after the first frame.
-    receipt: Option<fastframe_update::Receipt>,
     first_frame: bool,
 }
 
@@ -563,15 +561,8 @@ impl EframeShell {
         crate::theme::install_fonts_and_icons(ctx);
         Self {
             held,
-            receipt: None,
             first_frame: true,
         }
-    }
-
-    /// Carries the update receipt the helper relaunched this process with.
-    pub fn with_receipt(mut self, receipt: fastframe_update::Receipt) -> Self {
-        self.receipt = Some(receipt);
-        self
     }
 }
 
@@ -592,7 +583,7 @@ impl eframe::App for EframeShell {
             if let Some(tray) = self.held.tray.as_mut() {
                 tray.attach();
             }
-            if let Some(receipt) = self.receipt.take() {
+            if let Some(receipt) = self.held.update_receipt.take() {
                 // The helper stands ready to roll back until the new build
                 // proves it can draw; answer off the UI thread.
                 std::thread::spawn(move || {

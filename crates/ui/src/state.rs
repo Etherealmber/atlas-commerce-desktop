@@ -222,6 +222,8 @@ pub struct AtlasApp {
     pub wants_quit: bool,
     /// A headless tick or tray event asked the window to reappear.
     pub show_requested: bool,
+    /// Update-helper receipt, acknowledged on the first frame after relaunch.
+    pub update_receipt: Option<fastframe_update::Receipt>,
 
     // ── persisted state ──
     pub settings: Settings,
@@ -343,6 +345,7 @@ impl AtlasApp {
             update: UpdateState::default(),
             update_progress: Arc::new(Mutex::new((0, 0))),
             update_download_job: None,
+            update_receipt: None,
             notices: Vec::new(),
         }
     }
