@@ -63,10 +63,27 @@ jobs:
           RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps > doc.log 2>&1
           echo "EXIT:$?" >> doc.log
           true
+      - name: OSV scanner (captured, non-fatal)
+        run: |
+          set +e
+          # Configured run: osv-scanner.toml in the workspace root is picked
+          # up automatically and must leave the scan clean.
+          docker run --rm -v "$PWD":/src -w /src \
+            ghcr.io/google/osv-scanner-action:v2.7.0 \
+            scan source --lockfile=Cargo.lock > osv.log 2>&1
+          echo "EXIT:$?" >> osv.log
+          # Raw run: same lockfile in a directory without a config, so the
+          # unfiltered advisory list is visible for auditing.
+          mkdir -p osv-raw && cp Cargo.lock osv-raw/
+          docker run --rm -v "$PWD/osv-raw":/raw -w /raw \
+            ghcr.io/google/osv-scanner-action:v2.7.0 \
+            scan source --lockfile=Cargo.lock > osv-raw.log 2>&1
+          echo "EXIT:$?" >> osv-raw.log
+          true
       - name: Publish diagnostics branch
         run: |
           git checkout -b ci-debug-log
-          git add -f fmt.log compile.log test.log clippy.log doc.log Cargo.lock
+          git add -f fmt.log compile.log test.log clippy.log doc.log osv.log osv-raw.log Cargo.lock
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "ci: rust diagnostics"

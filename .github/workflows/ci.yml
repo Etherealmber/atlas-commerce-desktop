@@ -88,7 +88,9 @@ jobs:
       # One explicit input: the generated Cargo.lock. The action's default
       # shape pairs --recursive with a positional path; passing the flag
       # alone errors, and a full-tree scan would also see the reference
-      # checkouts in CI.
+      # checkouts in CI. osv-scanner.toml next to the lockfile documents
+      # the scoped, time-limited exceptions for unmaintained transitive
+      # crates; any new advisory still fails this job.
       - name: OSV scanner
         uses: google/osv-scanner-action/osv-scanner-action@v2.7.0
         with:
