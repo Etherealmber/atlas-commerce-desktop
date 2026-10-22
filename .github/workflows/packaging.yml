@@ -63,6 +63,9 @@ jobs:
         run: |
           $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
           python packaging/windows/build-msi.py --help
+      - name: Build release binary
+        shell: pwsh
+        run: cargo build --release
       - name: Inno Setup script compiles
         shell: pwsh
         run: |
@@ -72,10 +75,14 @@ jobs:
             Write-Host "Inno Setup not present on this runner image; skipping."
             exit 0
           }
-          cargo build --release
+          $binary = "$PWD\target\release\atlas-commerce-desktop.exe"
+          if (-not (Test-Path $binary)) {
+            Write-Error "release binary missing: $binary"
+            exit 1
+          }
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
             Select-Object -First 1).Matches.Groups[1].Value
           & $iscc "/DVersion=$version" "/DArch=x86_64" `
-            "/DBinary=$PWD\target\release\atlas-commerce-desktop.exe" `
+            "/DBinary=$binary" `
             "/DOutputDir=$env:RUNNER_TEMP\inno-check" packaging\windows\atlas-commerce-desktop.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
