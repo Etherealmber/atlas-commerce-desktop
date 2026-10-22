@@ -5,9 +5,9 @@ use egui::RichText;
 
 use crate::icons::Icon;
 use crate::state::{AtlasApp, ChatMessage};
+use crate::t;
 use crate::theme::Palette;
 use crate::widgets::{card, empty_state, icon, info_banner, page_title, pill, primary_button};
-use crate::t;
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session.

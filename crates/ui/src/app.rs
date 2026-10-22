@@ -401,24 +401,24 @@ impl AtlasApp {
         {
             self.agent.job = None;
             self.agent.busy = false;
-                match result {
-                    Ok(reply) => {
-                        self.agent.messages.push(crate::state::ChatMessage {
-                            from_user: false,
-                            text: if reply.reply.is_empty() {
-                                "Aucune réponse de l'agent.".to_owned()
-                            } else {
-                                reply.reply
-                            },
-                        });
-                    }
-                    Err(error) => {
-                        self.agent.messages.push(crate::state::ChatMessage {
-                            from_user: false,
-                            text: format!("Erreur : {}", error.message),
-                        });
-                    }
+            match result {
+                Ok(reply) => {
+                    self.agent.messages.push(crate::state::ChatMessage {
+                        from_user: false,
+                        text: if reply.reply.is_empty() {
+                            "Aucune réponse de l'agent.".to_owned()
+                        } else {
+                            reply.reply
+                        },
+                    });
                 }
+                Err(error) => {
+                    self.agent.messages.push(crate::state::ChatMessage {
+                        from_user: false,
+                        text: format!("Erreur : {}", error.message),
+                    });
+                }
+            }
         }
     }
 

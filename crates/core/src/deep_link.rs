@@ -143,8 +143,7 @@ impl QrTokenParser {
             }
             if let Some(index) = segments.iter().position(|segment| {
                 segment.eq_ignore_ascii_case("qr") || segment.eq_ignore_ascii_case("login-qr")
-            })
-                && let Some(token) = segments.get(index + 1)
+            }) && let Some(token) = segments.get(index + 1)
                 && is_raw_token(token)
             {
                 return Some((*token).to_owned());
