@@ -1,0 +1,183 @@
+# Native package descriptions for native-packages 0.10.0.
+# Shared CLI: gem install native-packages --version 0.10.0
+---
+schema: 1
+tool:
+  version: 0.10.0
+  nfpm: 2.47.0
+# Ubuntu 24.04 and Debian 13 use the ALSA t64 package name. The GUI itself
+# needs no audio stack; these are the winit/eframe runtime libraries only.
+libraries:
+  libasound.so.2:
+    deb: libasound2t64
+    rpm: alsa-lib
+nfpm:
+  name: atlas-commerce-desktop
+  maintainer: loxdpsy/Etherealmber <noreply@etherealmber.dev>
+  homepage: https://github.com/Etherealmber/atlas-commerce-desktop
+  description: Client natif pour la plateforme Atlas Commerce
+  license: MIT
+  contents:
+  # A glob source makes nFPM append its basename to the destination directory.
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/atlas-commerce-desktop"
+    dst: "/usr/bin/"
+    file_info:
+      mode: 493
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/LICENSE"
+    dst: "/usr/share/licenses/atlas-commerce-desktop/"
+    file_info:
+      mode: 420
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/README.md"
+    dst: "/usr/share/doc/atlas-commerce-desktop/"
+    file_info:
+      mode: 420
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/applications/*.desktop"
+    dst: "/usr/share/applications/"
+    file_info:
+      mode: 420
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/icons/*.svg"
+    dst: "/usr/share/icons/hicolor/scalable/apps/"
+    file_info:
+      mode: 420
+  overrides:
+    # ELF inspection cannot discover the GUI's dlopen dependencies. Keep
+    # these aligned with the winit/eframe feature set and the runner images.
+    deb:
+      depends:
+      - libdbus-1-3
+      - libc6 (>= 2.39)
+      - libgl1
+      - libegl1
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+      - libwayland-client0
+      - libwayland-cursor0
+      - libwayland-egl1
+      - libx11-6
+      - libx11-xcb1
+      - libxcursor1
+      - libxi6
+      - libxrandr2
+      - libgcc-s1
+      - libstdc++6
+    rpm:
+      depends:
+      - dbus-libs
+      - glibc >= 2.39
+      - libglvnd-glx
+      - libglvnd-egl
+      - libxkbcommon
+      - libxkbcommon-x11
+      - libwayland-client
+      - libwayland-cursor
+      - libwayland-egl
+      - libX11
+      - libX11-xcb
+      - libXcursor
+      - libXi
+      - libXrandr
+      - libgcc
+      - libstdc++
+  rpm:
+    buildhost: github-actions
+targets:
+  macos-universal:
+    platform: macos
+    arch: universal
+    formats: [dmg]
+    input:
+      kind: directory
+      local: dist/macos-input
+    native:
+      command: [bash, packaging/macos/dmg.sh, '@PAYLOAD@', '@PACKAGE@']
+      output: 'atlas-commerce-desktop-@TAG@-macos-universal.dmg'
+  linux-amd64:
+    platform: linux
+    arch: amd64
+    libc: glibc
+    compiler_target: x86_64-unknown-linux-gnu
+    formats:
+    - deb
+    - rpm
+    input:
+      local: dist/atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+      release_asset: atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+  linux-arm64:
+    platform: linux
+    arch: arm64
+    libc: glibc
+    compiler_target: aarch64-unknown-linux-gnu
+    formats:
+    - deb
+    - rpm
+    input:
+      local: dist/atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+      release_asset: atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+  # AppImages are built by the release's Linux jobs before publishing, so
+  # checksums.txt lists them and its signature covers them. The update
+  # information points at the newest stable release's .zsync for the same
+  # architecture; pre-releases never carry an AppImage.
+  appimage-amd64:
+    platform: linux
+    arch: amd64
+    libc: glibc
+    compiler_target: x86_64-unknown-linux-gnu
+    formats: [appimage]
+    appimage:
+      update_information: gh-releases-zsync|Etherealmber|atlas-commerce-desktop|latest|atlas-commerce-desktop-*-x86_64.AppImage.zsync
+    input:
+      local: dist/atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+      release_asset: atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+  appimage-arm64:
+    platform: linux
+    arch: arm64
+    libc: glibc
+    compiler_target: aarch64-unknown-linux-gnu
+    formats: [appimage]
+    appimage:
+      update_information: gh-releases-zsync|Etherealmber|atlas-commerce-desktop|latest|atlas-commerce-desktop-*-aarch64.AppImage.zsync
+    input:
+      local: dist/atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+      release_asset: atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+  # Windows Installer packages, built on each Windows release runner from
+  # the binary it built; the input folder holds what the package installs.
+  windows-amd64:
+    platform: windows
+    arch: amd64
+    compiler_target: x86_64-pc-windows-msvc
+    formats: [msi]
+    input:
+      kind: directory
+      local: dist/msi-input-x86_64-pc-windows-msvc
+    native:
+      command: [python, packaging/windows/build-msi.py, '@PAYLOAD@', '@PACKAGE@', '@VERSION@', '@ARCH@']
+      output: 'atlas-commerce-desktop-@TAG@-@TARGET@.msi'
+  windows-arm64:
+    platform: windows
+    arch: arm64
+    compiler_target: aarch64-pc-windows-msvc
+    formats: [msi]
+    input:
+      kind: directory
+      local: dist/msi-input-aarch64-pc-windows-msvc
+    native:
+      command: [python, packaging/windows/build-msi.py, '@PAYLOAD@', '@PACKAGE@', '@VERSION@', '@ARCH@']
+      output: 'atlas-commerce-desktop-@TAG@-@TARGET@.msi'
+release:
+  repository: Etherealmber/atlas-commerce-desktop
+  prereleases: true
+  checksums: checksums.txt
+assets:
+  AMD64:
+    file: atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+    local: dist/atlas-commerce-desktop-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+  ARM64:
+    file: atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+    local: dist/atlas-commerce-desktop-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+  SOURCE:
+    file: atlas-commerce-desktop-v@VERSION@-source.tar.gz
+    local: dist/atlas-commerce-desktop-v@VERSION@-source.tar.gz
+  MACOS:
+    file: atlas-commerce-desktop-v@VERSION@-macos-universal.dmg
+    local: dist/atlas-commerce-desktop-v@VERSION@-macos-universal.dmg
+version_file: Cargo.toml

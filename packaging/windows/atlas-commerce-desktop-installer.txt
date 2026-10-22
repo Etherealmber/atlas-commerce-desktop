@@ -1,0 +1,17 @@
+Atlas Commerce Desktop — Windows package notes
+==============================================
+
+This folder is produced by the release workflow from the release binary.
+
+* The Inno Setup program (atlas-commerce-desktop-…-setup.exe) installs the
+  application per-user into %LOCALAPPDATA%\Programs — no administrator rights
+  are required — and registers the atlascommerce:// URL protocol so e-mail
+  verify links and QR handoffs open the app.
+* The WiX MSI is built from this same payload by native-packages and is
+  intended for managed deployments.
+* A portable copy: place atlas-commerce-desktop.exe next to a file named
+  atlas-commerce-desktop-portable.txt. All data then stays in the
+  atlas-commerce-desktop-data folder beside the executable.
+
+The application stores only the server address, the username and the session
+token — never a password. No telemetry is collected.

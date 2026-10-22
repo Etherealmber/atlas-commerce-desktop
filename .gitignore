@@ -1,0 +1,23 @@
+# Rust build output
+/target
+**/*.rs.bk
+
+# Cargo lock is kept for binaries? We generate it in CI; local experiments:
+Cargo.lock.bak
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# fastframe-update staging folders
+.*-update-*
+atlas-commerce-desktop-data/
+
+# Logs written by a local run
+*.log
+
+# Python (packaging helpers)
+__pycache__/
+*.pyc

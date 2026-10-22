@@ -1,0 +1,120 @@
+# Atlas Commerce Desktop — native Windows/macOS/Linux client for the Atlas
+# Commerce stock-management platform. Rust + egui, built on fastframe
+# (https://fastframe.dev), the same "egui on rails" foundation as ZapFast and
+# Spotifast. Every fastframe crate is pinned to one tag; move them together.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/api",
+    "crates/ui",
+    "crates/app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+authors = ["loxdpsy / Etherealmber"]
+repository = "https://github.com/Etherealmber/atlas-commerce-desktop"
+homepage = "https://github.com/Etherealmber/atlas-commerce-desktop"
+
+[workspace.dependencies]
+# Internal crates
+atlas-core = { path = "crates/core", version = "0.1.0" }
+atlas-api = { path = "crates/api", version = "0.1.0" }
+atlas-ui = { path = "crates/ui", version = "0.1.0" }
+
+# Serialisation (the worker speaks snake_case JSON)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Errors, CLI, logging
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4.5", features = ["derive"] }
+log = "0.4"
+
+# HTTP: rustls only, so no OpenSSL is needed on any platform.
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-native-roots",
+    "json",
+    "gzip",
+    "http2",
+    "blocking",
+    "system-proxy",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+# Device fingerprint, QR rendering, links
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+qrcode = "0.14"
+url = "2"
+
+# Dates (worker timestamps are ISO 8601)
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+
+# Opening pages in the system browser
+open = "5"
+
+# egui 0.36.2 (forked via [patch.crates-io], as every fastframe app does).
+eframe = { version = "0.36.2", default-features = false, features = [
+    "accesskit",
+    "glow",
+    "default_fonts",
+    "links",
+    "wayland",
+    "x11",
+    "persistence",
+] }
+egui = "0.36.2"
+egui_extras = { version = "0.36.2", features = ["image", "svg"] }
+
+# fastframe — every crate on the same git tag, v0.14.0.
+fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-titlebar = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-dirs = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-file = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-notifications = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0", features = ["reqwest"] }
+fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-power = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-autostart = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+fastframe-desktop = { git = "https://github.com/crmne/fastframe", tag = "v0.14.0" }
+
+[profile.release]
+# Small, fast binaries: sub-second startup, low RAM — no debug symbols in the
+# shipped executable, the panic log keeps source locations on its own.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+# Faster cold starts while developing.
+opt-level = 0
+
+[patch.crates-io]
+# crmne/egui apps-0.36.2, shared with ZapFast and Spotifast: egui 0.36.2 with
+# right-to-left run shaping, the busy-loop fix, Wayland frame-callback pacing,
+# and the other desktop fixes listed by Spotifast's Cargo.toml. Every egui
+# crate comes from the same revision so they share one emath and epaint.
+# Drop this once egui releases these changes upstream.
+ecolor = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+eframe = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+egui = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+egui-wgpu = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+egui_extras = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+emath = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
+epaint = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }

@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: quality (fmt, clippy, docs)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # rust-toolchain.toml pins the exact toolchain; the action honours it.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: GUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
+            cmake
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: quality
+      - name: Formatting
+        run: cargo fmt --all --check
+      - name: Clippy (default features)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Clippy (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --all-features --no-deps
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.os }}
+      - name: Tests
+        run: cargo test --workspace
+      - name: Documentation tests
+        run: cargo test --workspace --doc
+      - name: Release build
+        run: cargo build --release --workspace
+
+  scan:
+    name: vulnerability scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate the lockfile the scanner reads
+        run: cargo generate-lockfile
+      - name: OSV scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.0
+        with:
+          scan-args: |-
+            --lockfile=Cargo.lock
+            --recursive

@@ -1,0 +1,44 @@
+[package]
+name = "atlas-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "egui + fastframe interface for Atlas Commerce Desktop."
+
+[dependencies]
+atlas-core.workspace = true
+atlas-api.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+chrono.workspace = true
+qrcode.workspace = true
+open.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+
+egui.workspace = true
+eframe.workspace = true
+egui_extras.workspace = true
+
+fastframe-fonts.workspace = true
+fastframe-text.workspace = true
+fastframe-icons.workspace = true
+fastframe-theme.workspace = true
+fastframe-i18n.workspace = true
+fastframe-titlebar.workspace = true
+fastframe-tray.workspace = true
+fastframe-shell.workspace = true
+fastframe-notifications.workspace = true
+fastframe-scroll.workspace = true
+fastframe-power.workspace = true
+fastframe-autostart.workspace = true
+fastframe-update.workspace = true
+fastframe-file.workspace = true
+
+[build-dependencies]
+fastframe-i18n = { workspace = true, features = ["build"] }

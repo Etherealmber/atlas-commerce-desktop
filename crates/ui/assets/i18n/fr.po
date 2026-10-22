@@ -1,0 +1,527 @@
+# French translations for Atlas Commerce Desktop.
+# Copyright (C) 2026 loxdpsy/Etherealmber
+# This file is distributed under the same license as the Atlas Commerce Desktop project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: atlas-commerce-desktop 0.1.0\n"
+"Report-Msgid-Bugs-To: https://github.com/Etherealmber/atlas-commerce-desktop/issues\n"
+"POT-Creation-Date: 2026-10-23 00:00+0900\n"
+"PO-Revision-Date: 2026-10-23 00:00+0900\n"
+"Last-Translator: loxdpsy <noreply@etherealmber.dev>\n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "A required update is available"
+msgstr "Une mise à jour obligatoire est disponible"
+
+msgid "A similar product already exists. Save again to create it anyway."
+msgstr "Un produit similaire existe déjà. Enregistrez à nouveau pour le créer quand même."
+
+msgid "A verification code was sent by e-mail."
+msgstr "Un code de vérification a été envoyé par e-mail."
+
+msgid "AI Agent"
+msgstr "Agent IA"
+
+msgid "About"
+msgstr "À propos"
+
+msgid "Active"
+msgstr "Actif"
+
+msgid "Add"
+msgstr "Ajouter"
+
+msgid "Add a custom server"
+msgstr "Ajouter un serveur personnalisé"
+
+msgid "Add at least one product to the sale."
+msgstr "Ajoutez au moins un produit à la vente."
+
+msgid "Add or configure a server"
+msgstr "Ajouter ou configurer un serveur"
+
+msgid "Adjust stock"
+msgstr "Ajuster le stock"
+
+msgid "Adjustment"
+msgstr "Ajustement"
+
+msgid "Allow Atlas Commerce in the system's Login Items settings."
+msgstr "Autorisez Atlas Commerce dans les réglages des éléments de connexion du système."
+
+msgid "Appearance"
+msgstr "Apparence"
+
+msgid "Apply"
+msgstr "Appliquer"
+
+msgid "Ask anything about your shop"
+msgstr "Posez toutes vos questions sur votre boutique"
+
+msgid "Atlas Cloud or your own hosted Atlas Commerce worker."
+msgstr "Atlas Cloud ou votre propre serveur Atlas Commerce hébergé."
+
+msgid "Atlas Commerce Desktop"
+msgstr "Atlas Commerce Desktop"
+
+msgid "Barcode"
+msgstr "Code-barres"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Category"
+msgstr "Catégorie"
+
+msgid "Change server"
+msgstr "Changer de serveur"
+
+msgid "Channel"
+msgstr "Canal"
+
+msgid "Check connection"
+msgstr "Tester la connexion"
+
+msgid "Check for updates now"
+msgstr "Rechercher les mises à jour maintenant"
+
+msgid "Check for updates on launch"
+msgstr "Rechercher les mises à jour au démarrage"
+
+msgid "Checking…"
+msgstr "Vérification…"
+
+msgid "Choose a server first."
+msgstr "Choisissez d'abord un serveur."
+
+msgid "Choose your server"
+msgstr "Choisissez votre serveur"
+
+msgid "Client name"
+msgstr "Nom du client"
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Code expired."
+msgstr "Code expiré."
+
+msgid "Copy"
+msgstr "Copier"
+
+msgid "Create products before recording a sale."
+msgstr "Créez des produits avant d'enregistrer une vente."
+
+msgid "Create your first product to get started."
+msgstr "Créez votre premier produit pour commencer."
+
+msgid "Current balance"
+msgstr "Solde actuel"
+
+msgid "Custom window title bar"
+msgstr "Barre de titre personnalisée"
+
+msgid "Daily quota"
+msgstr "Quota quotidien"
+
+msgid "Dashboard"
+msgstr "Tableau de bord"
+
+msgid "Device fingerprint"
+msgstr "Empreinte de l'appareil"
+
+msgid "Device revoked."
+msgstr "Appareil révoqué."
+
+msgid "Devices you sign in with are listed here."
+msgstr "Les appareils avec lesquels vous vous connectez sont répertoriés ici."
+
+msgid "Discard"
+msgstr "Abandonner"
+
+msgid "Discard changes?"
+msgstr "Abandonner les modifications ?"
+
+msgid "Download and install"
+msgstr "Télécharger et installer"
+
+msgid "Downloading update"
+msgstr "Téléchargement de la mise à jour"
+
+msgid "E-mail verification code (6 digits)"
+msgstr "Code de vérification e-mail (6 chiffres)"
+
+msgid "Enter the complete code received by e-mail."
+msgstr "Saisissez le code complet reçu par e-mail."
+
+msgid "Enter your username and password."
+msgstr "Saisissez votre nom d'utilisateur et votre mot de passe."
+
+msgid "Forget"
+msgstr "Oublier"
+
+msgid "General"
+msgstr "Général"
+
+msgid "Get started"
+msgstr "Commencer"
+
+msgid "Incomplete login — try again."
+msgstr "Connexion incomplète — réessayez."
+
+msgid "Initial stock"
+msgstr "Stock initial"
+
+msgid "Invoice history"
+msgstr "Historique des factures"
+
+msgid "Keep running in the notification area when closed"
+msgstr "Rester exécuté dans la zone de notification à la fermeture"
+
+msgid "Label (optional)"
+msgstr "Libellé (facultatif)"
+
+msgid "Language"
+msgstr "Langue"
+
+msgid "Latest version"
+msgstr "Dernière version"
+
+msgid "Load devices"
+msgstr "Charger les appareils"
+
+msgid "Login failed."
+msgstr "Échec de la connexion."
+
+msgid "Login refused on the phone."
+msgstr "Connexion refusée sur le téléphone."
+
+msgid "Low stock"
+msgstr "Stock bas"
+
+msgid "Low stock and overdue invoices appear here."
+msgstr "Les stocks bas et les factures en retard apparaissent ici."
+
+msgid "Low stock threshold"
+msgstr "Seuil de stock bas"
+
+msgid "Maximize"
+msgstr "Agrandir"
+
+msgid "Minimize"
+msgstr "Réduire"
+
+msgid "Monthly activity"
+msgstr "Activité mensuelle"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Native and fast stock management"
+msgstr "Gestion de stock native et rapide"
+
+msgid "Native notifications are off. Enable them in settings."
+msgstr "Les notifications natives sont désactivées. Activez-les dans les réglages."
+
+msgid "Native notifications for stock alerts"
+msgstr "Notifications natives pour les alertes de stock"
+
+msgid "New code"
+msgstr "Nouveau code"
+
+msgid "New product"
+msgstr "Nouveau produit"
+
+msgid "No account yet? Ask your shop's Atlas administrator."
+msgstr "Pas encore de compte ? Demandez à l'administrateur Atlas de votre boutique."
+
+msgid "No alert"
+msgstr "Aucune alerte"
+
+msgid "No data yet"
+msgstr "Aucune donnée pour le moment"
+
+msgid "No history yet"
+msgstr "Aucun historique pour le moment"
+
+msgid "No invoice yet"
+msgstr "Aucune facture pour le moment"
+
+msgid "No product available"
+msgstr "Aucun produit disponible"
+
+msgid "No product found"
+msgstr "Aucun produit trouvé"
+
+msgid "No sale yet"
+msgstr "Aucune vente pour le moment"
+
+msgid "No trusted device"
+msgstr "Aucun appareil de confiance"
+
+msgid "Not tracked"
+msgstr "Non suivi"
+
+msgid "Notifications"
+msgstr "Notifications"
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Open Atlas Commerce on your phone and scan this code to approve the computer."
+msgstr "Ouvrez Atlas Commerce sur votre téléphone et scannez ce code pour approuver l'ordinateur."
+
+msgid "Open project repository"
+msgstr "Ouvrir le dépôt du projet"
+
+msgid "Open settings"
+msgstr "Ouvrir les réglages"
+
+msgid "Overdue"
+msgstr "En retard"
+
+msgid "Password"
+msgstr "Mot de passe"
+
+msgid "Phone QR"
+msgstr "QR téléphone"
+
+msgid "Phone approved — finalizing…"
+msgstr "Téléphone approuvé — finalisation…"
+
+msgid "Phone connected — confirm on the phone."
+msgstr "Téléphone connecté — confirmez sur le téléphone."
+
+msgid "Pre-release"
+msgstr "Préversion"
+
+msgid "Press refresh to load the dashboard."
+msgstr "Appuyez sur actualiser pour charger le tableau de bord."
+
+msgid "Price (MAD)"
+msgstr "Prix (MAD)"
+
+msgid "Product created."
+msgstr "Produit créé."
+
+msgid "Products"
+msgstr "Produits"
+
+msgid "Quantity"
+msgstr "Quantité"
+
+msgid "Quick sale"
+msgstr "Vente rapide"
+
+msgid "Quick sale recorded."
+msgstr "Vente rapide enregistrée."
+
+msgid "Quick sales will show up here."
+msgstr "Les ventes rapides apparaîtront ici."
+
+msgid "Quick stats"
+msgstr "Statistiques rapides"
+
+msgid "Quit"
+msgstr "Quitter"
+
+msgid "Reason (optional)"
+msgstr "Motif (facultatif)"
+
+msgid "Recent invoices"
+msgstr "Factures récentes"
+
+msgid "Record sale"
+msgstr "Enregistrer la vente"
+
+msgid "Recorded sales appear here."
+msgstr "Les ventes enregistrées apparaissent ici."
+
+msgid "Refresh"
+msgstr "Actualiser"
+
+msgid "Refresh interval"
+msgstr "Intervalle d'actualisation"
+
+msgid "Remove"
+msgstr "Supprimer"
+
+msgid "Remove server?"
+msgstr "Supprimer le serveur ?"
+
+msgid "Restore"
+msgstr "Restaurer"
+
+msgid "Revoke"
+msgstr "Révoquer"
+
+msgid "Revoke device?"
+msgstr "Révoquer l'appareil ?"
+
+msgid "SKU"
+msgstr "SKU"
+
+msgid "Sales"
+msgstr "Ventes"
+
+msgid "Sales appear here month after month."
+msgstr "Les ventes apparaissent ici mois après mois."
+
+msgid "Save"
+msgstr "Enregistrer"
+
+msgid "Save and continue"
+msgstr "Enregistrer et continuer"
+
+msgid "Saved accounts on this server will be removed from this device."
+msgstr "Les comptes enregistrés sur ce serveur seront supprimés de cet appareil."
+
+msgid "Saved servers"
+msgstr "Serveurs enregistrés"
+
+msgid "Scan with your phone"
+msgstr "Scannez avec votre téléphone"
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "Search by name, SKU or barcode"
+msgstr "Rechercher par nom, SKU ou code-barres"
+
+msgid "Security"
+msgstr "Sécurité"
+
+msgid "Selected"
+msgstr "Sélectionné"
+
+msgid "Send"
+msgstr "Envoyer"
+
+msgid "Server address (https://…)"
+msgstr "Adresse du serveur (https://…)"
+
+msgid "Server changed."
+msgstr "Serveur modifié."
+
+msgid "Server removed."
+msgstr "Serveur supprimé."
+
+msgid "Servers"
+msgstr "Serveurs"
+
+msgid "Settings"
+msgstr "Réglages"
+
+msgid "Show password"
+msgstr "Afficher le mot de passe"
+
+msgid "Show window"
+msgstr "Afficher la fenêtre"
+
+msgid "Sign in"
+msgstr "Se connecter"
+
+msgid "Sign out"
+msgstr "Se déconnecter"
+
+msgid "Stable"
+msgstr "Stable"
+
+msgid "Start at login"
+msgstr "Démarrer à la connexion"
+
+msgid "Start hidden in the notification area"
+msgstr "Démarrer masqué dans la zone de notification"
+
+msgid "Stock in"
+msgstr "Entrée de stock"
+
+msgid "Stock out"
+msgstr "Sortie de stock"
+
+msgid "Stock updated."
+msgstr "Stock mis à jour."
+
+msgid "Stock value"
+msgstr "Valeur du stock"
+
+msgid "Stock, sales and product questions are answered from your data."
+msgstr "Les questions sur le stock, les ventes et les produits trouvent réponse dans vos données."
+
+msgid "That device will have to sign in again."
+msgstr "Cet appareil devra se reconnecter."
+
+msgid "The AI agent is not available for this account."
+msgstr "L'agent IA n'est pas disponible pour ce compte."
+
+msgid "The product information has not been saved."
+msgstr "Les informations du produit n'ont pas été enregistrées."
+
+msgid "Theme"
+msgstr "Thème"
+
+msgid "This device"
+msgstr "Cet appareil"
+
+msgid "This version can no longer talk to the server safely. Update to continue."
+msgstr "Cette version ne peut plus communiquer avec le serveur en sécurité. Mettez à jour pour continuer."
+
+msgid "Tip: open the link in the e-mail — this app verifies it without typing."
+msgstr "Astuce : ouvrez le lien dans l'e-mail — cette application le vérifie sans saisie."
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Total due"
+msgstr "Total dû"
+
+msgid "Trusted devices"
+msgstr "Appareils de confiance"
+
+msgid "Unit"
+msgstr "Unité"
+
+msgid "Unpaid sales"
+msgstr "Ventes impayées"
+
+msgid "Update now"
+msgstr "Mettre à jour maintenant"
+
+msgid "Updates"
+msgstr "Mises à jour"
+
+msgid "Use"
+msgstr "Utiliser"
+
+msgid "Username"
+msgstr "Nom d'utilisateur"
+
+msgid "Verify"
+msgstr "Vérifier"
+
+msgid "Verifying the e-mail link…"
+msgstr "Vérification du lien e-mail…"
+
+msgid "Waiting for the phone…"
+msgstr "En attente du téléphone…"
+
+msgid "Welcome to Atlas Commerce"
+msgstr "Bienvenue sur Atlas Commerce"
+
+msgid "Write a message…"
+msgstr "Écrivez un message…"
+
+msgid "You will need to sign in again to reach this server."
+msgstr "Vous devrez vous reconnecter pour accéder à ce serveur."
+
+msgid "Your stock, sales and AI assistant in one native application."
+msgstr "Votre stock, vos ventes et votre assistant IA dans une application native."
+
+msgid "invoices"
+msgstr "factures"

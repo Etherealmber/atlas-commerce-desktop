@@ -1,0 +1,305 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Match the native packages' declared glibc 2.39 baseline.
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            package-target: linux-amd64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            package-target: linux-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            msvc-arch: x64
+            # Plain substrings from dumpbin /headers, no regex escaping.
+            pe-machine: "8664 machine"
+            package-target: windows-amd64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            msvc-arch: arm64
+            pe-machine: "AA64 machine"
+            package-target: windows-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
+      - name: GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc-arch }}
+      # No compiler cache: published binaries never build from restored
+      # Actions caches.
+      - run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Verify the Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = "target\${{ matrix.target }}\release\atlas-commerce-desktop.exe"
+          $imports = & dumpbin /dependents $binary | Out-String
+          $runtime = $imports | Select-String -Pattern 'MSVCP[0-9_]*\.dll|VCRUNTIME[0-9_]*\.dll'
+          if ($runtime) { throw "atlas-commerce-desktop imports an MSVC runtime:`n$runtime" }
+          $headers = & dumpbin /headers $binary | Out-String
+          if ($headers -notmatch '${{ matrix.pe-machine }}') {
+            throw "$binary is not built for ${{ matrix.target }}:`n$headers"
+          }
+          $version = (& $binary --version | Out-String).Trim()
+          if ($version -notmatch '^atlas-commerce-desktop \d+\.\d+\.\d+') {
+            throw "Unexpected --version output: $version"
+          }
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="atlas-commerce-desktop-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/atlas-commerce-desktop.exe" "dist/$name/"
+          else
+            cp "target/${{ matrix.target }}/release/atlas-commerce-desktop" "dist/$name/"
+          fi
+          cp README.md LICENSE "dist/$name/"
+          cp packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            # Desktop integration for package builds and hand-installs.
+            cp --parents packaging/applications/atlas-commerce-desktop.desktop \
+              packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
+          fi
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "$name.zip" "$name"
+          else
+            tar czf "$name.tar.gz" "$name"
+          fi
+
+      # AppImage + zsync, stable releases only: the update information
+      # inside the AppImage points at the newest stable release's .zsync.
+      - uses: ruby/setup-ruby@v1
+        if: runner.os == 'Linux' && !contains(github.ref_name, '-')
+        with:
+          ruby-version: '3.4'
+      - name: AppImage
+        if: runner.os == 'Linux' && !contains(github.ref_name, '-')
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends \
+            libarchive-tools squashfs-tools zsync
+          gem install native-packages --version 0.10.0 --no-document
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu) id=appimage-amd64 ;;
+            aarch64-unknown-linux-gnu) id=appimage-arm64 ;;
+            *) echo "No AppImage target for ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+          native-packages build --version "${GITHUB_REF_NAME#v}" --target "$id" \
+            --defer-recipes --output "$RUNNER_TEMP/appimage"
+          cp "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage \
+             "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage.zsync dist/
+
+      # Inno Setup per-user installer (French + English wizard pages).
+      - name: Inno Setup installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $arch = "${{ matrix.target }}".Split("-")[0]
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=$version" "/DArch=$arch" `
+            "/DBinary=$PWD\target\${{ matrix.target }}\release\atlas-commerce-desktop.exe" `
+            "/DOutputDir=$PWD\dist" packaging\windows\atlas-commerce-desktop.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The Windows Installer package, from the same binary and no C tools.
+      - uses: ruby/setup-ruby@v1
+        if: runner.os == 'Windows'
+        with:
+          ruby-version: '3.4'
+      - name: Windows Installer package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
+          gem install native-packages --version 0.10.0 --no-document
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $payload = "dist\msi-input-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force $payload | Out-Null
+          $files = "target\${{ matrix.target }}\release\atlas-commerce-desktop.exe", "README.md", "LICENSE", "packaging\windows\atlas-commerce-desktop-installer.txt"
+          Copy-Item $files $payload
+          $packages = "$env:RUNNER_TEMP\windows-packages"
+          native-packages build --version $version --target ${{ matrix.package-target }} `
+            --defer-recipes --output $packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$packages\packages\${{ matrix.package-target }}\msi\*.msi" dist\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*-setup.exe
+            dist/*.msi
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+          if-no-files-found: error
+
+  macos:
+    name: macOS universal app
+    runs-on: macos-latest
+    env:
+      # Complete Apple credentials enable signing and notarization. Without
+      # them the bundle is ad-hoc signed, which arm64 still requires to run.
+      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Build both architectures
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+      - name: Universal binary
+        run: |
+          mkdir -p universal
+          lipo -create \
+            target/aarch64-apple-darwin/release/atlas-commerce-desktop \
+            target/x86_64-apple-darwin/release/atlas-commerce-desktop \
+            -output universal/atlas-commerce-desktop
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install native packaging
+        run: gem install native-packages --version 0.10.0 --no-document
+      - name: App bundle
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist/macos-input
+          bash packaging/macos/bundle.sh universal/atlas-commerce-desktop \
+            "dist/macos-input/Atlas Commerce Desktop.app" "$version"
+          cp README.md LICENSE dist/macos-input/
+      - name: Package, sign and notarize macOS app
+        run: |
+          set -euo pipefail
+          native-packages build \
+            --version "${GITHUB_REF_NAME#v}" --target macos-universal --defer-recipes \
+            --output "$RUNNER_TEMP/macos-packages"
+          cp "$RUNNER_TEMP/macos-packages/packages/macos-universal/dmg/"*.dmg dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: [build, macos]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.macos.result == 'success' }}
+    runs-on: ubuntu-24.04
+    # Publishing waits for maintainer approval; only this job reads the
+    # signing key, and only for v* tags.
+    environment: release-signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Source archive
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" \
+            --output "dist/atlas-commerce-desktop-${GITHUB_REF_NAME}-source.tar.gz"
+      - name: Update manifest (update.json)
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Mandatory updates are opted into per release by editing this
+          # asset on GitHub; tags carry ordinary, optional updates.
+          cat > dist/update.json <<EOF
+          {
+          "version": "$version",
+          "mandatory": false,
+          "minimum_version": null,
+          "notes": "Atlas Commerce Desktop $version",
+          "published_at": "$published_at"
+          }
+          EOF
+          cat dist/update.json
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      # Sign the manifest when the repository opts in via the
+      # UPDATE_SIGNING_ENABLED variable and holds an Ed25519 key. Without it,
+      # GitHub-served sha256 checksums still guard every download; the app's
+      # updater skips signature verification when no public key is compiled
+      # in (ATLAS_UPDATE_PUBLIC_KEY).
+      - name: Sign checksums
+        if: ${{ vars.UPDATE_SIGNING_ENABLED == 'true' }}
+        env:
+          ATLAS_UPDATE_SIGNING_KEY: ${{ secrets.ATLAS_UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          gem install native-packages --version 0.10.0 --no-document
+          native-packages sign-checksums dist/checksums.txt \
+            --public-key assets/update-public-key.hex \
+            --key-env ATLAS_UPDATE_SIGNING_KEY
+          native-packages verify-checksums dist/checksums.txt \
+            --public-key assets/update-public-key.hex
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          name: Atlas Commerce Desktop ${{ github.ref_name }}
+          generate_release_notes: true
+          # A tag with a suffix (v0.2.0-rc.1) is a pre-release: it stays
+          # off "latest", so the app's update check never offers it unless
+          # the user opted into the pre-release channel.
+          prerelease: ${{ contains(github.ref_name, '-') }}

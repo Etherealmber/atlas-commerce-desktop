@@ -1,0 +1,35 @@
+[package]
+name = "atlas-commerce-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Native Windows/macOS/Linux client for the Atlas Commerce stock platform."
+default-run = "atlas-commerce-desktop"
+
+[[bin]]
+name = "atlas-commerce-desktop"
+path = "src/main.rs"
+
+[dependencies]
+atlas-core.workspace = true
+atlas-ui.workspace = true
+
+log.workspace = true
+clap.workspace = true
+
+egui.workspace = true
+eframe.workspace = true
+
+fastframe-shell.workspace = true
+fastframe-titlebar.workspace = true
+fastframe-tray.workspace = true
+fastframe-instance.workspace = true
+fastframe-log.workspace = true
+fastframe-power.workspace = true
+fastframe-update.workspace = true
+fastframe-notifications.workspace = true
+fastframe-autostart.workspace = true
+fastframe-desktop.workspace = true

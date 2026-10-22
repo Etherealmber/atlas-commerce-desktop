@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Atlas Commerce Desktop">
+  <title>Atlas Commerce Desktop</title>
+  <rect width="256" height="256" rx="56" fill="#09090B"/>
+  <rect x="44" y="44" width="168" height="168" rx="38" fill="#F59E0B"/>
+  <path d="M86 176 L128 76 L170 176 M100 146 H156" stroke="#1C1205" stroke-width="16"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

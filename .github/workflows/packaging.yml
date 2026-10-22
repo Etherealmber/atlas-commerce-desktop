@@ -1,0 +1,81 @@
+name: Packaging
+
+# Validates every packaging input without building a release: the native
+# packages manifest, the shell scripts, the Windows MSI generator, the
+# desktop entry and the icon set. Runs on packaging changes and on demand.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - native-packages.yaml
+      - packaging/**
+      - .github/workflows/packaging.yml
+  pull_request:
+    paths:
+      - native-packages.yaml
+      - packaging/**
+      - .github/workflows/packaging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux packaging inputs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Validate the native-packages manifest
+        run: |
+          ruby -ryaml -e 'yaml = YAML.load_file("native-packages.yaml"); \
+            abort("missing targets") unless yaml["targets"].is_a?(Hash) && yaml["targets"].any?; \
+            abort("missing release repository") unless yaml.dig("release", "repository") == "Etherealmber/atlas-commerce-desktop"; \
+            puts "native-packages.yaml: #{yaml["targets"].size} targets OK"'
+      - name: Validate shell packagers
+        run: |
+          bash -n packaging/macos/bundle.sh
+          bash -n packaging/macos/dmg.sh
+      - name: Validate the desktop entry and icons
+        run: |
+          test -s packaging/applications/atlas-commerce-desktop.desktop
+          test -s packaging/icons/atlas-commerce-desktop.svg
+          test -s packaging/macos/icon-1024.png
+          desktop-file-validate packaging/applications/atlas-commerce-desktop.desktop
+        continue-on-error: true
+
+  windows:
+    name: Windows MSI generator
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: WiX toolset
+        run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
+      - name: The generator parses and its help runs
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
+          python packaging/windows/build-msi.py --help
+      - name: Inno Setup script compiles
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            Write-Host "Inno Setup not present on this runner image; skipping."
+            exit 0
+          }
+          cargo build --release
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          & $iscc "/DVersion=$version" "/DArch=x86_64" `
+            "/DBinary=$PWD\target\release\atlas-commerce-desktop.exe" `
+            "/DOutputDir=$env:RUNNER_TEMP\inno-check" packaging\windows\atlas-commerce-desktop.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

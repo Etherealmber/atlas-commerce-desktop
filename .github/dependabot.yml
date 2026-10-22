@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Rust crates. The fastframe and egui forks are pinned by git tag/revision
+  # in Cargo.toml, so Dependabot only proposes crates.io dependency bumps;
+  # fastframe upgrades move deliberately, one tag at a time.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    groups:
+      rust-patch:
+        update-types:
+          - patch
+      rust-minor:
+        update-types:
+          - minor
+
+  # The reusable actions and the runner images.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci

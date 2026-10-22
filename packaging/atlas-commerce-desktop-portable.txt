@@ -1,0 +1,6 @@
+# Marker file for the portable Windows build.
+#
+# When the executable sits next to this file, fastframe-dirs keeps every
+# setting, session token and cache in an "atlas-commerce-desktop-data" folder
+# beside it, so the whole application can run from a USB key without touching
+# the host machine's profile.

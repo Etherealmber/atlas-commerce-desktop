@@ -1,0 +1,25 @@
+[package]
+name = "atlas-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Platform services for Atlas Commerce Desktop: folders, device identity, sessions, settings and deep links."
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+url.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+fastframe-dirs.workspace = true
+fastframe-file.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
