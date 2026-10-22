@@ -548,7 +548,7 @@ fn channel_button(
 
 // ── About ──────────────────────────────────────────────────────────────────
 
-fn about(app: &AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Palette) {
+fn about(app: &AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
     section(ui, palette, Icon::Info, t!(app.locale, "About").as_ref());
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -582,7 +582,6 @@ fn about(app: &AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Palette) {
                 log::warn!("could not open repository: {error}");
             }
         }
-        let _ = ctx;
     });
 }
 

@@ -598,7 +598,7 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
 }
 
-fn qr_image(ui: &mut egui::Ui, url: &str, palette: &Palette) {
+fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
     let code = match qrcode::QrCode::new(url) {
         Ok(code) => code,
         Err(_) => return,
@@ -624,7 +624,6 @@ fn qr_image(ui: &mut egui::Ui, url: &str, palette: &Palette) {
             painter.rect_filled(module_rect, 0.0, Color32::BLACK);
         }
     }
-    let _ = palette;
 }
 
 // ── Job starters ────────────────────────────────────────────────────────────
@@ -636,7 +635,6 @@ fn start_login(app: &mut AtlasApp) {
     };
     let username = app.login.username.trim().to_lowercase();
     let password = app.login.password.clone();
-    let fp = app.identity.fingerprint().to_owned();
     if username.is_empty() || password.is_empty() {
         app.login.error = Some(t!(app.locale, "Enter your username and password.").into_owned());
         return;
@@ -645,7 +643,6 @@ fn start_login(app: &mut AtlasApp) {
     app.login.error = None;
     app.login.job_login =
         Some(app.runner.spawn(async move { client.login(&username, &password).await }));
-    let _ = fp;
 }
 
 fn start_otp(app: &mut AtlasApp) {
@@ -655,7 +652,6 @@ fn start_otp(app: &mut AtlasApp) {
     let username = app.login.username.trim().to_lowercase();
     let password = app.login.password.clone();
     let otp: String = app.login.otp.chars().filter(char::is_ascii_digit).collect();
-    let fp = app.identity.fingerprint().to_owned();
     if otp.len() < 4 {
         app.login.error = Some(t!(app.locale, "Enter the complete code received by e-mail.").into_owned());
         return;
@@ -666,7 +662,6 @@ fn start_otp(app: &mut AtlasApp) {
         app.runner
             .spawn(async move { client.verify_otp(&username, &password, &otp).await }),
     );
-    let _ = fp;
 }
 
 fn start_verify_link(app: &mut AtlasApp, link: VerifyLink) {
