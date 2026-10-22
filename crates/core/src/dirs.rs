@@ -26,8 +26,9 @@ pub const DIRS: App = App {
     ..App::new(SLUG, "com", "etherealmber", "AtlasCommerceDesktop")
 };
 
-/// Concrete paths inside the discovered folders.
-#[derive(Clone, Debug)]
+/// Concrete paths inside the discovered folders. `Mode` is not `Clone` in
+/// fastframe, and the app owns one of these for its whole lifetime.
+#[derive(Debug)]
 pub struct AppPaths {
     pub dirs: fastframe_dirs::Dirs,
     pub mode: Mode,
