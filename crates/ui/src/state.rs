@@ -271,7 +271,12 @@ pub struct AtlasApp {
 
     // ── transient notices ──
     pub notices: Vec<String>,
+    /// When the current notice stack expires and should be cleared.
+    pub notices_expire_at: Option<Instant>,
 }
+
+/// How long a toast stays on screen before the stack is cleared.
+pub const NOTICE_TTL: Duration = Duration::from_secs(4);
 
 impl AtlasApp {
     /// Builds the app from already-loaded on-disk state.
@@ -347,6 +352,7 @@ impl AtlasApp {
             update_download_job: None,
             update_receipt: None,
             notices: Vec::new(),
+            notices_expire_at: None,
         }
     }
 
@@ -387,7 +393,7 @@ impl AtlasApp {
                 }
                 self.client = Some(Arc::new(client));
             }
-            Err(error) => self.notices.push(error.message),
+            Err(error) => self.notice(error.message),
         }
     }
 
@@ -458,6 +464,9 @@ impl AtlasApp {
         if self.notices.len() > 4 {
             self.notices.remove(0);
         }
+        // Every push (including replacements when the stack is capped)
+        // restarts the bounded visibility window.
+        self.notices_expire_at = Some(Instant::now() + NOTICE_TTL);
     }
 }
 

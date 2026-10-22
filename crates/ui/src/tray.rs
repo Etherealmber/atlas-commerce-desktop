@@ -1,6 +1,6 @@
 //! System tray: keeps the app running with the window closed and offers
 //! Show / Quick stats / Quit. French labels are rebuilt when the language
-//! changes via [`Tray::set_labels`].
+//! changes via [`TrayHandle::set_labels`].
 
 use fastframe_tray::{Config, Event, MenuItem, Tray};
 

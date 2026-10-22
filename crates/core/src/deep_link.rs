@@ -110,6 +110,7 @@ impl QrTokenParser {
             let after = rest.trim_start_matches('/');
             if let Some(query) = after.find('?').map(|index| &after[index + 1..])
                 && let Some(token) = query_token(query)
+                && is_raw_token(&token)
             {
                 return Some(token);
             }
@@ -126,7 +127,7 @@ impl QrTokenParser {
             for key in ["t", "token", "session"] {
                 if let Some(value) = parsed.query_pairs().find(|(k, _)| k == key) {
                     let token = value.1.trim();
-                    if !token.is_empty() {
+                    if is_raw_token(token) {
                         return Some(token.to_owned());
                     }
                 }
@@ -244,5 +245,25 @@ mod tests {
         assert!(QrTokenParser::extract("12345678").is_none());
         assert!(QrTokenParser::extract("short").is_none());
         assert!(QrTokenParser::extract("https://example.com/products").is_none());
+    }
+
+    #[test]
+    fn rejects_malformed_query_tokens() {
+        // A query value must pass the same raw-token rules as path segments.
+        assert!(QrTokenParser::extract("atlascommerce://qr?t=nope").is_none());
+        // Valid length, invalid character set.
+        assert!(QrTokenParser::extract(&format!(
+            "atlascommerce://qr?token={}",
+            ".".repeat(24)
+        ))
+        .is_none());
+        // Percent-decoding turns %20 into a space, which is not token-safe.
+        assert!(QrTokenParser::extract(&format!(
+            "https://stock.afmarbre.com/login/qr?session={}%20ab",
+            "a".repeat(21)
+        ))
+        .is_none());
+        // Empty value stays rejected.
+        assert!(QrTokenParser::extract("atlascommerce://qr?t=").is_none());
     }
 }

@@ -113,6 +113,10 @@ impl ServerUrl {
         }
         let with_scheme = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
             trimmed.to_owned()
+        } else if trimmed.contains("://") {
+            // An explicit scheme other than http(s) (ftp:, mailto:, custom
+            // app schemes…): never silently turn it into an https host.
+            return None;
         } else {
             format!("https://{trimmed}")
         };

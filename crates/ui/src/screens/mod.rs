@@ -9,6 +9,8 @@ pub mod sales;
 pub mod settings;
 pub mod shell;
 
+use std::time::Instant;
+
 use egui::{Color32, Response, RichText, Sense, Ui};
 
 use crate::state::AtlasApp;
@@ -30,6 +32,13 @@ pub fn spinner(ui: &mut Ui, palette: &Palette) {
 /// Renders the transient notice stack (bottom-left toasts).
 pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     if app.notices.is_empty() {
+        return;
+    }
+    // The stack has a bounded lifetime: clear it once the deadline set by
+    // [`AtlasApp::notice`] passes, rather than on the first frame drawn.
+    if app.notices_expire_at.is_some_and(|at| Instant::now() >= at) {
+        app.notices.clear();
+        app.notices_expire_at = None;
         return;
     }
     let screen = ui.ctx().input(|i| i.viewport_rect());
@@ -60,8 +69,12 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         });
         y -= 8.0;
     }
-    // Toasts are transient: clear them after drawing for this frame.
-    app.notices.clear();
+    // Wake the UI exactly when the stack should disappear, even if no
+    // other input or job requests a repaint.
+    if let Some(at) = app.notices_expire_at {
+        ui.ctx()
+            .request_repaint_after(at.saturating_duration_since(Instant::now()));
+    }
 }
 
 /// A header row with an optional back chevron.
