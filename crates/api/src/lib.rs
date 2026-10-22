@@ -183,9 +183,7 @@ fn transport_error(error: reqwest::Error) -> ApiError {
     if error.is_timeout() {
         ApiError::transport("Le serveur met trop de temps à répondre. Vérifiez votre connexion.")
     } else if error.is_connect() {
-        ApiError::transport(
-            "Connexion impossible au serveur. Vérifiez l'adresse et votre réseau.",
-        )
+        ApiError::transport("Connexion impossible au serveur. Vérifiez l'adresse et votre réseau.")
     } else {
         ApiError::transport(format!("Erreur réseau : {error}"))
     }

@@ -131,7 +131,10 @@ impl QrTokenParser {
                     }
                 }
             }
-            let segments: Vec<&str> = parsed.path_segments().map(|iter| iter.collect()).unwrap_or_default();
+            let segments: Vec<&str> = parsed
+                .path_segments()
+                .map(|iter| iter.collect())
+                .unwrap_or_default();
             if let Some(index) = segments.iter().position(|segment| *segment == "session") {
                 if let Some(token) = segments.get(index + 1) {
                     if is_raw_token(token) {
@@ -139,10 +142,9 @@ impl QrTokenParser {
                     }
                 }
             }
-            if let Some(index) = segments
-                .iter()
-                .position(|segment| segment.eq_ignore_ascii_case("qr") || segment.eq_ignore_ascii_case("login-qr"))
-            {
+            if let Some(index) = segments.iter().position(|segment| {
+                segment.eq_ignore_ascii_case("qr") || segment.eq_ignore_ascii_case("login-qr")
+            }) {
                 if let Some(token) = segments.get(index + 1) {
                     if is_raw_token(token) {
                         return Some((*token).to_owned());
@@ -183,7 +185,8 @@ fn query_token(query: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    const LINK: &str = "atlascommerce://verify?user=Alice&code=482913&sig=abc123def456&exp=1893456000000";
+    const LINK: &str =
+        "atlascommerce://verify?user=Alice&code=482913&sig=abc123def456&exp=1893456000000";
 
     #[test]
     fn parses_a_complete_signed_verify_link() {
@@ -198,14 +201,17 @@ mod tests {
 
     #[test]
     fn parses_https_verify_links() {
-        let https = "https://stock.afmarbre.com/verify?user=bob&code=123456&sig=zz&exp=9999999999999";
+        let https =
+            "https://stock.afmarbre.com/verify?user=bob&code=123456&sig=zz&exp=9999999999999";
         assert!(VerifyLink::parse(https).is_some());
     }
 
     #[test]
     fn rejects_incomplete_links() {
         assert!(VerifyLink::parse("atlascommerce://verify?user=alice&code=482913").is_none());
-        assert!(VerifyLink::parse("atlascommerce://verify?user=&code=482913&sig=x&exp=1").is_none());
+        assert!(
+            VerifyLink::parse("atlascommerce://verify?user=&code=482913&sig=x&exp=1").is_none()
+        );
         assert!(VerifyLink::parse("https://example.com/?user=a&code=482913&sig=x&exp=1").is_none());
         assert!(VerifyLink::parse("not a link").is_none());
         assert!(VerifyLink::parse("").is_none());
@@ -219,8 +225,10 @@ mod tests {
             Some(token)
         );
         assert_eq!(
-            QrTokenParser::extract(&format!("https://stock.afmarbre.com/login/qr?t={token}&mode=pc"))
-                .as_deref(),
+            QrTokenParser::extract(&format!(
+                "https://stock.afmarbre.com/login/qr?t={token}&mode=pc"
+            ))
+            .as_deref(),
             Some(token)
         );
         assert_eq!(

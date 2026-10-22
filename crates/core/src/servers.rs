@@ -152,7 +152,11 @@ impl ServerUrl {
     /// Joins a path such as `api/health` onto the base, exactly one slash.
     #[must_use]
     pub fn join(base: &str, path: &str) -> String {
-        format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'))
+        format!(
+            "{}/{}",
+            base.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        )
     }
 }
 
@@ -193,7 +197,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("servers.json");
         let mut store = ServerStore::with_production();
-        let url = store.select("boutique.afmarbre.com", "Ma boutique").unwrap();
+        let url = store
+            .select("boutique.afmarbre.com", "Ma boutique")
+            .unwrap();
         assert_eq!(url, "https://boutique.afmarbre.com");
         assert_eq!(store.saved.len(), 2);
         // Selecting the same URL again must not duplicate it.
@@ -210,6 +216,8 @@ mod tests {
     #[test]
     fn production_is_recognized() {
         assert!(ServerUrl::is_production("https://stock.afmarbre.com/"));
-        assert!(!ServerUrl::is_production("https://stock.afmarbre.com.evil.test"));
+        assert!(!ServerUrl::is_production(
+            "https://stock.afmarbre.com.evil.test"
+        ));
     }
 }

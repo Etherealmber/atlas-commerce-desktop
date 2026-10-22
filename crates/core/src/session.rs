@@ -102,9 +102,10 @@ impl AccountStore {
     pub fn forget(&mut self, server_url: &str, username: &str) {
         let server = server_url.trim().to_lowercase();
         let user = username.trim().to_lowercase();
-        self.accounts
-            .retain(|_, account| !(account.server_url.eq_ignore_ascii_case(&server)
-                && account.username.eq_ignore_ascii_case(&user)));
+        self.accounts.retain(|_, account| {
+            !(account.server_url.eq_ignore_ascii_case(&server)
+                && account.username.eq_ignore_ascii_case(&user))
+        });
     }
 
     pub fn clear_server(&mut self, server_url: &str) {
@@ -135,8 +136,7 @@ impl AccountStore {
 /// Loads the active session when it belongs to the currently selected server.
 #[must_use]
 pub fn load_session(path: &Path, current_server: &str) -> Option<SessionRecord> {
-    let record: SessionRecord =
-        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let record: SessionRecord = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
     if record
         .server_url
         .eq_ignore_ascii_case(current_server.trim_end_matches('/'))

@@ -17,9 +17,9 @@ pub mod update_feed;
 
 pub use deep_link::{QrTokenParser, VerifyLink};
 pub use device::DeviceIdentity;
-pub use dirs::{AppPaths, APP_ID, APP_NAME, SLUG};
+pub use dirs::{APP_ID, APP_NAME, AppPaths, SLUG};
 pub use jobs::{Job, JobRunner};
-pub use servers::{SavedServerEntry, ServerError, ServerStore, ServerUrl, PRODUCTION_URL};
+pub use servers::{PRODUCTION_URL, SavedServerEntry, ServerError, ServerStore, ServerUrl};
 pub use session::{AccountStore, SavedAccount, SessionRecord};
 pub use settings::{Settings, ThemeMode, UpdateChannel};
-pub use update_feed::{UpdateDecision, UpdateManifest, MANIFEST_ASSET};
+pub use update_feed::{MANIFEST_ASSET, UpdateDecision, UpdateManifest};

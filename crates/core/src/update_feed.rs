@@ -35,15 +35,9 @@ pub enum UpdateDecision {
     /// Nothing newer than the running version.
     UpToDate,
     /// A normal, optional update the settings screen offers.
-    Optional {
-        version: String,
-        notes: String,
-    },
+    Optional { version: String, notes: String },
     /// A blocking update shown before the shell.
-    Mandatory {
-        version: String,
-        notes: String,
-    },
+    Mandatory { version: String, notes: String },
 }
 
 impl UpdateManifest {
@@ -85,8 +79,14 @@ fn parse_semver(value: &str) -> Option<(u64, u64, u64, u64)> {
     let (core, pre) = trimmed.split_once('-').unwrap_or((trimmed, ""));
     let mut numbers = core.split('.');
     let major = numbers.next()?.parse().ok()?;
-    let minor = numbers.next().and_then(|value| value.parse().ok()).unwrap_or(0);
-    let patch = numbers.next().and_then(|value| value.parse().ok()).unwrap_or(0);
+    let minor = numbers
+        .next()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let patch = numbers
+        .next()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
     // A release without a suffix ranks above any pre-release.
     let pre_rank = if pre.is_empty() { 1 } else { 0 };
     Some((major, minor, patch, pre_rank))

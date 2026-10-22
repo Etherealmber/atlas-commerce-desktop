@@ -4,8 +4,8 @@
 //! it and hand their result back through a standard library channel, so the
 //! interface can poll a [`Job`] once per frame with no async in the UI layer.
 
-use std::sync::mpsc::{self, Receiver, RecvError, TryRecvError};
 use std::sync::Mutex;
+use std::sync::mpsc::{self, Receiver, RecvError, TryRecvError};
 
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::oneshot;

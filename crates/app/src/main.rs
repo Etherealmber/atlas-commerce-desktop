@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use atlas_core::session::load_session;
 use atlas_core::{
-    AccountStore, AppPaths, DeviceIdentity, JobRunner, ServerStore, Settings, APP_ID, APP_NAME,
-    SLUG,
+    APP_ID, APP_NAME, AccountStore, AppPaths, DeviceIdentity, JobRunner, SLUG, ServerStore,
+    Settings,
 };
 use atlas_ui::tray::TrayHandle;
 use atlas_ui::{AtlasApp, EframeShell};
@@ -145,9 +145,8 @@ fn main() -> eframe::Result<()> {
 
     // Registry / file-system call: off the thread that will become the UI.
     let autostart = Autostart::new(SLUG, APP_NAME).hidden_argument("--start-hidden");
-    let autostart_state =
-        std::thread::scope(|scope| scope.spawn(|| autostart.state()).join())
-            .unwrap_or(AutostartState::Off);
+    let autostart_state = std::thread::scope(|scope| scope.spawn(|| autostart.state()).join())
+        .unwrap_or(AutostartState::Off);
 
     // A link given to the first instance travels the same queue as handoffs.
     if let Some(link) = cli.link.clone() {
@@ -157,17 +156,7 @@ fn main() -> eframe::Result<()> {
     }
 
     let mut app = AtlasApp::new(
-        paths,
-        runner,
-        identity,
-        settings,
-        servers,
-        session,
-        accounts,
-        waker,
-        power,
-        incoming,
-        tray,
+        paths, runner, identity, settings, servers, session, accounts, waker, power, incoming, tray,
     );
     app.tray_available = tray_available;
     app.autostart_state = autostart_state;

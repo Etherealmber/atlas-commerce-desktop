@@ -40,11 +40,7 @@ pub async fn probe(raw_url: &str, fingerprint: &str, user_agent: &str) -> ProbeR
 }
 
 /// Probes an already normalized base URL.
-pub async fn probe_normalized(
-    base: &str,
-    fingerprint: &str,
-    user_agent: &str,
-) -> ProbeReport {
+pub async fn probe_normalized(base: &str, fingerprint: &str, user_agent: &str) -> ProbeReport {
     let started = std::time::Instant::now();
     let client = match reqwest::Client::builder()
         .user_agent(user_agent)
@@ -61,7 +57,7 @@ pub async fn probe_normalized(
                 database: false,
                 storage: false,
                 message: format!("Client HTTP impossible : {error}"),
-            }
+            };
         }
     };
     let url = ServerUrl::join(base, "api/health");
@@ -128,7 +124,8 @@ pub async fn probe_normalized(
             message: if error.is_timeout() {
                 "Délai d'attente dépassé — le serveur est peut-être hors ligne.".to_owned()
             } else if error.is_connect() {
-                "Site introuvable ou injoignable — vérifiez l'adresse et votre connexion.".to_owned()
+                "Site introuvable ou injoignable — vérifiez l'adresse et votre connexion."
+                    .to_owned()
             } else {
                 "Site ou serveur indisponible. Vérifiez l'adresse saisie.".to_owned()
             },

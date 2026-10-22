@@ -1,8 +1,8 @@
 //! Atlas Agent IA — one persistent conversation per account.
 
+use crate::ApiClient;
 use crate::error::ApiError;
 use crate::models::{AgentChat, AgentPolicy, AgentReply};
-use crate::ApiClient;
 
 impl ApiClient {
     /// `GET /api/agent/policy` — quota and block state.
@@ -12,11 +12,7 @@ impl ApiClient {
 
     /// `POST /api/assist/chat` — one turn of the persistent `live` thread.
     /// The worker keeps the recent history server-side keyed by thread id.
-    pub async fn agent_chat(
-        &self,
-        message: &str,
-        thread_id: &str,
-    ) -> Result<AgentReply, ApiError> {
+    pub async fn agent_chat(&self, message: &str, thread_id: &str) -> Result<AgentReply, ApiError> {
         let request = AgentChat {
             message: message.to_owned(),
             user_message: message.to_owned(),

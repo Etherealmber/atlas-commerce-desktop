@@ -1,9 +1,9 @@
 //! Commerce endpoints: products, stock movements, dashboard, sales and
 //! alerts. Query parameters follow the worker and the Android client.
 
+use crate::ApiClient;
 use crate::error::ApiError;
 use crate::models::*;
-use crate::ApiClient;
 
 impl ApiClient {
     /// `GET /api/products` — the mobile/light field set, capped like Android.
@@ -36,11 +36,7 @@ impl ApiClient {
     }
 
     /// `POST /api/products/:id/adjust-stock`.
-    pub async fn adjust_stock(
-        &self,
-        id: i64,
-        adjust: &StockAdjust,
-    ) -> Result<Product, ApiError> {
+    pub async fn adjust_stock(&self, id: i64, adjust: &StockAdjust) -> Result<Product, ApiError> {
         self.post_data(&format!("/api/products/{id}/adjust-stock"), adjust)
             .await
     }
@@ -52,8 +48,7 @@ impl ApiClient {
 
     /// `GET /api/invoices?kind=…` — sales and tickets.
     pub async fn invoices(&self, kind: &str) -> Result<Vec<Invoice>, ApiError> {
-        self.get_data(&format!("/api/invoices?kind={kind}"))
-            .await
+        self.get_data(&format!("/api/invoices?kind={kind}")).await
     }
 
     /// `POST /api/invoices` with an idempotency key, for quick sales.

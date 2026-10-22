@@ -135,7 +135,10 @@ fn platform_machine_id() -> Option<String> {
     text.lines().find_map(|line| {
         let line = line.trim();
         line.strip_prefix("MachineGuid")
-            .map(|rest| rest.trim_start_matches(|c: char| c.is_whitespace()).to_owned())
+            .map(|rest| {
+                rest.trim_start_matches(|c: char| c.is_whitespace())
+                    .to_owned()
+            })
             .filter(|value| !value.is_empty())
     })
 }
@@ -201,10 +204,12 @@ mod tests {
     fn fresh_identity_is_stable_shape() {
         let identity = DeviceIdentity::fresh();
         assert_eq!(identity.fingerprint().len(), 64);
-        assert!(identity
-            .fingerprint()
-            .chars()
-            .all(|c| c.is_ascii_hexdigit()));
+        assert!(
+            identity
+                .fingerprint()
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
+        );
         assert_eq!(identity.short_id().len(), 8);
     }
 
@@ -214,7 +219,10 @@ mod tests {
         assert!(ua.len() < 40, "user agent must stay short: {ua:?}");
         let lower = ua.to_lowercase();
         for token in ["mozilla", "chrome/", "safari/", "firefox/", "edg/"] {
-            assert!(!lower.contains(token), "user agent looks like a browser: {ua:?}");
+            assert!(
+                !lower.contains(token),
+                "user agent looks like a browser: {ua:?}"
+            );
         }
     }
 

@@ -344,12 +344,16 @@ impl Product {
 
     #[must_use]
     pub fn subtitle(&self) -> String {
-        [self.sku.clone(), self.barcode.clone(), self.category.clone()]
-            .into_iter()
-            .flatten()
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>()
-            .join(" · ")
+        [
+            self.sku.clone(),
+            self.barcode.clone(),
+            self.category.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ")
     }
 }
 
@@ -411,8 +415,13 @@ impl Invoice {
 
     #[must_use]
     pub fn is_quick_sale(&self) -> bool {
-        matches!(self.doc_kind.as_deref(), Some("quick_sale") | Some("ticket"))
-            || self.number.as_deref().is_some_and(|number| number.starts_with("VR"))
+        matches!(
+            self.doc_kind.as_deref(),
+            Some("quick_sale") | Some("ticket")
+        ) || self
+            .number
+            .as_deref()
+            .is_some_and(|number| number.starts_with("VR"))
     }
 }
 
@@ -561,8 +570,7 @@ mod tests {
 
     #[test]
     fn nav_badges_zero_fill_missing_counters() {
-        let badges: NavBadges =
-            serde_json::from_str(r#"{"products_low":3,"vr_open":1}"#).unwrap();
+        let badges: NavBadges = serde_json::from_str(r#"{"products_low":3,"vr_open":1}"#).unwrap();
         assert_eq!(badges.products_low, 3);
         assert_eq!(badges.vr_open, 1);
         assert_eq!(badges.invoices_unpaid, 0);
