@@ -246,9 +246,9 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 if secondary_button(
                                     ui,
                                     if probing {
-                                        t!(app.locale, "Checking…").as_ref()
+                                        t!(app.locale, "Checking…")
                                     } else {
-                                        t!(app.locale, "Check connection").as_ref()
+                                        t!(app.locale, "Check connection")
                                     },
                                     palette,
                                 ) && !probing

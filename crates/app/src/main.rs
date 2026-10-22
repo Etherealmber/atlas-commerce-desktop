@@ -64,10 +64,10 @@ fn main() -> eframe::Result<()> {
         None => "show".to_owned(),
     };
     let _guard = match slot.claim(&request, move |request| {
-        if let Some(link) = request.strip_prefix("open-link:") {
-            if let Ok(mut queue) = queue.lock() {
-                queue.push(link.to_owned());
-            }
+        if let Some(link) = request.strip_prefix("open-link:")
+            && let Ok(mut queue) = queue.lock()
+        {
+            queue.push(link.to_owned());
         }
         // Always wake the running instance; it decides what the link means.
         Some("ok".to_owned())
@@ -149,10 +149,10 @@ fn main() -> eframe::Result<()> {
         .unwrap_or(AutostartState::Off);
 
     // A link given to the first instance travels the same queue as handoffs.
-    if let Some(link) = cli.link.clone() {
-        if let Ok(mut queue) = incoming.lock() {
-            queue.push(link);
-        }
+    if let Some(link) = cli.link.clone()
+        && let Ok(mut queue) = incoming.lock()
+    {
+        queue.push(link);
     }
 
     let mut app = AtlasApp::new(

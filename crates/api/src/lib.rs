@@ -87,10 +87,10 @@ impl ApiClient {
             .header(reqwest::header::ACCEPT, "application/json")
             .header("X-Atlas-Client", NATIVE_HEADER)
             .header("X-Device-Fingerprint", &self.fingerprint);
-        if let Ok(guard) = self.token.lock() {
-            if let Some(token) = guard.as_deref() {
-                builder = builder.bearer_auth(token);
-            }
+        if let Ok(guard) = self.token.lock()
+            && let Some(token) = guard.as_deref()
+        {
+            builder = builder.bearer_auth(token);
         }
         builder
     }

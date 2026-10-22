@@ -39,14 +39,13 @@ impl DeviceIdentity {
     /// id and persists it (privately) for future launches.
     #[must_use]
     pub fn load_or_create(path: &Path) -> Self {
-        if let Ok(text) = std::fs::read_to_string(path) {
-            if let Ok(record) = serde_json::from_str::<DeviceRecord>(&text) {
-                if !record.fingerprint.is_empty() {
-                    return Self {
-                        fingerprint: record.fingerprint,
-                    };
-                }
-            }
+        if let Ok(text) = std::fs::read_to_string(path)
+            && let Ok(record) = serde_json::from_str::<DeviceRecord>(&text)
+            && !record.fingerprint.is_empty()
+        {
+            return Self {
+                fingerprint: record.fingerprint,
+            };
         }
         let identity = Self::fresh();
         identity.persist(path);

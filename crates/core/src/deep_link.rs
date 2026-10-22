@@ -108,10 +108,10 @@ impl QrTokenParser {
             .or_else(|| trimmed.strip_prefix("atlascommerce:"))
         {
             let after = rest.trim_start_matches('/');
-            if let Some(query) = after.find('?').map(|index| &after[index + 1..]) {
-                if let Some(token) = query_token(query) {
-                    return Some(token);
-                }
+            if let Some(query) = after.find('?').map(|index| &after[index + 1..])
+                && let Some(token) = query_token(query)
+            {
+                return Some(token);
             }
             let tail = after.split('?').next().unwrap_or("").trim_end_matches('/');
             let last = tail.rsplit('/').next().unwrap_or("");
@@ -135,21 +135,19 @@ impl QrTokenParser {
                 .path_segments()
                 .map(|iter| iter.collect())
                 .unwrap_or_default();
-            if let Some(index) = segments.iter().position(|segment| *segment == "session") {
-                if let Some(token) = segments.get(index + 1) {
-                    if is_raw_token(token) {
-                        return Some((*token).to_owned());
-                    }
-                }
+            if let Some(index) = segments.iter().position(|segment| *segment == "session")
+                && let Some(token) = segments.get(index + 1)
+                && is_raw_token(token)
+            {
+                return Some((*token).to_owned());
             }
             if let Some(index) = segments.iter().position(|segment| {
                 segment.eq_ignore_ascii_case("qr") || segment.eq_ignore_ascii_case("login-qr")
-            }) {
-                if let Some(token) = segments.get(index + 1) {
-                    if is_raw_token(token) {
-                        return Some((*token).to_owned());
-                    }
-                }
+            })
+                && let Some(token) = segments.get(index + 1)
+                && is_raw_token(token)
+            {
+                return Some((*token).to_owned());
             }
             return None;
         }

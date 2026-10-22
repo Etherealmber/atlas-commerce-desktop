@@ -176,17 +176,17 @@ impl AtlasApp {
     }
 
     fn poll_update_jobs(&mut self, ctx: &Context) {
-        if let Some(job) = &self.update.job {
-            if let Some(result) = job.poll() {
-                self.update.job = None;
-                self.update.checking = false;
-                match result {
-                    Ok(Some(manifest)) => {
-                        self.apply_manifest(manifest);
-                    }
-                    Ok(None) => {}
-                    Err(error) => self.update.error = Some(error),
+        if let Some(job) = &self.update.job
+            && let Some(result) = job.poll()
+        {
+            self.update.job = None;
+            self.update.checking = false;
+            match result {
+                Ok(Some(manifest)) => {
+                    self.apply_manifest(manifest);
                 }
+                Ok(None) => {}
+                Err(error) => self.update.error = Some(error),
             }
         }
         if let Some(job) = &self.update_download_job {
@@ -262,20 +262,20 @@ impl AtlasApp {
         }
         let links = std::mem::take(&mut self.pending_deep_links);
         for raw in links {
-            if let Some(link) = atlas_core::VerifyLink::parse(&raw) {
+            if let Some(link) = atlas_core::VerifyLink::parse(&raw)
+                && self.session.is_none()
+            {
                 // A verify link only makes sense on the login screen.
-                if self.session.is_none() {
-                    self.login.pending_link = Some(link);
-                    self.screen = Screen::Login;
-                }
-            } else if let Some(token) = atlas_core::QrTokenParser::extract(&raw) {
-                if self.session.is_none() {
-                    self.qr.active = true;
-                    self.qr.token = token;
-                    self.qr.status = "pending".to_owned();
-                    self.qr.next_poll = None;
-                    self.screen = Screen::Login;
-                }
+                self.login.pending_link = Some(link);
+                self.screen = Screen::Login;
+            } else if let Some(token) = atlas_core::QrTokenParser::extract(&raw)
+                && self.session.is_none()
+            {
+                self.qr.active = true;
+                self.qr.token = token;
+                self.qr.status = "pending".to_owned();
+                self.qr.next_poll = None;
+                self.screen = Screen::Login;
             }
         }
     }
@@ -388,18 +388,19 @@ impl AtlasApp {
     }
 
     fn poll_agent_jobs(&mut self) {
-        if let Some(job) = &self.agent.job_policy {
-            if let Some(result) = job.poll() {
-                self.agent.job_policy = None;
-                if let Ok(policy) = result {
-                    self.agent.policy = Some(policy);
-                }
+        if let Some(job) = &self.agent.job_policy
+            && let Some(result) = job.poll()
+        {
+            self.agent.job_policy = None;
+            if let Ok(policy) = result {
+                self.agent.policy = Some(policy);
             }
         }
-        if let Some(job) = &self.agent.job {
-            if let Some(result) = job.poll() {
-                self.agent.job = None;
-                self.agent.busy = false;
+        if let Some(job) = &self.agent.job
+            && let Some(result) = job.poll()
+        {
+            self.agent.job = None;
+            self.agent.busy = false;
                 match result {
                     Ok(reply) => {
                         self.agent.messages.push(crate::state::ChatMessage {
@@ -418,7 +419,6 @@ impl AtlasApp {
                         });
                     }
                 }
-            }
         }
     }
 
