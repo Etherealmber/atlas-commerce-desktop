@@ -13,9 +13,13 @@ name: Release
 #                       macOS DMG) and uploads them as run artifacts without
 #                       touching GitHub Releases.
 #
-# A push of a v* tag runs the same pipeline with publishing on. The workflow
-# never runs `git push`: a dispatched release creates its tag through the
-# GitHub releases API and is always promoted to "latest".
+# A push of a v* tag runs the same pipeline with publishing on. The release
+# tag itself is created through the GitHub releases API and is always promoted
+# to "latest". The only `git push` in this workflow is the narrowly scoped
+# workspace version bump: when the dispatched version is newer than
+# Cargo.toml, prepare commits `chore(release): bump workspace … [skip ci]`
+# (mirroring atlas-commerce-android) before the build jobs start. Tag pushes
+# and third-party repositories cannot be auto-bumped and stay strict.
 
 on:
   push:
@@ -64,6 +68,8 @@ jobs:
       publish: ${{ steps.meta.outputs.publish }}
       mandatory: ${{ steps.meta.outputs.mandatory }}
       notes_mode: ${{ steps.meta.outputs.notes_mode }}
+      needs_bump: ${{ steps.meta.outputs.needs_bump }}
+      bump_sha: ${{ steps.bump.outputs.bump_sha }}
     steps:
       - uses: actions/checkout@v7
       - name: Resolve release metadata
@@ -104,10 +110,26 @@ jobs:
           # The shipped binary reports the workspace version; the manifest and
           # every package name use the tag. A mismatch would make the updater
           # offer the "new" version forever (or gate clients on a bad manifest).
+          # On a manual dispatch the chosen version bumps the workspace itself
+          # (next step); tag pushes and third-party repos stay strict because
+          # neither can be auto-committed safely.
           cargo_version=$(grep -m1 -oE '^version = "[^"]+"' Cargo.toml | cut -d'"' -f2)
+          needs_bump=false
           if [ "$cargo_version" != "$version" ]; then
-            echo "::error::La version $version ne correspond pas à Cargo.toml ($cargo_version). Incrémentez la version du workspace puis relancez."
-            exit 1
+            if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
+              echo "::error::Tag $tag : Cargo.toml publie $cargo_version. Un tag immuable ne peut pas être bumpé automatiquement ; alignez le workspace puis recréez le tag."
+              exit 1
+            fi
+            if [ "$repo" != "$GITHUB_REPOSITORY" ]; then
+              echo "::error::La version $version ne correspond pas à Cargo.toml ($cargo_version) et le workflow ne peut pas pousser dans le dépôt tiers $repo. Alignez le workspace manuellement puis relancez."
+              exit 1
+            fi
+            lower=$(printf '%s\n%s\n' "$cargo_version" "$version" | sort -V | head -n1)
+            if [ "$lower" != "$cargo_version" ]; then
+              echo "::error::La version demandée $version n'est pas strictement supérieure à la version du workspace ($cargo_version)."
+              exit 1
+            fi
+            needs_bump=true
           fi
 
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
@@ -131,6 +153,11 @@ jobs:
             echo "| Mise à jour obligatoire | $mandatory |"
             echo "| Notes de version | $([ "$notes_mode" = custom ] && echo "fournies manuellement" || echo "génération automatique") |"
             echo "| Déclencheur | $GITHUB_EVENT_NAME |"
+            if [ "$needs_bump" = true ]; then
+              echo "| Bump Cargo.toml | automatique \`$cargo_version\` → \`$version\` (commit poussé avant build) |"
+            else
+              echo "| Bump Cargo.toml | non nécessaire (déjà \`$cargo_version\`) |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           {
@@ -140,8 +167,35 @@ jobs:
             echo "publish=$publish"
             echo "mandatory=$mandatory"
             echo "notes_mode=$notes_mode"
+            echo "needs_bump=$needs_bump"
           } >> "$GITHUB_OUTPUT"
           echo "::notice title=prepare release::Tag $tag sur $repo — publication=$publish, obligatoire=$mandatory, notes=$notes_mode."
+
+      # Choosing a version in the dispatch form that is newer than the
+      # workspace bumps Cargo.toml immediately, so every downstream job
+      # (build matrix, DMG, MSI/Inno, release) compiles and tags the exact
+      # chosen version without a manual edit-and-rerun cycle.
+      - name: Auto-bump workspace version
+        id: bump
+        if: steps.meta.outputs.needs_bump == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/bump-workspace-version.py "$RELEASE_VERSION"
+          git config user.name "atlas-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add Cargo.toml
+          git commit -m "chore(release): bump workspace to ${RELEASE_VERSION} [skip ci]"
+          # A push failure must abort the release: otherwise builds would
+          # compile the old version while tag/manifest advertise the new one.
+          branch="${GITHUB_REF#refs/heads/}"
+          if ! git push origin "HEAD:$branch"; then
+            echo "::error::Impossible de pousser le bump vers $branch (protection de branche ?). La release s'arrête ici ; relancez après avoir corrigé."
+            exit 1
+          fi
+          echo "bump_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "::notice title=prepare release::Workspace bumpé vers $RELEASE_VERSION et poussé sur $branch ($(git rev-parse --short HEAD))."
 
   build:
     name: build (${{ matrix.target }})
@@ -173,6 +227,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -364,6 +422,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       # One portable zip per architecture, produced by the build matrix.
       - uses: actions/download-artifact@v8
         with:
@@ -469,6 +531,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -574,6 +640,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
           # Full history so release-notes.py can diff against the previous tag.
           fetch-depth: 0
           persist-credentials: false
@@ -608,7 +678,9 @@ jobs:
         with:
           repository: ${{ needs.prepare.outputs.repo }}
           tag_name: ${{ needs.prepare.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          # github.sha is the pre-bump event commit; when prepare pushed the
+          # version-bump commit, the tag must target that new sha instead.
+          target_commitish: ${{ needs.prepare.outputs.bump_sha || github.sha }}
           name: Atlas Commerce Desktop ${{ needs.prepare.outputs.tag }}
           body_path: RELEASE_NOTES.md
           make_latest: 'true'
