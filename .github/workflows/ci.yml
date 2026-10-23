@@ -76,6 +76,16 @@ jobs:
             echo
             echo "Toolchain : \`$(rustc --version)\` — \`$(cargo --version)\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      # One-line API-readable mirror of the job summary: annotations survive
+      # where artifact downloads and job logs are not reachable.
+      - name: Announce result
+        if: always()
+        run: |
+          if grep -hqE '^(error|warning)(\[[[:alnum:]]+\])?:' "$LOG_DIR"/*.log; then
+            echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
+            exit 1
+          fi
+          echo "::notice title=quality::rustfmt, clippy (défaut + toutes features) et rustdoc : OK, aucune alerte."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -140,6 +150,17 @@ jobs:
               echo "Binaire release : \`$bin\` — $(du -h "$bin" | cut -f1)"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        shell: bash
+        run: |
+          total=$(grep -hoE '[0-9]+ passed' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}')
+          failed=$(grep -hcE 'test result: FAILED|^error(\[|:)' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}')
+          if [ "$failed" != 0 ]; then
+            echo "::error title=tests (${{ matrix.os }})::Échecs de tests ou erreurs de compilation — voir l'artefact test-logs-${{ matrix.os }}."
+            exit 1
+          fi
+          echo "::notice title=tests (${{ matrix.os }})::$total tests OK (unitaires + documentation) et build release réussi."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -185,6 +206,17 @@ jobs:
               echo "**Résultat : des éléments sont signalés, voir \`osv.log\` dans les artefacts.**"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        run: |
+          if grep -q "No issues found" "$LOG_DIR/osv.log"; then
+            pkgs=$(grep -oE 'found [0-9]+ packages' "$LOG_DIR/osv.log" | grep -oE '[0-9]+' | head -1)
+            filtered=$(grep -c "filtered out" "$LOG_DIR/osv.log" || true)
+            echo "::notice title=vulnerability scan::$pkgs paquets analysés ; $filtered avis RUSTSEC non maintenus filtrés (osv-scanner.toml) ; aucune vulnérabilité."
+          else
+            echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

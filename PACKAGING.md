@@ -68,10 +68,12 @@ a manual run creates its tag through the GitHub releases API.
 
 No workflow commits or pushes back to a branch. Each job appends a
 Markdown report to the GitHub Actions *job summary* (toolchain, test
-results, produced files, SHA-256 fingerprints) and uploads its captured
-logs and packages as run artifacts: `quality-logs`, `test-logs-<os>`,
-`vulnerability-logs` under CI, per-target archives and `macos-universal`
-under releases, and the packaging validation logs.
+results, produced files, SHA-256 fingerprints), emits a one-line
+`::notice::`/`::error::` annotation mirroring that result (readable
+through the check-run API), and uploads its captured logs and packages
+as run artifacts: `quality-logs`, `test-logs-<os>`,
+`vulnerability-logs` under CI, per-target archives and
+`macos-universal` under releases, and the packaging validation logs.
 
 ## Application identity
 

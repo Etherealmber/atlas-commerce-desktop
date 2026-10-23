@@ -132,6 +132,7 @@ jobs:
             echo "notes_mode=$notes_mode"
             echo "existing_tag=$existing_tag"
           } >> "$GITHUB_OUTPUT"
+          echo "::notice title=prepare release::Tag $tag sur $repo — pré-version=$prerelease, notes=$notes_mode, tag existant=$existing_tag."
 
   build:
     name: build (${{ matrix.target }})
@@ -310,6 +311,16 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Announce result
+        if: always()
+        shell: bash
+        run: |
+          count=$(find dist -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$count" = 0 ]; then
+            echo "::error title=build ${{ matrix.target }}::Aucun artefact empaqueté pour $RELEASE_TAG — voir le résumé du job."
+            exit 1
+          fi
+          echo "::notice title=build ${{ matrix.target }}::$count artefact(s) produit(s) pour $RELEASE_TAG sur ${{ matrix.os }}."
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
@@ -399,6 +410,15 @@ jobs:
             (cd dist && sha256sum * 2>/dev/null) || echo "(non disponible)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        run: |
+          dmg=$(find dist -maxdepth 1 -name '*.dmg' 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$dmg" = 0 ]; then
+            echo "::error title=macOS universal::Aucun DMG produit pour $RELEASE_TAG — voir le résumé du job."
+            exit 1
+          fi
+          echo "::notice title=macOS universal::DMG universel (aarch64 + x86_64) construit pour $RELEASE_TAG."
       - uses: actions/upload-artifact@v4
         with:
           name: macos-universal
@@ -547,3 +567,14 @@ jobs:
               echo "| \`$file\` | $size | \`${hash:0:16}…\` |"
             done < checksums.txt
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        run: |
+          url="https://github.com/${RELEASE_REPO}/releases/tag/${RELEASE_TAG}"
+          assets=$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+          if [ "${assets:-0}" -gt 0 ]; then
+            echo "::notice title=release publiée::$RELEASE_TAG ($assets assets, pré-version=$RELEASE_PRERELEASE, notes=$NOTES_MODE) — $url"
+          else
+            echo "::error title=publication release::La release $RELEASE_TAG n'existe pas ou n'a aucun asset — voir le résumé du job."
+            exit 1
+          fi
