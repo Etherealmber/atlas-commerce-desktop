@@ -22,6 +22,8 @@ fn route_meta(route: Route) -> (Icon, &'static str) {
         Route::Catalog => (Icon::Boxes, "Catalogue"),
         Route::Clients => (Icon::Users, "Clients"),
         Route::Vendors => (Icon::Store, "Fournisseurs"),
+        Route::Expenses => (Icon::Wallet, "Dépenses"),
+        Route::DeliveryNotes => (Icon::Truck, "Bons de livraison"),
         Route::Sales => (Icon::Receipt, "Ventes"),
         Route::Agent => (Icon::Bot, "Agent IA"),
         Route::Notifications => (Icon::Bell, "Notifications"),
@@ -152,6 +154,12 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     }
                     if route == Route::Vendors && app.vendors.data.is_none() {
                         app.load_vendors();
+                    }
+                    if route == Route::Expenses && app.expenses.data.is_none() {
+                        app.load_expenses();
+                    }
+                    if route == Route::DeliveryNotes && app.delivery_notes.data.is_none() {
+                        app.load_delivery_notes();
                     }
                     if route == Route::Catalog {
                         if app.categories.data.is_none() {
@@ -324,6 +332,12 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 }
                 Screen::Shell(Route::Vendors) => {
                     super::vendors::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Expenses) => {
+                    super::expenses::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::DeliveryNotes) => {
+                    super::delivery_notes::draw(app, ui, palette);
                 }
                 Screen::Shell(Route::Sales) => {
                     super::sales::draw(app, ui, palette);

@@ -80,7 +80,7 @@ impl ApiClient {
 
 /// Minimal query encoding (the worker parses `q` itself; keep reserved
 /// characters safe without pulling another dependency).
-fn urlencoding(value: &str) -> String {
+pub(crate) fn urlencoding(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.bytes() {
         match byte {

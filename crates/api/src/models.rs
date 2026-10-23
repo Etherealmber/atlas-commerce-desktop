@@ -709,6 +709,139 @@ pub struct UnitWrite {
     pub sort_order: i64,
 }
 
+// ── Expenses ──────────────────────────────────────────────────────────────
+
+/// One row of the `expenses` table. `entry_type` distinguishes real expenses
+/// from income and owner movements; the worker defaults it to `"expense"`.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Expense {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub amount: f64,
+    #[serde(default)]
+    pub payment_method: String,
+    #[serde(default)]
+    pub expense_date: String,
+    #[serde(default)]
+    pub vendor_name: String,
+    #[serde(default)]
+    pub reference: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub entry_type: String,
+}
+
+/// Create payload for `POST /api/expenses`; mirrors the worker's
+/// `validateExpenseWrite` inputs.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ExpenseWrite {
+    pub category: String,
+    pub description: String,
+    pub amount: f64,
+    pub payment_method: String,
+    pub expense_date: String,
+    pub vendor_name: String,
+    pub reference: String,
+    pub notes: String,
+    pub entry_type: String,
+}
+
+// ── Delivery notes ────────────────────────────────────────────────────────
+
+/// A delivery note (`bon de livraison`); the worker assigns the
+/// `BL-YYYY-NNNN` number and forces the status to `confirmed`.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct DeliveryNote {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub number: String,
+    #[serde(default)]
+    pub invoice_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: String,
+    #[serde(default)]
+    pub issue_date: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+/// Create payload for `POST /api/delivery-notes`. A zero `invoice_id` means
+/// the note is standalone; items are copied from the invoice server-side.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DeliveryNoteWrite {
+    pub invoice_id: i64,
+    pub client_name: String,
+    pub issue_date: String,
+    pub notes: String,
+}
+
+// ── Barcode scan ──────────────────────────────────────────────────────────
+
+/// The flattened product returned by `GET /api/scan/barcode/:code`. The
+/// worker adds `parent`, `stock_status`, `display_name` and `invoice_line`
+/// alongside these columns; the extra fields are ignored on decode.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ScannedProduct {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub sku: Option<String>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub barcode: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub unit: Option<String>,
+    #[serde(default)]
+    pub price: f64,
+    #[serde(default)]
+    pub stock_quantity: f64,
+    #[serde(default)]
+    pub low_stock_threshold: Option<f64>,
+    #[serde(rename = "track_inventory", default = "default_one")]
+    pub track_inventory: i64,
+    #[serde(rename = "is_active", default = "default_one")]
+    pub is_active: i64,
+    #[serde(default)]
+    pub parent_id: Option<i64>,
+    #[serde(default)]
+    pub variant_label: Option<String>,
+    #[serde(default)]
+    pub tax_rate: Option<f64>,
+    #[serde(default)]
+    pub stock_status: Option<String>,
+    #[serde(default)]
+    pub display_name: Option<String>,
+}
+
+/// Payload for `POST /api/scan/quick-product`. On a 409
+/// `DUPLICATE_PRODUCT` the same body is retried with `force_duplicate`.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct QuickProductWrite {
+    pub barcode: String,
+    pub name: String,
+    pub price: f64,
+    pub cost: f64,
+    pub category: String,
+    pub unit: String,
+    pub stock_quantity: f64,
+    pub sku: String,
+    pub force_duplicate: bool,
+    #[serde(rename = "low_stock_threshold")]
+    pub low_stock_threshold: f64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

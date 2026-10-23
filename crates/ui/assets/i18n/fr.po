@@ -702,3 +702,138 @@ msgstr "Unité mise à jour."
 
 msgid "Units"
 msgstr "Unités"
+
+msgid "Native desktop client"
+msgstr "Client de bureau natif"
+
+msgid "Expenses"
+msgstr "Dépenses"
+
+msgid "New entry"
+msgstr "Nouvelle écriture"
+
+msgid "Search by description, category, vendor or reference"
+msgstr "Rechercher par description, catégorie, fournisseur ou référence"
+
+msgid "No expense yet"
+msgstr "Aucune dépense pour le moment"
+
+msgid "Recorded expenses and income appear here."
+msgstr "Les dépenses et recettes enregistrées apparaissent ici."
+
+msgid "No matching entry"
+msgstr "Aucune écriture correspondante"
+
+msgid "Try another search term."
+msgstr "Essayez un autre terme de recherche."
+
+msgid "Cash"
+msgstr "Espèces"
+
+msgid "Card"
+msgstr "Carte"
+
+msgid "Company transfer"
+msgstr "Virement société"
+
+msgid "Company check"
+msgstr "Chèque société"
+
+msgid "Other"
+msgstr "Autre"
+
+msgid "Income"
+msgstr "Recettes"
+
+msgid "Net balance"
+msgstr "Solde net"
+
+msgid "The description is required."
+msgstr "La description est obligatoire."
+
+msgid "The description must be 300 characters or fewer."
+msgstr "La description doit contenir 300 caractères au maximum."
+
+msgid "The amount must be a positive number."
+msgstr "Le montant doit être un nombre positif."
+
+msgid "Amount"
+msgstr "Montant"
+
+msgid "Payment method"
+msgstr "Mode de paiement"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Vendor (optional)"
+msgstr "Fournisseur (facultatif)"
+
+msgid "Reference (optional)"
+msgstr "Référence (facultatif)"
+
+msgid "Notes (optional)"
+msgstr "Notes (facultatif)"
+
+msgid "Expense"
+msgstr "Dépense"
+
+msgid "Entry saved."
+msgstr "Écriture enregistrée."
+
+msgid "Delivery notes"
+msgstr "Bons de livraison"
+
+msgid "New delivery note"
+msgstr "Nouveau bon de livraison"
+
+msgid "No delivery note yet"
+msgstr "Aucun bon de livraison pour le moment"
+
+msgid "Created delivery notes appear here."
+msgstr "Les bons de livraison créés apparaissent ici."
+
+msgid "Confirmed"
+msgstr "Confirmé"
+
+msgid "Draft"
+msgstr "Brouillon"
+
+msgid "Cancelled"
+msgstr "Annulé"
+
+msgid "Issue date"
+msgstr "Date d'émission"
+
+msgid "The client name is required."
+msgstr "Le nom du client est obligatoire."
+
+msgid "The client name must be 200 characters or fewer."
+msgstr "Le nom du client doit contenir 200 caractères au maximum."
+
+msgid "Delivery note created."
+msgstr "Bon de livraison créé."
+
+msgid "Scan or type a barcode / SKU, then press Enter"
+msgstr "Scannez ou saisissez un code-barres / SKU, puis Entrée"
+
+msgid "Create from barcode"
+msgstr "Créer depuis un code-barres"
+
+msgid "Stock"
+msgstr "Stock"
+
+msgid "Sale price"
+msgstr "Prix de vente"
+
+msgid "Cost"
+msgstr "Coût"
+
+msgid "This barcode already exists. Save again to create the product anyway."
+msgstr "Ce code-barres existe déjà. Enregistrez à nouveau pour créer le produit quand même."
+
+msgid "Create anyway"
+msgstr "Créer quand même"
+
+msgid "The barcode is required."
+msgstr "Le code-barres est obligatoire."

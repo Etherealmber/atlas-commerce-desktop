@@ -95,6 +95,13 @@ REMEDIATION: list[tuple[re.Pattern[str], str]] = [
         "ad-hoc signed; verify `bundle.sh` and the universal `lipo` inputs.",
     ),
     (
+        re.compile(r"wix|\.msi|CNDL|LGHT", re.IGNORECASE),
+        "The WiX MSI generator failed. It runs `packaging/windows/build-msi.py` "
+        "on the release payload with the wix 5.0.2 dotnet tool; reproduce with "
+        "`python packaging/windows/build-msi.py <payload> out.msi 0.1.0 amd64` "
+        "and check the CNDL/LGHT compiler lines surfaced in the annotations.",
+    ),
+    (
         re.compile(r"native-packages|AppImage", re.IGNORECASE),
         "The native-packages/AppImage step failed. Re-run with the captured "
         "job log and check `native-packages.yaml` and the Ruby gem version.",

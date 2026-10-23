@@ -116,6 +116,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
+    super::scan::draw_scan_bar(app, ui, palette);
+    ui.add_space(10.0);
+
     draw_search(app, ui, palette);
     ui.add_space(10.0);
 

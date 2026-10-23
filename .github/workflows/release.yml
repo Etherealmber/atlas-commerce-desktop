@@ -265,6 +265,33 @@ jobs:
           cp "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage \
              "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage.zsync dist/
 
+      # Per-architecture Windows Installer package (.msi), like Spotifast:
+      # the portable zip and the universal setup.exe cover the other channels.
+      # The generator is pure WiX v5 (no C tools, no native-packages gem).
+      - name: Windows Installer package
+        id: msi
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
+          $arch = if ("${{ matrix.target }}".StartsWith("aarch64")) { "arm64" } else { "amd64" }
+          $payload = "dist\msi-input"
+          New-Item -ItemType Directory -Force $payload | Out-Null
+          Copy-Item "target\${{ matrix.target }}\release\atlas-commerce-desktop.exe", `
+            "README.md", "LICENSE", "packaging\windows\atlas-commerce-desktop-installer.txt" $payload
+          $msi = "dist\atlas-commerce-desktop-$env:RELEASE_TAG-${{ matrix.target }}.msi"
+          python packaging\windows\build-msi.py $payload $msi $env:RELEASE_VERSION $arch 2>&1 |
+            Tee-Object msi.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path msi.log -Pattern 'error|exception|failed|CNDL|LGHT' |
+              Select-Object -First 15 | ForEach-Object {
+                echo "::error title=msi-build::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
+
       # The universal setup.exe (x64 + ARM64 in one installer) is assembled
       # by the separate windows-installer job once both Windows binaries exist.
 
@@ -284,6 +311,7 @@ jobs:
             echo "| Compilation | $(outcome "${{ steps.build.outcome }}" "cargo build") |"
             echo "| Vérification binaire Windows | $(outcome "${{ steps.verify.outcome }}" "dumpbin/PE/--version") |"
             echo "| Archive portable | $(outcome "${{ steps.archive.outcome }}" "zip/tar.gz") |"
+            echo "| Paquet MSI | $(outcome "${{ runner.os == 'Windows' && steps.msi.outcome || 'skipped' }}" "WiX build") |"
             echo "| AppImage | $(outcome "${{ steps.appimage.outcome }}" "AppImage + zsync") |"
             echo
             echo "### Artefacts produits (\`dist/\`)"
@@ -318,6 +346,7 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.msi
             dist/*.AppImage
             dist/*.AppImage.zsync
           if-no-files-found: error
@@ -389,19 +418,25 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          # Build markdown fences without backtick literals: in double-quoted
+          # PowerShell strings the backtick is the escape character.
+          $fence = [string][char]96 * 3
+          $artifacts = (Get-ChildItem dist -ErrorAction SilentlyContinue |
+            Select-Object Name, Length | Format-Table -AutoSize | Out-String)
+          $innoTail = (Get-Content inno.log -Tail 25 -ErrorAction SilentlyContinue) -join "`n"
           $summary = @(
-            "## Windows universal installer (x64 + ARM64)",
-            "",
-            "Tag ``$env:RELEASE_TAG`` — version ``$env:RELEASE_VERSION``",
-            "",
-            "### Artefacts produits (``dist/``)",
-            "```",
-            (Get-ChildItem dist -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table -AutoSize | Out-String),
-            "```",
-            "### Fin du log Inno Setup",
-            "```text",
-            ((Get-Content inno.log -Tail 25 -ErrorAction SilentlyContinue) -join "`n"),
-            "```"
+            '## Windows universal installer (x64 + ARM64)',
+            '',
+            "Tag $env:RELEASE_TAG - version $env:RELEASE_VERSION",
+            '',
+            '### Artefacts produits (dist/)',
+            $fence,
+            $artifacts,
+            $fence,
+            '### Fin du log Inno Setup',
+            ($fence + 'text'),
+            $innoTail,
+            $fence
           )
           $summary | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
       - name: Announce result
@@ -415,6 +450,7 @@ jobs:
           }
           echo "::notice title=windows-installer::Installeur universel x64 + ARM64 construit : $($setup.Name)."
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: windows-universal
           path: dist/*-setup.exe

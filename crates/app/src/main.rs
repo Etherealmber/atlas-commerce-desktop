@@ -9,6 +9,11 @@
 //! 4. the fastframe [`Shell`] owns the [`AtlasApp`] and recreates the
 //!    eframe window whenever the tray asks for it after a hide-to-tray.
 
+// Release builds on Windows are pure GUI programs: no console window opens
+// alongside the app (debug builds keep it for logs). Same attribute as the
+// Spotifast entry point.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::sync::{Arc, Mutex};
 
 use atlas_core::session::load_session;

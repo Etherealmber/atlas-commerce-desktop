@@ -9,13 +9,15 @@ que ces endpoints — aucun contrat n'est deviné.
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
   normalisés en `:id`).
-- Le desktop en couvre **32**, soit environ 10 %. Tous les endpoints appelés
+- Le desktop en couvre **38**, soit environ 12 %. Tous les endpoints appelés
   par le client existent à l'identique dans le worker : aucun appel hors
   contrat.
 - Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
-  connexion (avec OTP, lien magique et session QR), tableau de bord, produits,
+  connexion (avec OTP, lien magique et session QR), tableau de bord, produits
+  (avec barre de scan code-barres/SKU et création produit rapide),
   catalogue (catégories et unités), clients (CRM), fournisseurs,
-  ventes/factures (liste), notifications, agent, paramètres, coquille.
+  dépenses/recettes, bons de livraison, ventes/factures (liste),
+  notifications, agent, paramètres, coquille.
 
 ## Matrice par domaine
 
@@ -42,11 +44,11 @@ que ces endpoints — aucun contrat n'est deviné.
 | `integrations` | 0 | 6 |
 | `mobile-actions` | 0 | 6 |
 | `vendors` | 3 | 6 |
-| `expenses` | 0 | 5 |
+| `expenses` | 2 | 5 |
 | `categories` | 3 | 4 |
 | `units` | 3 | 4 |
 | `agent` | 1 | 3 |
-| `delivery-notes` | 0 | 3 |
+| `delivery-notes` | 2 | 3 |
 | `kits` | 0 | 3 |
 | `webhooks` | 0 | 3 |
 | `atlas` | 0 | 2 |
@@ -54,7 +56,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `import` | 0 | 2 |
 | `integrity` | 0 | 2 |
 | `ledger` | 0 | 2 |
-| `scan` | 0 | 2 |
+| `scan` | 2 | 2 |
 | `alerts` | 1 | 1 |
 | `bank` | 0 | 1 |
 | `canary` | 1 | 1 |
@@ -87,7 +89,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Reports`, `Balance` | Non (17 rapports + balance) |
 | `Bank` | Non (rapprochement CSV) |
 | `Reimbursements` | Non (remboursements, rattachés aux factures) |
-| `Scan` | Non (lecture code-barres) |
+| `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
 | `ImportData` | Non (imports validés en deux temps) |
 | `Actions` | Non (file d'actions mobile) |
 | `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
