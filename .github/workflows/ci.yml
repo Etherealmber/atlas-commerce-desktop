@@ -147,14 +147,15 @@ jobs:
           } | head -c 60000 > /tmp/quality-diagnostics.md
           # Never let diagnostics publishing flip an otherwise green job:
           # the "Announce result" step owns the gate.
-          gh api -X POST "repos/${{ github.repository }}/check-runs" \
+          if ! err=$(gh api -X POST "repos/${{ github.repository }}/check-runs" \
             -f name="quality diagnostics" \
             -f head_sha="${{ github.sha }}" \
             -f status="completed" \
             -f conclusion="neutral" \
             -F "output[title]=Diagnostics fmt/clippy/rustdoc" \
-            -F "output[text]=@/tmp/quality-diagnostics.md" > /dev/null \
-            || echo "::warning title=quality::impossible de publier le check-run de diagnostics"
+            -F "output[text]=@/tmp/quality-diagnostics.md" 2>&1 > /dev/null); then
+            echo "::warning title=quality::publish failed: $(printf '%s' "$err" | tr '\n' ' ' | head -c 800)"
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
