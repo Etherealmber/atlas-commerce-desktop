@@ -10,8 +10,9 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 | Path | Purpose |
 |---|---|
 | `packaging/applications/atlas-commerce-desktop.desktop` | Freedesktop entry, registers the `atlascommerce://` MIME type and `StartupWMClass`. |
-| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon. |
+| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon, the monochrome brand mark. |
 | `packaging/icons` + `packaging/macos/icon-1024.png` | Sources for the Windows `.ico` and the macOS `.icns`. |
+| `scripts/generate-icons.py` | Regenerates the SVG, 1024 px PNG and multi-size `.ico` from the shared monochrome design (Pillow). |
 | `packaging/windows/atlas-commerce-desktop.iss` | Inno Setup per-user installer, registers the URL protocol under `HKCU`. |
 | `packaging/windows/build-msi.py` | WiX 5 per-user MSI generator (no C custom actions). |
 | `packaging/macos/Info.plist` | Bundle template with `__IDENTIFIER__`/`__EXECUTABLE__`/`__VERSION__`/`__BUILD__` placeholders and the `atlascommerce` URL scheme. |
@@ -34,35 +35,42 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 
 ## Release flow (`release.yml`)
 
-Two entry points run the same pipeline, which never executes `git push`:
-a manual run creates its tag through the GitHub releases API.
+One pipeline, production only — no beta/rc channel. It never executes
+`git push`: a manual run creates its tag through the GitHub releases API
+and every release is promoted to *latest*.
 
 - **Manual run** — Actions → *Release* → *Run workflow*. Inputs:
   - `repository`: source repo as `owner/name` or a full GitHub URL
     (defaults to `Etherealmber/atlas-commerce-desktop`);
-  - `version`: e.g. `0.2.0` or `v0.2.0` (a suffix such as `-rc.1` marks a
-    pre-release, optionally forced with the `prerelease` toggle);
-  - `notes`: optional release notes; when left empty GitHub generates
-    them from commits and merged pull requests.
-- **Tag push** — pushing `vX.Y.Z` triggers the identical pipeline.
+  - `version`: stable `x.y.z` only (e.g. `0.2.0`); it must already match
+    the workspace `Cargo.toml` version, since the shipped binary reports
+    that version;
+  - `release_notes`: optional French notes; when left empty
+    `scripts/release-notes.py` summarises the commits since the previous
+    tag (same generator as atlas-commerce-android);
+  - `mandatory`: marks the release as a blocking update in `update.json`;
+  - `publish`: uncheck to build every installer and keep them as run
+    artifacts without creating a GitHub Release — the way to produce and
+    download a `.msi`/setup `.exe` on demand.
+- **Tag push** — pushing `vX.Y.Z` triggers the identical pipeline with
+  publishing on.
 
-1. The `prepare` job validates the version, normalises the tag, resolves
-   pre-release status and notes mode, and records everything in its job
+1. The `prepare` job validates the strict `x.y.z` version against
+   `Cargo.toml`, normalises the tag, and records every choice in its job
    summary.
-2. The matrix builds `x86_64`/`aarch64` Linux archives, Windows zip +
-   Inno Setup installer + WiX MSI, and a universal macOS DMG from a
-   `lipo` binary.
-3. Stable versions additionally build AppImages with `.zsync` update
-   information pointing at the newest stable GitHub release.
-4. The `publish` job (environment `release-signing`) collects every
-   artifact, adds the source archive, writes `update.json`, and generates
-   `checksums.txt`.
-5. When `UPDATE_SIGNING_ENABLED` is set, the checksums are signed with
+2. The matrix builds `x86_64`/`aarch64` Linux archives plus AppImages with
+   `.zsync`, and Windows `x86_64`/`arm64` portable zips **with the Inno
+   Setup installer (`*-setup.exe`) and the WiX `.msi`**; a separate job
+   builds the universal macOS DMG from a `lipo` binary.
+3. The `publish` job (environment `release-signing`, skipped when
+   `publish` is unchecked) generates the notes, creates the release via
+   the API, adds the source archive, writes `update.json` (including the
+   mandatory flag), and generates `checksums.txt`.
+4. When `UPDATE_SIGNING_ENABLED` is set, the checksums are signed with
    `ATLAS_UPDATE_SIGNING_KEY` and verified against
    `assets/update-public-key.hex`.
-6. The GitHub CLI creates the release (with `--generate-notes` or the
-   supplied notes) and uploads all assets; pre-releases never replace
-   `latest`, so the app's stable update channel never offers them.
+5. The GitHub CLI uploads all assets with `--clobber` and keeps the
+   release on *latest*.
 
 ## Build summaries and artifacts
 
