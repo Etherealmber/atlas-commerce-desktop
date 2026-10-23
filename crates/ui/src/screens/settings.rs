@@ -323,7 +323,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             })
             .collect();
         let refs: Vec<(&str, u64)> = options.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        if let Some(seconds) = segmented(ui, palette, &refs, app.settings.poll_interval_secs) {
+        if let Some(seconds) = segmented(ui, palette, &refs, Some(app.settings.poll_interval_secs)) {
             app.settings.poll_interval_secs = seconds;
             app.save_settings();
         }
@@ -347,7 +347,7 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
                     (Locale::French.native_name(), Locale::French),
                     ("English", Locale::English),
                 ];
-                if let Some(locale) = segmented(ui, palette, &options, app.locale) {
+                if let Some(locale) = segmented(ui, palette, &options, Some(app.locale)) {
                     app.settings.language = locale.tag().to_owned();
                     app.locale = locale;
                     app.save_settings();
@@ -372,7 +372,7 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
                     (light.as_ref(), ThemeMode::Light),
                     (system.as_ref(), ThemeMode::System),
                 ];
-                if let Some(mode) = segmented(ui, palette, &options, app.settings.theme) {
+                if let Some(mode) = segmented(ui, palette, &options, Some(app.settings.theme)) {
                     app.settings.theme = mode;
                     app.save_settings();
                 }
@@ -968,7 +968,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     (prerelease.as_ref(), UpdateChannel::Prerelease),
                 ];
                 if let Some(channel) =
-                    segmented(ui, palette, &options, app.settings.update_channel)
+                    segmented(ui, palette, &options, Some(app.settings.update_channel))
                 {
                     app.settings.update_channel = channel;
                     app.save_settings();

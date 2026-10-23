@@ -363,18 +363,19 @@ pub fn switch_row(
     *value != before
 }
 
-/// Segmented pill selector (language, theme, channel, scopes…). The selected
-/// option is returned when clicked.
+/// Segmented pill selector (language, theme, channel, scopes…). `selected`
+/// is `None` when no choice exists yet (e.g. a required scope with no
+/// preselected default); the clicked value is returned.
 pub fn segmented<T: PartialEq + Copy>(
     ui: &mut egui::Ui,
     palette: &Palette,
     options: &[(&str, T)],
-    selected: T,
+    selected: Option<T>,
 ) -> Option<T> {
     let mut picked = None;
     ui.horizontal(|ui| {
         for (label, value) in options {
-            let is_selected = selected == *value;
+            let is_selected = selected == Some(*value);
             let button = egui::Button::new(
                 RichText::new(*label)
                     .color(if is_selected {
