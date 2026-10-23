@@ -88,6 +88,22 @@ impl AtlasApp {
         self.products.start(job);
     }
 
+    pub fn load_clients(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self.runner.spawn(async move { client.clients().await });
+        self.clients.start(job);
+    }
+
+    pub fn load_vendors(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self.runner.spawn(async move { client.vendors().await });
+        self.vendors.start(job);
+    }
+
     pub fn load_invoices(&mut self) {
         let Some(client) = self.client.clone() else {
             return;
@@ -308,6 +324,12 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.products.poll() {
+            ctx.request_repaint();
+        }
+        if self.clients.poll() {
+            ctx.request_repaint();
+        }
+        if self.vendors.poll() {
             ctx.request_repaint();
         }
         if self.invoices.poll() {

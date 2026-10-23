@@ -528,3 +528,116 @@ msgstr "Votre stock, vos ventes et votre assistant IA dans une application nativ
 
 msgid "invoices"
 msgstr "factures"
+
+# ── Clients / CRM ──
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Choose a client on the left to see its details."
+msgstr "Choisissez un client à gauche pour voir ses détails."
+
+msgid "City"
+msgstr "Ville"
+
+msgid "Client created."
+msgstr "Client créé."
+
+msgid "Client updated."
+msgstr "Client mis à jour."
+
+msgid "Clients"
+msgstr "Clients"
+
+msgid "Created clients appear here."
+msgstr "Les clients créés apparaissent ici."
+
+msgid "Credit limit"
+msgstr "Limite de crédit"
+
+msgid "Credit limit (MAD)"
+msgstr "Limite de crédit (MAD)"
+
+msgid "Edit"
+msgstr "Modifier"
+
+msgid "Edit client"
+msgstr "Modifier le client"
+
+msgid "Email"
+msgstr "E-mail"
+
+msgid "ICE is too long (40 characters max)."
+msgstr "ICE trop long (40 caractères maximum)."
+
+msgid "New client"
+msgstr "Nouveau client"
+
+msgid "No"
+msgstr "Non"
+
+msgid "No client selected"
+msgstr "Aucun client sélectionné"
+
+msgid "No client yet"
+msgstr "Aucun client"
+
+msgid "Outstanding balance"
+msgstr "Solde dû"
+
+msgid "Phone"
+msgstr "Téléphone"
+
+msgid "Phone is too long (40 characters max)."
+msgstr "Téléphone trop long (40 caractères maximum)."
+
+msgid "Search by name, city, phone or ICE"
+msgstr "Rechercher par nom, ville, téléphone ou ICE"
+
+msgid "Tax ID (IF)"
+msgstr "Identifiant fiscal (IF)"
+
+msgid "The credit limit must be a number between 0 and 1,000,000,000,000."
+msgstr "La limite de crédit doit être un nombre entre 0 et 1 000 000 000 000."
+
+msgid "The e-mail address is invalid."
+msgstr "L'adresse e-mail est invalide."
+
+msgid "The name is required."
+msgstr "Le nom est obligatoire."
+
+msgid "The name must be 200 characters or fewer."
+msgstr "Le nom doit comporter 200 caractères au maximum."
+
+msgid "VAT exempt"
+msgstr "Exonéré de TVA"
+
+msgid "Yes"
+msgstr "Oui"
+
+# ── Vendors / purchasing ──
+msgid "Choose a vendor on the left to see its details."
+msgstr "Choisissez un fournisseur à gauche pour voir ses détails."
+
+msgid "Created vendors appear here."
+msgstr "Les fournisseurs créés apparaissent ici."
+
+msgid "Edit vendor"
+msgstr "Modifier le fournisseur"
+
+msgid "New vendor"
+msgstr "Nouveau fournisseur"
+
+msgid "No vendor selected"
+msgstr "Aucun fournisseur sélectionné"
+
+msgid "No vendor yet"
+msgstr "Aucun fournisseur"
+
+msgid "Vendor created."
+msgstr "Fournisseur créé."
+
+msgid "Vendor updated."
+msgstr "Fournisseur mis à jour."
+
+msgid "Vendors"
+msgstr "Fournisseurs"

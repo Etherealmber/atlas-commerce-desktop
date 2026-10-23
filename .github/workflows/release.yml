@@ -219,20 +219,22 @@ jobs:
           set -euo pipefail
           name="atlas-commerce-desktop-${RELEASE_TAG}-${{ matrix.target }}"
           mkdir -p "dist/$name"
-          if [ "${runner.os}" = "Windows" ]; then
+          # RUNNER_OS is the shell environment variable; "${runner.os}" is
+          # GitHub expression syntax and would be a bash "bad substitution".
+          if [ "$RUNNER_OS" = "Windows" ]; then
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop.exe" "dist/$name/"
           else
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop" "dist/$name/"
           fi
           cp README.md LICENSE "dist/$name/"
           cp packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
-          if [ "${runner.os}" = "Linux" ]; then
+          if [ "$RUNNER_OS" = "Linux" ]; then
             # Desktop integration for package builds and hand-installs.
             cp --parents packaging/applications/atlas-commerce-desktop.desktop \
               packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
           fi
           cd dist
-          if [ "${runner.os}" = "Windows" ]; then
+          if [ "$RUNNER_OS" = "Windows" ]; then
             7z a "$name.zip" "$name"
           else
             tar czf "$name.tar.gz" "$name"
@@ -330,7 +332,7 @@ jobs:
             exit 1
           fi
           echo "::notice title=build-${{ matrix.target }}::$count artefact(s) produit(s) pour $RELEASE_TAG sur ${{ matrix.os }} (archive, installeur Windows le cas échéant)."
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: |
@@ -429,7 +431,7 @@ jobs:
             exit 1
           fi
           echo "::notice title=macos-universal::DMG universel (aarch64 + x86_64) construit pour $RELEASE_TAG."
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: dist/*.dmg
@@ -462,7 +464,7 @@ jobs:
           # Full history so release-notes.py can diff against the previous tag.
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

@@ -14,10 +14,12 @@
 
 pub mod agent;
 pub mod auth;
+pub mod clients;
 pub mod commerce;
 pub mod error;
 pub mod models;
 pub mod probe;
+pub mod vendors;
 
 use std::sync::Mutex;
 
@@ -116,6 +118,21 @@ impl ApiClient {
     ) -> Result<T, ApiError> {
         let response = self
             .request(reqwest::Method::POST, path)
+            .json(body)
+            .send()
+            .await
+            .map_err(transport_error)?;
+        self.unwrap_envelope(response).await
+    }
+
+    /// PUT a JSON body, returning the envelope's `data`.
+    pub(crate) async fn put_data<T: serde::de::DeserializeOwned, B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, ApiError> {
+        let response = self
+            .request(reqwest::Method::PUT, path)
             .json(body)
             .send()
             .await

@@ -1,0 +1,43 @@
+name: CI failure bot
+
+# Watches the three delivery workflows. When a run finishes with a failure,
+# checks out the exact failing revision, downloads its logs, extracts the
+# error windows, reads the implicated source lines and opens a GitHub issue
+# with concrete remediation guidance (or comments if the same revision
+# already has one). Triggered after every push once its checks complete —
+# the bot itself never fails a check.
+
+on:
+  workflow_run:
+    workflows: ["CI", "Packaging", "Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: ci-bot-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the failing revision
+        uses: actions/checkout@v7
+        with:
+          # Same-repo runs (push/PR/dispatch) always resolve; fork checkouts
+          # are allowed to fail, in which case code snippets are skipped.
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+        continue-on-error: true
+      - name: Analyse logs and open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_BOT_RUN_ID: ${{ github.event.workflow_run.id }}
+          CI_BOT_REPO: ${{ github.repository }}
+        run: python3 scripts/ci-bot-report.py
