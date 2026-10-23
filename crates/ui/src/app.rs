@@ -235,6 +235,74 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
+    /// Open the web app's filtered invoice list for one client in the system
+    /// browser. The browser keeps its own web session (same route the web
+    /// client navigates to from its Clients table).
+    pub fn open_client_invoices(&mut self, client: &atlas_api::models::Client) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let url = match url::Url::parse_with_params(
+            &format!("{}/invoices", api.base_url()),
+            &[
+                ("client", client.id.to_string()),
+                ("q", client.name.clone()),
+            ],
+        ) {
+            Ok(url) => url,
+            Err(error) => {
+                log::warn!("invalid invoices link: {error}");
+                self.notice(t!(self.locale, "Invalid report link.").into_owned());
+                return;
+            }
+        };
+        if let Err(error) = open::that(url.as_str()) {
+            log::warn!("open browser invoices: {error}");
+            self.notice(
+                t!(self.locale, "The system could not open the browser.")
+                    .into_owned(),
+            );
+        }
+    }
+
+    /// Mint a 30-minute report ticket and open the printable client
+    /// situation report (`Synthèse` or `Détail complet`) in the browser.
+    pub fn open_client_situation(&mut self, client: &atlas_api::models::Client, full: bool) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        if self.report_job.is_some() {
+            return;
+        }
+        let client_id = client.id;
+        let name = client.name.clone();
+        let ice = client.ice.clone();
+        let locale = self.locale;
+        let job = self.runner.spawn(async move {
+            let ticket = api.report_link_ticket().await?;
+            let mut url = url::Url::parse(&format!(
+                "{}/api/reports/client-situation",
+                api.base_url()
+            ))
+            .map_err(|error| {
+                log::warn!("invalid report link: {error}");
+                atlas_api::ApiError::client(
+                    t!(locale, "Invalid report link.").into_owned(),
+                )
+            })?;
+            url.query_pairs_mut()
+                .append_pair("rt", &ticket.rt)
+                .append_pair("client_id", &client_id.to_string())
+                .append_pair("name", &name)
+                .append_pair("ice", &ice);
+            if full {
+                url.query_pairs_mut().append_pair("detail", "full");
+            }
+            Ok(url.to_string())
+        });
+        self.report_job = Some(job);
+    }
+
     pub fn revoke_api_key(&mut self, id: i64) {
         let Some(client) = self.client.clone() else {
             return;
@@ -317,6 +385,23 @@ impl AtlasApp {
                     self.created_key = Some(created);
                     self.key_editor = None;
                     self.load_api_keys();
+                }
+                Err(error) => self.notice(error.message),
+            }
+        }
+        if let Some(job) = &self.report_job
+            && let Some(result) = job.poll()
+        {
+            self.report_job = None;
+            match result {
+                Ok(url) => {
+                    if let Err(error) = open::that(&url) {
+                        log::warn!("open browser report: {error}");
+                        self.notice(
+                            t!(self.locale, "The system could not open the browser.")
+                                .into_owned(),
+                        );
+                    }
                 }
                 Err(error) => self.notice(error.message),
             }

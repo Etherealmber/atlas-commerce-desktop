@@ -265,6 +265,8 @@ pub enum SettingsFocus {
     General,
     Profile,
     Integrations,
+    /// Jumps to the updates/about area (release notes and repository links).
+    About,
 }
 
 /// The whole application.
@@ -344,6 +346,9 @@ pub struct AtlasApp {
     /// The full secret, kept only between creation and the modal's dismissal.
     pub created_key: Option<CreatedApiKey>,
     pub key_create_job: Option<Job<Result<CreatedApiKey, ApiError>>>,
+    /// In-flight report link: mints a short-lived ticket and resolves to the
+    /// printable browser URL that must be handed to the OS opener.
+    pub report_job: Option<Job<Result<String, ApiError>>>,
     pub assist: Cache<AssistProvider>,
 
     // ── commerce caches ──
@@ -467,6 +472,7 @@ impl AtlasApp {
             key_editor: None,
             created_key: None,
             key_create_job: None,
+            report_job: None,
             assist: Cache::default(),
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
@@ -685,6 +691,7 @@ impl AtlasApp {
         self.key_editor = None;
         self.created_key = None;
         self.key_create_job = None;
+        self.report_job = None;
         self.assist = Cache::default();
         self.nav_back.clear();
         self.nav_forward.clear();

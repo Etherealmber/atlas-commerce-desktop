@@ -101,17 +101,19 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
             data.low_stock_count > 0,
         ),
     ];
-    egui::Grid::new("dashboard-metrics")
-        .num_columns(4)
-        .spacing([12.0, 12.0])
-        .show(ui, |ui| {
-            for (index, (which, label, value, warn)) in cards.iter().enumerate() {
-                metric_card(ui, palette, *which, label, value, *warn);
-                if (index + 1) % 4 == 0 {
-                    ui.end_row();
-                }
-            }
-        });
+    // A fixed 4-column grid starved narrow windows (each card demanded at
+    // least 168px, so the row overflowed its card). Pick a column count from
+    // the real available width and let the row wrap instead.
+    let gap = 12.0_f32;
+    let available = ui.available_width();
+    let cols = ((available + gap) / 180.0).floor() as usize;
+    let cols = cols.clamp(1, cards.len());
+    let card_width = ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
+    ui.horizontal_wrapped(|ui| {
+        for (which, label, value, warn) in cards {
+            metric_card(ui, palette, which, &label, &value, warn, card_width);
+        }
+    });
 }
 
 fn metric_card(
@@ -121,9 +123,11 @@ fn metric_card(
     label: &str,
     value: &str,
     warn: bool,
+    width: f32,
 ) {
     card(palette).show(ui, |ui| {
-        ui.set_min_size(vec2(168.0, 92.0));
+        ui.set_width(width);
+        ui.set_min_height(92.0);
         ui.horizontal(|ui| {
             icon(
                 ui,
@@ -192,7 +196,8 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
 
 fn stat_row(ui: &mut egui::Ui, palette: &Palette, label: impl AsRef<str>, value: impl AsRef<str>) {
     ui.horizontal(|ui| {
-        ui.set_width(ui.available_width());
+        // Pinning the label to the full available width starved the value
+        // column until both texts painted on top of each other.
         ui.label(
             RichText::new(label.as_ref())
                 .color(palette.secondary)
@@ -233,18 +238,37 @@ fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
         .iter()
         .map(|point| point.sales.max(point.expenses))
         .fold(1.0, f64::max);
-    let height = 110.0;
+    let label_height = 18.0;
+    let chart_height = 110.0;
     let width = ui.available_width();
-    let slot = (width / data.monthly_series.len() as f32).max(28.0);
-    let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+    let count = data.monthly_series.len().max(1) as f32;
+    let slot = width / count;
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(width, chart_height + label_height), Sense::hover());
+    let chart_bottom = rect.bottom() - label_height;
+    let bar_width = (slot * 0.30).max(2.0);
+    let bar_gap = (slot * 0.08).min(2.0);
+    let font = egui::FontId::proportional(10.5);
+    // Measure a sample label and thin the labels so two of them can never
+    // paint over the same pixels (the old "Nov 2Déc 2Jan…" garble).
+    let sample = data
+        .monthly_series
+        .first()
+        .map(|point| short_month(&point.label))
+        .unwrap_or_default();
+    let label_width = ui
+        .painter()
+        .layout_no_wrap(sample, font.clone(), palette.dim)
+        .size()
+        .x;
+    let label_step = ((label_width + 8.0) / slot).ceil().max(1.0) as usize;
     for (index, point) in data.monthly_series.iter().enumerate() {
-        let x = rect.left() + slot * index as f32 + slot * 0.25;
-        let bar_width = slot * 0.32;
-        let sales_h = (point.sales / max * height as f64) as f32;
-        let expenses_h = (point.expenses / max * height as f64) as f32;
+        let center = rect.left() + slot * index as f32 + slot / 2.0;
+        let sales_h = (point.sales / max * chart_height as f64) as f32;
+        let expenses_h = (point.expenses / max * chart_height as f64) as f32;
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
-                egui::pos2(x, rect.bottom() - sales_h),
+                egui::pos2(center - bar_width - bar_gap / 2.0, chart_bottom - sales_h),
                 vec2(bar_width, sales_h),
             ),
             3.0,
@@ -252,20 +276,32 @@ fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
         );
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
-                egui::pos2(x + bar_width + 2.0, rect.bottom() - expenses_h),
+                egui::pos2(center + bar_gap / 2.0, chart_bottom - expenses_h),
                 vec2(bar_width, expenses_h),
             ),
             3.0,
             palette.surface_active,
         );
-        ui.painter().text(
-            egui::pos2(x, rect.bottom() + 4.0),
-            egui::Align2::LEFT_TOP,
-            point.label.clone(),
-            egui::FontId::proportional(10.5),
-            palette.dim,
-        );
+        if index % label_step == 0 {
+            ui.painter().text(
+                egui::pos2(center, chart_bottom + 4.0),
+                egui::Align2::CENTER_TOP,
+                short_month(&point.label),
+                font.clone(),
+                palette.dim,
+            );
+        }
     }
+}
+
+/// "Nov 2025" → "Nov" so month labels fit narrow chart slots. Labels without
+/// a space (already abbreviated) are kept as-is.
+fn short_month(label: &str) -> String {
+    label
+        .split_whitespace()
+        .next()
+        .unwrap_or(label)
+        .to_owned()
 }
 
 fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
@@ -291,7 +327,6 @@ fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &
     let currency = data.currency();
     for invoice in &data.recent_invoices {
         ui.horizontal(|ui| {
-            ui.set_width(ui.available_width());
             icon(ui, Icon::Receipt, palette.secondary, 16.0);
             ui.label(
                 RichText::new(

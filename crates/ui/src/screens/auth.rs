@@ -19,10 +19,42 @@ use crate::widgets::*;
 // ── Splash ────────────────────────────────────────────────────────────────
 
 pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    // The splash is time-gated and hosts an animated bar, so it must keep
+    // repainting even though no background job holds `busy()`.
+    ui.ctx()
+        .request_repaint_after(Duration::from_millis(50));
+    let time = ui.input(|input| input.time) as f32;
+    let screen = ui.available_size();
+
     ui.vertical_centered(|ui| {
-        ui.add_space(ui.available_height() * 0.32);
-        crate::brand(ui, palette, 56.0);
-        ui.add_space(18.0);
+        ui.add_space(screen.y * 0.24);
+
+        // Brand medallion: a soft pulsing halo and a thin ring around the
+        // monochrome Atlas tile, matching the Android launch screen.
+        let box_size = 104.0;
+        let (medallion, _) =
+            ui.allocate_exact_size(egui::Vec2::splat(box_size), egui::Sense::hover());
+        let center = medallion.center();
+        let pulse = (time * 2.2).sin() * 0.5 + 0.5;
+        ui.painter().circle_filled(
+            center,
+            box_size * 0.47,
+            palette.accent.gamma_multiply(0.07 + 0.06 * pulse),
+        );
+        ui.painter().circle_stroke(
+            center,
+            box_size * 0.47,
+            egui::Stroke::new(1.0, palette.outline),
+        );
+        widgets::overlay_at(
+            ui,
+            egui::Rect::from_center_size(center, egui::Vec2::splat(56.0)),
+            |ui| {
+                crate::brand(ui, palette, 56.0);
+            },
+        );
+
+        ui.add_space(22.0);
         ui.label(
             RichText::new(t!(app.locale, "Atlas Commerce Desktop"))
                 .strong()
@@ -31,13 +63,55 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         );
         ui.add_space(6.0);
         ui.label(
-            RichText::new(t!(app.locale, "Native and fast stock management"))
+            RichText::new(t!(app.locale, "Stock · Cash · Invoicing"))
                 .color(palette.dim)
                 .size(13.5),
         );
-        ui.add_space(28.0);
-        crate::screens::spinner(ui, palette);
+        ui.add_space(30.0);
+
+        // Slim indeterminate track with a sweeping accent segment.
+        let track_width = 220.0_f32.min(screen.x * 0.6);
+        let (track, _) = ui.allocate_exact_size(egui::vec2(track_width, 4.0), egui::Sense::hover());
+        ui.painter()
+            .rect_filled(track, 999.0, palette.surface_active);
+        let span = 0.34;
+        let head = (time * 0.85).fract() * (1.0 - span);
+        let segment = egui::Rect::from_min_size(
+            egui::pos2(
+                track.left() + track.width() * head,
+                track.top(),
+            ),
+            egui::vec2(track.width() * span, track.height()),
+        );
+        ui.painter().rect_filled(segment, 999.0, palette.accent);
+
+        ui.add_space(14.0);
+        ui.horizontal_centered(|ui| {
+            widgets::icon(ui, Icon::ShieldCheck, palette.secondary, 14.0);
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(t!(app.locale, "Securing your workspace…"))
+                    .color(palette.secondary)
+                    .size(12.5),
+            );
+        });
     });
+
+    // Version pinned to the bottom of the splash.
+    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+    let galley = ui.painter().layout_no_wrap(
+        version,
+        egui::FontId::proportional(11.5),
+        palette.dim,
+    );
+    ui.painter().galley(
+        egui::pos2(
+            screen.x / 2.0 - galley.size().x / 2.0,
+            screen.y - 34.0,
+        ),
+        galley,
+        palette.dim,
+    );
 
     // Brief, calm splash while state restores.
     if app.started_at.elapsed() >= Duration::from_millis(650) {
@@ -400,65 +474,101 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
-                ui.add_space(ui.available_height() * 0.06);
+                ui.add_space(ui.available_height() * 0.05);
 
-                // Brand lockup: monochrome tile, wordmark, subtitle.
-                crate::brand(ui, palette, 56.0);
-                ui.add_space(14.0);
+                // Compact brand lockup above the card.
+                crate::brand(ui, palette, 46.0);
+                ui.add_space(12.0);
                 ui.label(
                     RichText::new("Atlas Commerce")
                         .color(palette.text)
                         .strong()
-                        .size(22.0),
+                        .size(20.0),
                 );
-                ui.add_space(2.0);
-                ui.label(
-                    RichText::new(t!(app.locale, "Native desktop client"))
-                        .color(palette.dim)
-                        .size(12.5),
-                );
-                ui.add_space(16.0);
-
-                // The server this session talks to, with a one-tap change.
-                let host = app
-                    .server_store
-                    .selected_url()
-                    .map(ServerUrl::host)
-                    .unwrap_or_else(|| "—".to_owned());
-                ui.horizontal(|ui| {
-                    icon(ui, Icon::Server, palette.secondary, 15.0);
-                    pill(ui, &host, palette.surface, palette.secondary);
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                RichText::new(t!(app.locale, "Change server"))
-                                    .color(palette.secondary)
-                                    .size(12.5),
-                            )
-                            .fill(Color32::TRANSPARENT)
-                            .stroke(egui::Stroke::NONE),
-                        )
-                        .clicked()
-                    {
-                        app.screen = Screen::ServerSetup;
-                    }
-                });
                 ui.add_space(18.0);
 
-                let width = 420.0_f32;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, ui.available_height() - 60.0),
-                    egui::Layout::top_down(egui::Align::Center),
-                    |ui| {
-                        segmented_tabs(app, ui, palette);
-                        ui.add_space(14.0);
+                // One elevated, centered card, mirroring the web login's
+                // dark panel: heading, server pill, tab switch and the form
+                // all live on the same surface.
+                let card_width = 440.0_f32;
+                card(palette)
+                    .corner_radius(14.0)
+                    .inner_margin(egui::Margin::same(22))
+                    .show(ui, |ui| {
+                        ui.set_width(card_width);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                RichText::new(t!(app.locale, "Welcome back"))
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(18.0),
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                RichText::new(t!(
+                                    app.locale,
+                                    "Sign in to continue to your workspace."
+                                ))
+                                .color(palette.dim)
+                                .size(12.5),
+                            );
+                            ui.add_space(14.0);
 
-                        if app.qr.active {
-                            draw_qr(app, ui, palette);
-                        } else {
-                            draw_password(app, ui, palette);
-                        }
-                    },
+                            // The server this session talks to, one tap away.
+                            let host = app
+                                .server_store
+                                .selected_url()
+                                .map(ServerUrl::host)
+                                .unwrap_or_else(|| "—".to_owned());
+                            let host = if host.chars().count() > 30 {
+                                format!(
+                                    "{}…",
+                                    host.chars().take(29).collect::<String>()
+                                )
+                            } else {
+                                host
+                            };
+                            ui.horizontal(|ui| {
+                                icon(ui, Icon::Server, palette.secondary, 14.0);
+                                ui.add_space(2.0);
+                                pill(ui, &host, palette.window, palette.secondary);
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new(t!(app.locale, "Change server"))
+                                                .color(palette.secondary)
+                                                .size(12.5),
+                                        )
+                                        .fill(Color32::TRANSPARENT)
+                                        .stroke(egui::Stroke::NONE),
+                                    )
+                                    .clicked()
+                                {
+                                    app.screen = Screen::ServerSetup;
+                                }
+                            });
+                            ui.add_space(16.0);
+
+                            segmented_tabs(app, ui, palette);
+                            ui.add_space(14.0);
+
+                            if app.qr.active {
+                                draw_qr(app, ui, palette);
+                            } else {
+                                draw_password(app, ui, palette);
+                            }
+                        });
+                    });
+
+                ui.add_space(14.0);
+                ui.label(
+                    RichText::new(format!(
+                        "{} · v{}",
+                        t!(app.locale, "Native desktop client"),
+                        env!("CARGO_PKG_VERSION")
+                    ))
+                    .color(palette.dim)
+                    .size(11.5),
                 );
             });
         });
@@ -472,12 +582,13 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         LoginTab::Password
     };
     egui::Frame::NONE
-        .fill(palette.surface)
+        .fill(palette.window)
         .stroke(egui::Stroke::new(1.0, palette.outline))
         .corner_radius(10.0)
         .inner_margin(egui::Margin::symmetric(4, 4))
         .show(ui, |ui| {
-            ui.set_width(420.0);
+            ui.set_width(ui.available_width());
+            let button_width = (ui.available_width() - 16.0) / 2.0;
             ui.horizontal(|ui| {
                 for (candidate, label, icon_kind) in [
                     (LoginTab::Password, t!(app.locale, "Password"), Icon::Lock),
@@ -486,7 +597,7 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     let selected = tab == candidate;
                     let response = ui
                         .add_sized(
-                            [204.0, 36.0],
+                            [button_width, 36.0],
                             egui::Button::new(
                                 RichText::new(label.as_ref())
                                     .color(if selected {
@@ -529,7 +640,8 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 }
 
 fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    card(palette).show(ui, |ui| {
+    // The login card already provides the surface; no nested card frame.
+    ui.vertical(|ui| {
         if let Some(error) = &app.login.error {
             error_banner(ui, error, palette);
             ui.add_space(8.0);
@@ -646,67 +758,66 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         }
     }
 
-    card(palette).show(ui, |ui| {
-        ui.vertical_centered(|ui| {
-            icon(ui, Icon::Smartphone, palette.accent, 22.0);
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(t!(app.locale, "Scan with your phone"))
-                    .strong()
-                    .color(palette.text),
-            );
-            ui.add_space(4.0);
-            ui.label(
-                RichText::new(t!(
-                    app.locale,
-                    "Open Atlas Commerce on your phone and scan this code to approve the computer."
-                ))
-                .color(palette.dim)
-                .size(12.5),
-            );
-            ui.add_space(12.0);
+    // The login card already provides the surface; no nested card frame.
+    ui.vertical_centered(|ui| {
+        icon(ui, Icon::Smartphone, palette.accent, 22.0);
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new(t!(app.locale, "Scan with your phone"))
+                .strong()
+                .color(palette.text),
+        );
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(t!(
+                app.locale,
+                "Open Atlas Commerce on your phone and scan this code to approve the computer."
+            ))
+            .color(palette.dim)
+            .size(12.5),
+        );
+        ui.add_space(12.0);
 
-            if app.qr.qr_url.is_empty() {
-                crate::screens::spinner(ui, palette);
-            } else {
-                qr_image(ui, &app.qr.qr_url, palette);
-            }
-            ui.add_space(12.0);
+        if app.qr.qr_url.is_empty() {
+            crate::screens::spinner(ui, palette);
+        } else {
+            qr_image(ui, &app.qr.qr_url, palette);
+        }
+        ui.add_space(12.0);
 
-            let (text, color) = match app.qr.status.as_str() {
-                "approved" => (
-                    t!(app.locale, "Phone approved — finalizing…").into_owned(),
-                    palette.accent,
-                ),
-                "claimed" => (
-                    t!(app.locale, "Phone connected — confirm on the phone.").into_owned(),
-                    palette.secondary,
-                ),
-                "denied" => (
-                    t!(app.locale, "Login refused on the phone.").into_owned(),
-                    palette.danger,
-                ),
-                "expired" | "consumed" if app.qr.expired => {
-                    (t!(app.locale, "Code expired.").into_owned(), palette.danger)
-                }
-                _ => (
-                    t!(app.locale, "Waiting for the phone…").into_owned(),
-                    palette.secondary,
-                ),
-            };
-            ui.label(RichText::new(text).color(color).size(13.0));
-            if !app.qr.account.is_empty() {
-                ui.label(
-                    RichText::new(app.qr.account.clone())
-                        .color(palette.dim)
-                        .size(12.0),
-                );
+        let (text, color) = match app.qr.status.as_str() {
+            "approved" => (
+                t!(app.locale, "Phone approved — finalizing…").into_owned(),
+                palette.accent,
+            ),
+            "claimed" => (
+                t!(app.locale, "Phone connected — confirm on the phone.").into_owned(),
+                palette.secondary,
+            ),
+            "denied" => (
+                t!(app.locale, "Login refused on the phone.").into_owned(),
+                palette.danger,
+            ),
+            "expired" | "consumed" if app.qr.expired => {
+                (t!(app.locale, "Code expired.").into_owned(), palette.danger)
             }
-            ui.add_space(10.0);
-            if secondary_button(ui, t!(app.locale, "New code"), palette) {
-                start_qr_session(app);
-            }
-        });
+            _ => (
+                t!(app.locale, "Waiting for the phone…").into_owned(),
+                palette.secondary,
+            ),
+        };
+        ui.label(RichText::new(text).color(color).size(13.0));
+        if !app.qr.account.is_empty() {
+            ui.label(
+                RichText::new(app.qr.account.clone())
+                    .color(palette.dim)
+                    .size(12.0),
+            );
+        }
+        ui.add_space(10.0);
+        if secondary_button(ui, t!(app.locale, "New code"), palette) {
+            start_qr_session(app);
+        }
     });
 }
 

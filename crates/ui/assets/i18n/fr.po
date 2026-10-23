@@ -352,6 +352,9 @@ msgstr "Oublier"
 msgid "French is the default; the English catalog is built in."
 msgstr "Le français est la langue par défaut ; le catalogue anglais est intégré."
 
+msgid "Full detail"
+msgstr "Détail complet"
+
 msgid "General"
 msgstr "Général"
 
@@ -379,8 +382,14 @@ msgstr "Connexion incomplète — réessayez."
 msgid "Initial stock"
 msgstr "Stock initial"
 
+msgid "Invalid report link."
+msgstr "Lien de rapport invalide."
+
 msgid "Invoice history"
 msgstr "Historique des factures"
+
+msgid "Invoices"
+msgstr "Factures"
 
 msgid "Issue date"
 msgstr "Date d'émission"
@@ -781,6 +790,9 @@ msgstr "Rechercher par nom, SKU ou code-barres"
 msgid "Search by name, city, phone or ICE"
 msgstr "Rechercher par nom, ville, téléphone ou ICE"
 
+msgid "Securing your workspace…"
+msgstr "Initialisation sécurisée…"
+
 msgid "Security"
 msgstr "Sécurité"
 
@@ -814,8 +826,14 @@ msgstr "Afficher la fenêtre"
 msgid "Sign in"
 msgstr "Se connecter"
 
+msgid "Sign in to continue to your workspace."
+msgstr "Connectez-vous pour accéder à votre espace."
+
 msgid "Sign out"
 msgstr "Se déconnecter"
+
+msgid "Situation"
+msgstr "Situation"
 
 msgid "Sort order"
 msgstr "Ordre de tri"
@@ -834,6 +852,9 @@ msgstr "Démarrer masqué dans la zone de notification"
 
 msgid "Stock"
 msgstr "Stock"
+
+msgid "Stock · Cash · Invoicing"
+msgstr "Stock · Caisse · Facturation"
 
 msgid "Stock in"
 msgstr "Entrée de stock"
@@ -909,6 +930,9 @@ msgstr "Les informations du produit n'ont pas été enregistrées."
 
 msgid "The sort order must be a whole number."
 msgstr "L'ordre de tri doit être un nombre entier."
+
+msgid "The system could not open the browser."
+msgstr "Le système n'a pas pu ouvrir le navigateur."
 
 msgid "Theme"
 msgstr "Thème"
@@ -1000,8 +1024,14 @@ msgstr "Vérification du lien e-mail…"
 msgid "Waiting for the phone…"
 msgstr "En attente du téléphone…"
 
+msgid "Welcome back"
+msgstr "Bon retour"
+
 msgid "Welcome to Atlas Commerce"
 msgstr "Bienvenue sur Atlas Commerce"
+
+msgid "What's new"
+msgstr "Nouveautés"
 
 msgid "Write a message…"
 msgstr "Écrivez un message…"

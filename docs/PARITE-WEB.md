@@ -9,9 +9,10 @@ que ces endpoints — aucun contrat n'est deviné.
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
   normalisés en `:id`).
-- Le desktop en couvre **43**, soit environ 13 %. Tous les endpoints appelés
+- Le desktop en couvre **44**, soit environ 13 %. Tous les endpoints appelés
   par le client existent à l'identique dans le worker : aucun appel hors
-  contrat.
+  contrat. Le ticket `GET /api/reports/link-ticket` sert à ouvrir les
+  rapports imprimables dans le navigateur système sans exposer le JWT.
 - Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
   connexion (avec OTP, lien magique et session QR), tableau de bord, produits
   (avec barre de scan code-barres/SKU et création produit rapide),
@@ -27,7 +28,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `auth` | 10 | 29 |
 | `invoices` | 1 | 24 |
 | `inventory` | 0 | 17 |
-| `reports` | 0 | 17 |
+| `reports` | 1 | 17 |
 | `products` | 3 | 16 |
 | `bills` | 0 | 15 |
 | `employees` | 0 | 14 |
@@ -82,11 +83,11 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Quotes` | Non (devis) |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Non (reçus) |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; manque prix par client, imports et suppressions OTP |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; les actions `Factures` et `Situation` (synthèse / détail complet) ouvrent le navigateur via ticket de rapport ; manque prix par client, imports et suppressions OTP |
 | `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; les factures fournisseurs (`Bills`) restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Non (RH et pointage) |
-| `Reports`, `Balance` | Non (17 rapports + balance) |
+| `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
 | `Bank` | Non (rapprochement CSV) |
 | `Reimbursements` | Non (remboursements, rattachés aux factures) |
 | `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
@@ -94,7 +95,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Actions` | Non (file d'actions mobile) |
 | `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
 | `AccessPage` | Non (administration des utilisateurs) |
-| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Non — pages web ; à traiter en panneau natif ou à exclure |
+| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version GitHub au navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
 
 ## Exclusions proposées (non transposables au desktop)
 

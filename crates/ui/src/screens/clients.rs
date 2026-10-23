@@ -290,6 +290,17 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if secondary_button(ui, t!(app.locale, "Edit"), palette) {
                 app.client_editor = Some(ClientEditor::for_client(client));
             }
+            // Web parity: the printable situation report opens in the system
+            // browser through a short-lived report ticket (never the JWT).
+            if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
+                app.open_client_situation(client, true);
+            }
+            if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+                app.open_client_situation(client, false);
+            }
+            if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
+                app.open_client_invoices(client);
+            }
         });
     });
     ui.add_space(10.0);
@@ -356,7 +367,10 @@ fn detail_row(
     value: impl AsRef<str>,
 ) {
     ui.horizontal(|ui| {
-        ui.set_width(ui.available_width());
+        // No set_width(available_width): pinning the whole row to the full
+        // available width starved the value column until label and value
+        // overlapped. Let the label take its natural width and push the
+        // value to the right edge instead.
         ui.label(
             RichText::new(label.as_ref())
                 .color(palette.secondary)
