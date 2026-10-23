@@ -258,10 +258,7 @@ impl AtlasApp {
         };
         if let Err(error) = open::that(url.as_str()) {
             log::warn!("open browser invoices: {error}");
-            self.notice(
-                t!(self.locale, "The system could not open the browser.")
-                    .into_owned(),
-            );
+            self.notice(t!(self.locale, "The system could not open the browser.").into_owned());
         }
     }
 
@@ -280,16 +277,14 @@ impl AtlasApp {
         let locale = self.locale;
         let job = self.runner.spawn(async move {
             let ticket = api.report_link_ticket().await?;
-            let mut url = url::Url::parse(&format!(
-                "{}/api/reports/client-situation",
-                api.base_url()
-            ))
-            .map_err(|error| {
-                log::warn!("invalid report link: {error}");
-                atlas_api::ApiError::client(
-                    t!(locale, "Invalid report link.").into_owned(),
-                )
-            })?;
+            let mut url =
+                url::Url::parse(&format!("{}/api/reports/client-situation", api.base_url()))
+                    .map_err(|error| {
+                        log::warn!("invalid report link: {error}");
+                        atlas_api::ApiError::client(
+                            t!(locale, "Invalid report link.").into_owned(),
+                        )
+                    })?;
             url.query_pairs_mut()
                 .append_pair("rt", &ticket.rt)
                 .append_pair("client_id", &client_id.to_string())
@@ -395,11 +390,10 @@ impl AtlasApp {
             self.report_job = None;
             match result {
                 Ok(url) => {
-                    if let Err(error) = open::that(&url) {
+                    if let Err(error) = open::that(url.as_str()) {
                         log::warn!("open browser report: {error}");
                         self.notice(
-                            t!(self.locale, "The system could not open the browser.")
-                                .into_owned(),
+                            t!(self.locale, "The system could not open the browser.").into_owned(),
                         );
                     }
                 }

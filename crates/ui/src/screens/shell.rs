@@ -413,14 +413,16 @@ fn draw_profile_menu(
                     // Web parity (profile dropdown): release notes open on
                     // GitHub in the browser, About jumps to the settings
                     // section that carries version and repository links.
-                    let whats_new =
-                        menu_row(ui, palette, Icon::ExternalLink, t!(app.locale, "What's new"))
-                            .clicked();
+                    let whats_new = menu_row(
+                        ui,
+                        palette,
+                        Icon::ExternalLink,
+                        t!(app.locale, "What's new"),
+                    )
+                    .clicked();
                     if whats_new {
                         app.profile_menu_open = false;
-                        if let Err(error) =
-                            open::that(crate::screens::settings::RELEASES_URL)
-                        {
+                        if let Err(error) = open::that(crate::screens::settings::RELEASES_URL) {
                             log::warn!("could not open releases: {error}");
                         }
                     }
@@ -609,11 +611,7 @@ fn rail_row(
     );
     // Last interaction wins for overlapping rectangles, so registering the
     // row click after the overlay widgets keeps the label text clickable.
-    ui.interact(
-        rect,
-        egui::Id::new(("rail-row", label)),
-        Sense::click(),
-    )
+    ui.interact(rect, egui::Id::new(("rail-row", label)), Sense::click())
 }
 
 // ── Routed content ─────────────────────────────────────────────────────────

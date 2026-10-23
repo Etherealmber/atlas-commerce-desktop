@@ -20,8 +20,7 @@ use crate::widgets::{
 };
 use crate::{t, widgets};
 
-pub(crate) const REPOSITORY_URL: &str =
-    "https://github.com/Etherealmber/atlas-commerce-desktop";
+pub(crate) const REPOSITORY_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop";
 pub(crate) const RELEASES_URL: &str =
     "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
 const POLL_CHOICES: [u64; 4] = [30, 60, 120, 300];

@@ -108,8 +108,7 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     let available = ui.available_width();
     let cols = ((available + gap) / 180.0).floor() as usize;
     let cols = cols.clamp(1, cards.len());
-    let card_width =
-        ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
+    let card_width = ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
     ui.horizontal_wrapped(|ui| {
         for (which, label, value, warn) in cards {
             metric_card(ui, palette, which, &label, &value, warn, card_width);
@@ -298,11 +297,7 @@ fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
 /// "Nov 2025" → "Nov" so month labels fit narrow chart slots. Labels without
 /// a space (already abbreviated) are kept as-is.
 fn short_month(label: &str) -> String {
-    label
-        .split_whitespace()
-        .next()
-        .unwrap_or(label)
-        .to_owned()
+    label.split_whitespace().next().unwrap_or(label).to_owned()
 }
 
 fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {

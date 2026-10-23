@@ -21,8 +21,7 @@ use crate::widgets::*;
 pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // The splash is time-gated and hosts an animated bar, so it must keep
     // repainting even though no background job holds `busy()`.
-    ui.ctx()
-        .request_repaint_after(Duration::from_millis(50));
+    ui.ctx().request_repaint_after(Duration::from_millis(50));
     let time = ui.input(|input| input.time) as f32;
     let screen = ui.available_size();
 
@@ -71,17 +70,13 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
         // Slim indeterminate track with a sweeping accent segment.
         let track_width = 220.0_f32.min(screen.x * 0.6);
-        let (track, _) =
-            ui.allocate_exact_size(egui::vec2(track_width, 4.0), egui::Sense::hover());
+        let (track, _) = ui.allocate_exact_size(egui::vec2(track_width, 4.0), egui::Sense::hover());
         ui.painter()
             .rect_filled(track, 999.0, palette.surface_active);
         let span = 0.34;
         let head = (time * 0.85).fract() * (1.0 - span);
         let segment = egui::Rect::from_min_size(
-            egui::pos2(
-                track.left() + track.width() * head,
-                track.top(),
-            ),
+            egui::pos2(track.left() + track.width() * head, track.top()),
             egui::vec2(track.width() * span, track.height()),
         );
         ui.painter().rect_filled(segment, 999.0, palette.accent);
@@ -100,16 +95,11 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     // Version pinned to the bottom of the splash.
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let galley = ui.painter().layout_no_wrap(
-        version,
-        egui::FontId::proportional(11.5),
-        palette.dim,
-    );
+    let galley = ui
+        .painter()
+        .layout_no_wrap(version, egui::FontId::proportional(11.5), palette.dim);
     ui.painter().galley(
-        egui::pos2(
-            screen.x / 2.0 - galley.size().x / 2.0,
-            screen.y - 34.0,
-        ),
+        egui::pos2(screen.x / 2.0 - galley.size().x / 2.0, screen.y - 34.0),
         galley,
         palette.dim,
     );
@@ -522,10 +512,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 .map(ServerUrl::host)
                                 .unwrap_or_else(|| "—".to_owned());
                             let host = if host.chars().count() > 30 {
-                                format!(
-                                    "{}…",
-                                    host.chars().take(29).collect::<String>()
-                                )
+                                format!("{}…", host.chars().take(29).collect::<String>())
                             } else {
                                 host
                             };
