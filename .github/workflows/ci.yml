@@ -116,14 +116,35 @@ jobs:
         with:
           key: test-${{ matrix.os }}
       # bash (Git Bash on Windows) gives every runner the same tee-based capture.
+      # On failure, panic and assertion lines are re-emitted as workflow-command
+      # annotations so they remain readable through the check-runs API.
       - name: Tests
         shell: bash
         run: |
           mkdir -p "$LOG_DIR"
+          set +e
           cargo test --workspace 2>&1 | tee "$LOG_DIR/test.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" != 0 ]; then
+            grep -E "panicked at|FAILED|^error\[|assertion .* failed|test result: FAILED" "$LOG_DIR/test.log" \
+              | head -20 | while IFS= read -r line; do
+              echo "::error title=test-failure::${line:0:400}"
+            done
+            exit "$status"
+          fi
       - name: Documentation tests
         shell: bash
-        run: cargo test --workspace --doc 2>&1 | tee "$LOG_DIR/doc-tests.log"
+        run: |
+          set +e
+          cargo test --workspace --doc 2>&1 | tee "$LOG_DIR/doc-tests.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" != 0 ]; then
+            grep -E "panicked at|FAILED|^error\[|assertion .* failed" "$LOG_DIR/doc-tests.log" \
+              | head -20 | while IFS= read -r line; do
+              echo "::error title=doc-test-failure::${line:0:400}"
+            done
+            exit "$status"
+          fi
       - name: Release build
         shell: bash
         run: cargo build --release --workspace 2>&1 | tee "$LOG_DIR/release-build.log"

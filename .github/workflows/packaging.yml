@@ -102,7 +102,15 @@ jobs:
           python packaging/windows/build-msi.py --help *>&1 | Tee-Object packaging-windows.log
       - name: Build release binary
         shell: pwsh
-        run: cargo build --release 2>&1 | Tee-Object -Append packaging-windows.log
+        run: |
+          cargo build --release 2>&1 | Tee-Object -Append packaging-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path packaging-windows.log -Pattern 'error(\[|:)|panicked' |
+              Select-Object -First 20 | ForEach-Object {
+                echo "::error title=packaging-build::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
       - name: Inno Setup script compiles
         shell: pwsh
         run: |
