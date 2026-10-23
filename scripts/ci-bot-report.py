@@ -323,10 +323,16 @@ def marker_matches(marker: dict[str, str], run_json: dict) -> str | None:
     if marker.get("sha") == sha7:
         return "sha"
     pr = first_pr_number(run_json)
-    if pr and marker.get("pr") == pr:
-        return "thread"
+    marker_pr = marker.get("pr", "-")
+    if pr is not None:
+        # A run tied to a pull request only follows the issue of that same
+        # PR: a matching branch name across different PRs (e.g. fork PRs
+        # whose head branch is called "main") must never cross-link.
+        return "thread" if marker_pr != "-" and marker_pr == pr else None
+    # A run without a PR (plain branch push) only threads onto markers that
+    # themselves carry no PR, on the same branch.
     branch = (run_json.get("headBranch") or "").replace(" ", "-")
-    if branch and marker.get("branch") == branch:
+    if marker_pr == "-" and branch and marker.get("branch") == branch:
         return "thread"
     return None
 
@@ -337,10 +343,26 @@ def gh_json(*args: str) -> dict:
 
 
 def collect(run_id: str, repo: str) -> tuple[dict, str]:
+    # `gh run view --json` has no pullRequests field: PR membership is
+    # resolved separately through the commits API below.
     run_json = gh_json(
         "run", "view", run_id, "--repo", repo,
-        "--json", "jobs,displayTitle,headSha,workflowName,url,event,headBranch,pullRequests",
+        "--json", "jobs,displayTitle,headSha,workflowName,url,event,headBranch",
     )
+    try:
+        refs = json.loads(
+            subprocess.check_output(
+                ["gh", "api", f"repos/{repo}/commits/{run_json.get('headSha')}/pulls"],
+                text=True,
+            )
+        )
+        run_json["pullRequests"] = [
+            {"number": pr.get("number"), "url": pr.get("html_url", "")}
+            for pr in refs
+            if pr.get("number") is not None
+        ]
+    except Exception:  # noqa: BLE001 - PR metadata is best-effort
+        run_json["pullRequests"] = []
     logs = subprocess.run(
         ["gh", "run", "view", run_id, "--repo", repo, "--log", "--failed"],
         text=True,
@@ -634,7 +656,11 @@ def run_report(run_id: str, repo: str, conclusion: str) -> int:
         for ref in failure.code_refs:
             if ref not in refs:
                 refs.append(ref)
-    root = Path(os.environ.get("GITHUB_WORKSPACE", os.getcwd()))
+    # The failing revision is checked out as read-only data under
+    # CI_BOT_REVISION_DIR; the executed bot script itself always comes from
+    # the trusted default-branch checkout (see ci-bot.yml).
+    root = Path(os.environ.get("CI_BOT_REVISION_DIR") or
+                os.environ.get("GITHUB_WORKSPACE", os.getcwd()))
     snippets = read_snippets(refs, root)
 
     body = issue_body(run_json, failures, snippets, repo)
@@ -681,6 +707,39 @@ def selftest() -> int:
         pullRequests=[],
     )
     assert marker_matches(parsed, main_run) is None
+
+    # A different pull request on an identically named branch must not match,
+    # even though branch and workflow are identical.
+    other_pr = dict(
+        run,
+        headSha="555444333",
+        headBranch="arena/2f55b264-atlas-commerce-desktop",
+        pullRequests=[{"number": 7, "url": "https://example.invalid/pr/7"}],
+    )
+    assert marker_matches(parsed, other_pr) is None
+
+    # A plain branch-push run (no PR) cannot claim an issue filed for a PR.
+    push_run = dict(run, headSha="555444333", pullRequests=[])
+    assert marker_matches(parsed, push_run) is None
+
+    # Two non-PR runs on the same branch do thread together.
+    branch_marker = parse_marker(
+        issue_marker(dict(run, headBranch="main", pullRequests=[]))
+    )
+    branch_run = {
+        "workflowName": "CI",
+        "headSha": "aaa111bbb222",
+        "headBranch": "main",
+        "event": "push",
+        "displayTitle": "push",
+        "url": "https://example.invalid/run/2",
+        "pullRequests": [],
+        "jobs": [],
+    }
+    assert marker_matches(branch_marker, branch_run) == "thread"
+    # ... but a fork PR whose head branch is also called "main" does not.
+    fork_pr = dict(branch_run, pullRequests=[{"number": 99, "url": "u"}])
+    assert marker_matches(branch_marker, fork_pr) is None
 
     # Markers absent from free-form issue bodies parse to nothing.
     assert parse_marker("plain body, no marker") == {}
