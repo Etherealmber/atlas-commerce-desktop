@@ -76,5 +76,6 @@ fastframe_icons::icons! {
         Laptop => "laptop",
         CirclePlus => "circle-plus",
         Key => "key",
+        Truck => "truck",
     }
 }

@@ -17,10 +17,13 @@ use egui::Context;
 use crate::i18n::Locale;
 use crate::screens::catalog::{CatalogTab, CategoryEditor, UnitEditor};
 use crate::screens::clients::ClientEditor;
+use crate::screens::delivery_notes::DeliveryNoteEditor;
+use crate::screens::expenses::ExpenseEditor;
 use crate::screens::products::ProductEditor;
-use crate::screens::vendors::VendorEditor;
 use crate::screens::products::StockDialog;
 use crate::screens::sales::QuickSaleDraft;
+use crate::screens::scan::ScanState;
+use crate::screens::vendors::VendorEditor;
 use crate::theme::Palette;
 
 /// A pollable network result with loading/error bookkeeping.
@@ -95,6 +98,8 @@ pub enum Route {
     Catalog,
     Clients,
     Vendors,
+    Expenses,
+    DeliveryNotes,
     Sales,
     Agent,
     Notifications,
@@ -102,12 +107,14 @@ pub enum Route {
 }
 
 impl Route {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::Dashboard,
         Self::Products,
         Self::Catalog,
         Self::Clients,
         Self::Vendors,
+        Self::Expenses,
+        Self::DeliveryNotes,
         Self::Sales,
         Self::Agent,
         Self::Notifications,
@@ -266,6 +273,12 @@ pub struct AtlasApp {
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
+    pub expenses: Cache<Vec<Expense>>,
+    pub expense_search: String,
+    pub expense_editor: Option<ExpenseEditor>,
+    pub delivery_notes: Cache<Vec<DeliveryNote>>,
+    pub delivery_note_editor: Option<DeliveryNoteEditor>,
+    pub scan: ScanState,
     pub categories: Cache<Vec<Category>>,
     pub units: Cache<Vec<Unit>>,
     pub catalog_tab: CatalogTab,
@@ -372,6 +385,12 @@ impl AtlasApp {
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
+            expenses: Cache::default(),
+            expense_search: String::new(),
+            expense_editor: None,
+            delivery_notes: Cache::default(),
+            delivery_note_editor: None,
+            scan: ScanState::default(),
             categories: Cache::default(),
             units: Cache::default(),
             catalog_tab: CatalogTab::default(),
@@ -501,6 +520,12 @@ impl AtlasApp {
         self.vendor_search = String::new();
         self.selected_vendor = None;
         self.vendor_editor = None;
+        self.expenses = Cache::default();
+        self.expense_search = String::new();
+        self.expense_editor = None;
+        self.delivery_notes = Cache::default();
+        self.delivery_note_editor = None;
+        self.scan = ScanState::default();
         self.categories = Cache::default();
         self.units = Cache::default();
         self.category_editor = None;

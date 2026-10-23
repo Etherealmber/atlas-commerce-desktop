@@ -17,9 +17,12 @@ pub mod auth;
 pub mod catalog;
 pub mod clients;
 pub mod commerce;
+pub mod delivery_notes;
 pub mod error;
+pub mod expenses;
 pub mod models;
 pub mod probe;
+pub mod scan;
 pub mod vendors;
 
 use std::sync::Mutex;
