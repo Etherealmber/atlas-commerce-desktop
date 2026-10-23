@@ -244,7 +244,9 @@ impl AtlasApp {
             client.list_api_keys().await
         });
         self.api_keys.start(job);
-        self.notice(t!(self.locale, "API key revoked.").into_owned());
+        // The confirmation notice waits for the job to succeed (see
+        // poll_background); a failed deletion stays on the cache error path.
+        self.api_keys_revoke_pending = true;
     }
 
     pub fn load_assist(&mut self) {
@@ -279,13 +281,27 @@ impl AtlasApp {
             self.profile_save_job = None;
             match result {
                 Ok(me) => {
+                    // The PATCH response only carries the editable profile
+                    // fields; preserve identity fields from the loaded Me
+                    // instead of replacing them with serde defaults.
+                    let merged = if let Some(existing) = self.profile.data.as_mut() {
+                        existing.display_name = me.display_name.clone();
+                        existing.email = me.email.clone();
+                        existing.phone = me.phone.clone();
+                        existing.notes = me.notes.clone();
+                        existing.avatar_url = me.avatar_url.clone();
+                        existing.clone()
+                    } else {
+                        me.clone()
+                    };
+                    self.profile.data = Some(merged.clone());
                     self.profile_form.loaded = true;
-                    self.profile.data = Some(me.clone());
-                    self.fill_profile_form(&me);
+                    self.fill_profile_form(&merged);
                     if let Some(session) = self.session.as_mut() {
-                        session.display_name = me.display_name.clone().unwrap_or_default();
-                        session.avatar_url = me.avatar_url.clone().unwrap_or_default();
-                        session.email = me.email.clone().unwrap_or_default();
+                        session.display_name =
+                            merged.display_name.clone().unwrap_or_default();
+                        session.avatar_url = merged.avatar_url.clone().unwrap_or_default();
+                        session.email = merged.email.clone().unwrap_or_default();
                     }
                     self.save_session();
                     self.notice(t!(self.locale, "Profile updated.").into_owned());
@@ -544,6 +560,12 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.api_keys.poll() {
+            if self.api_keys_revoke_pending {
+                self.api_keys_revoke_pending = false;
+                if self.api_keys.error.is_none() {
+                    self.notice(t!(self.locale, "API key revoked.").into_owned());
+                }
+            }
             ctx.request_repaint();
         }
         self.poll_profile_jobs();

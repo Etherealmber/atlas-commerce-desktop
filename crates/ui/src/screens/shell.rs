@@ -365,8 +365,16 @@ fn draw_profile_menu(
         })
         .response;
 
-    // Click-outside dismissal (the opening click is on the avatar, not here).
-    if ctx.input(|input| input.pointer.any_pressed()) && !response.contains_pointer() {
+    // Click-outside dismissal. The avatar owns its own toggle, so a press
+    // landing on the avatar or inside the popover must not flip the state.
+    let pressed_outside = ctx.input(|input| {
+        input.pointer.any_pressed()
+            && input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pos| !response.contains(pos) && !avatar_rect.contains(pos))
+    });
+    if pressed_outside {
         app.profile_menu_open = false;
     }
 }

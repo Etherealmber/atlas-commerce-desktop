@@ -331,6 +331,9 @@ pub struct AtlasApp {
     pub profile_form: ProfileForm,
     pub profile_save_job: Option<Job<Result<Me, ApiError>>>,
     pub api_keys: Cache<Vec<ApiKey>>,
+    /// True between a revoke request and the refreshed list completing, so
+    /// the confirmation notice only appears on a successful deletion.
+    pub api_keys_revoke_pending: bool,
     pub key_editor: Option<ApiKeyEditor>,
     /// The full secret, kept only between creation and the modal's dismissal.
     pub created_key: Option<CreatedApiKey>,
@@ -454,6 +457,7 @@ impl AtlasApp {
             profile_form: ProfileForm::default(),
             profile_save_job: None,
             api_keys: Cache::default(),
+            api_keys_revoke_pending: false,
             key_editor: None,
             created_key: None,
             key_create_job: None,
@@ -669,6 +673,7 @@ impl AtlasApp {
         self.profile_form = ProfileForm::default();
         self.profile_save_job = None;
         self.api_keys = Cache::default();
+        self.api_keys_revoke_pending = false;
         self.key_editor = None;
         self.created_key = None;
         self.key_create_job = None;

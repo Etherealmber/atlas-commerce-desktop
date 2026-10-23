@@ -896,7 +896,8 @@ pub struct CreatedApiKey {
     pub key_prefix: String,
     #[serde(default)]
     pub scopes: Option<String>,
-    #[serde(default)]
+    // The raw secret is returned exactly once by the worker; no default: a
+    // missing secret must fail loudly instead of showing an empty modal.
     pub key: String,
     #[serde(default, rename = "created_at")]
     pub created_at: Option<String>,
