@@ -105,26 +105,74 @@ fn config_for(locale: Locale) -> Config {
     }
 }
 
-/// Draws the tray icon: a rounded amber square with a white "A" mark.
+/// Draws the monochrome brand mark: a rounded tile with the "A" carved out
+/// of its alpha channel. The tray framework repaints the shape white or
+/// black to match the panel (see fastframe-tray's `IconColour`), so only the
+/// silhouette matters — no brand colour lives in this icon.
 #[must_use]
 pub fn draw_icon(size: usize) -> Vec<u8> {
     let mut rgba = vec![0u8; size * size * 4];
-    let center = size as f32 / 2.0;
-    let radius = size as f32 * 0.22;
+    let scale = size as f32 / 256.0;
+    let half = 128.0 * scale;
+    let tile_radius = 40.0 * scale;
+    let stroke_half = 8.0 * scale;
+    // The A's three strokes, in 256-unit coordinates: two legs and the bar.
+    let strokes: [((f32, f32), (f32, f32)); 3] = [
+        ((86.0, 176.0), (128.0, 76.0)),
+        ((128.0, 76.0), (170.0, 176.0)),
+        ((100.0, 146.0), (156.0, 146.0)),
+    ];
     for y in 0..size {
         for x in 0..size {
-            let dx = x as f32 + 0.5 - center;
-            let dy = y as f32 + 0.5 - center;
-            let inside = (dx * dx + dy * dy).sqrt() <= radius;
-            let index = (y * size + x) * 4;
-            if inside {
-                // Amber mark.
-                rgba[index] = 0xf5;
-                rgba[index + 1] = 0x9e;
-                rgba[index + 2] = 0x0b;
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let dx = (px - half).abs();
+            let dy = (py - half).abs();
+            // Inside a rounded rectangle: inset the corner radius.
+            let corner = (dx - (half - tile_radius)).max(0.0);
+            let inside_tile = dx <= half
+                && dy <= half
+                && corner * corner + (dy - (half - tile_radius)).max(0.0).powi(2)
+                    <= tile_radius * tile_radius;
+            if !inside_tile {
+                continue;
+            }
+            // Carve the A where the pixel sits on one of the strokes.
+            let carved = strokes.iter().any(|(start, end)| {
+                let start = (start.0 * scale, start.1 * scale);
+                let end = (end.0 * scale, end.1 * scale);
+                distance_to_segment(px, py, start, end) <= stroke_half
+            });
+            if !carved {
+                let index = (y * size + x) * 4;
+                // Neutral white: IconColour::White keeps it, Black inverts it.
+                rgba[index] = 0xfa;
+                rgba[index + 1] = 0xfa;
+                rgba[index + 2] = 0xfa;
                 rgba[index + 3] = 255;
             }
         }
     }
     rgba
+}
+
+/// Shortest distance from point (`px`, `py`) to the segment joining `start`
+/// and `end`.
+fn distance_to_segment(
+    px: f32,
+    py: f32,
+    start: (f32, f32),
+    end: (f32, f32),
+) -> f32 {
+    let vx = end.0 - start.0;
+    let vy = end.1 - start.1;
+    let length_sq = vx * vx + vy * vy;
+    let t = if length_sq == 0.0 {
+        0.0
+    } else {
+        (((px - start.0) * vx + (py - start.1) * vy) / length_sq).clamp(0.0, 1.0)
+    };
+    let closest_x = start.0 + t * vx;
+    let closest_y = start.1 + t * vy;
+    ((px - closest_x).powi(2) + (py - closest_y).powi(2)).sqrt()
 }

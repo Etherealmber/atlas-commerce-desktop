@@ -72,8 +72,9 @@ dépôt — jamais par un CDN. Chaque publication contient un actif `update.json
 binaires et un fichier `checksums.txt` (signé Ed25519 lorsque la clé publique
 est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
 
-- Le canal **Stable** interroge la dernière release ; le canal
-  **Préversion** inclut les tags portant un suffixe (par ex. `v0.2.0-rc.1`).
+- Le workflow de publication ne produit que des versions de production
+  `x.y.z`, systématiquement promues en *latest* ; aucun canal beta/rc n'est
+  publié.
 - Une release marquée obligatoire, ou dont la `minimum_version` est supérieure
   à la version installée, affiche un écran de mise à jour bloquant.
 - Le téléchargement, la vérification de somme de contrôle, l'installation par

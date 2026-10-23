@@ -283,8 +283,15 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                     }
                                 }
                                 if let Some(report) = &app.server_form.probe_report {
+                                    // Android positive token: #34D399 in dark
+                                    // mode, #0F7B4F in light mode.
+                                    let positive = if palette.dark {
+                                        Color32::from_rgb(0x34, 0xd3, 0x99)
+                                    } else {
+                                        Color32::from_rgb(0x0f, 0x7b, 0x4f)
+                                    };
                                     let (icon, color) = if report.ok {
-                                        (Icon::CircleCheck, Color32::from_rgb(0x4a, 0xe0, 0x8a))
+                                        (Icon::CircleCheck, positive)
                                     } else {
                                         (Icon::CircleX, palette.danger)
                                     };

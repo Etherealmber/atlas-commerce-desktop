@@ -593,8 +593,9 @@ impl eframe::App for EframeShell {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // No white flash while the first frame builds.
-        egui::Color32::from_rgb(0x09, 0x09, 0x0b).to_normalized_gamma_f32()
+        // No white flash while the first frame builds: the dark theme's
+        // `--ac-bg` token (#111113), shared with the web and Android apps.
+        egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32()
     }
 
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
