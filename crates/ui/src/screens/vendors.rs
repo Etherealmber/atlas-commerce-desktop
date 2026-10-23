@@ -314,7 +314,9 @@ fn detail_row(
     value: impl AsRef<str>,
 ) {
     ui.horizontal(|ui| {
-        ui.set_width(ui.available_width());
+        // Natural label width: pinning the label to the full available width
+        // starved the right-aligned value until the texts overlapped (same
+        // defect as the client detail rows).
         ui.label(
             RichText::new(label.as_ref())
                 .color(palette.secondary)

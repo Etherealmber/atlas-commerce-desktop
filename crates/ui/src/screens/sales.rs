@@ -144,7 +144,8 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .unwrap_or("MAD");
     for invoice in invoices {
         ui.horizontal(|ui| {
-            ui.set_width(ui.available_width());
+            // No full-width pin inside a horizontal row: the amount and
+            // status pill on the right would be starved and overlap.
             icon(ui, Icon::Receipt, palette.secondary, 16.0);
             ui.vertical(|ui| {
                 ui.label(
