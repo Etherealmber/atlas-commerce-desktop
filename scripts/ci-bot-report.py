@@ -25,6 +25,7 @@ Design notes:
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -286,6 +287,49 @@ def first_pr_url(run_json: dict, repo: str) -> str | None:
     return None
 
 
+PR_EVENTS = ("pull_request", "pull_request_target")
+
+
+def pr_refs_for_event(event: str, refs: list[dict]) -> list[dict]:
+    """Filter commits/pulls API output down to real PR-event membership.
+
+    The same API answers for push runs (a merge commit belongs to its merged
+    PR), but adopting that number on a push run would cross the threads, so
+    non-PR events always get an empty list.
+    """
+    if event not in PR_EVENTS:
+        return []
+    return [
+        {"number": pr.get("number"), "url": pr.get("html_url", "")}
+        for pr in refs
+        if pr.get("number") is not None
+    ]
+
+
+def parse_timestamp(value: str | None) -> datetime.datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def green_run_is_current(green_created: str | None, failure_committed: str | None) -> bool:
+    """Whether a green run may close an issue whose last failure is known.
+
+    False (keep the issue open) when either timestamp is missing or the green
+    run started before the failure revision was committed: runs can finish
+    out of order across concurrency groups, so an older green run must not
+    close an issue tracking a newer still-failing revision.
+    """
+    green = parse_timestamp(green_created)
+    failure = parse_timestamp(failure_committed)
+    if green is None or failure is None:
+        return False
+    return green >= failure
+
+
 def issue_marker(run_json: dict) -> str:
     """Build the machine-readable identity comment stored in every issue."""
     sha7 = run_json["headSha"][:7]
@@ -344,25 +388,28 @@ def gh_json(*args: str) -> dict:
 
 def collect(run_id: str, repo: str) -> tuple[dict, str]:
     # `gh run view --json` has no pullRequests field: PR membership is
-    # resolved separately through the commits API below.
+    # resolved separately through the commits API below. createdAt is needed
+    # to ignore stale green runs (out-of-order completion).
     run_json = gh_json(
         "run", "view", run_id, "--repo", repo,
-        "--json", "jobs,displayTitle,headSha,workflowName,url,event,headBranch",
+        "--json",
+        "jobs,displayTitle,headSha,workflowName,url,event,headBranch,createdAt",
     )
-    try:
-        refs = json.loads(
-            subprocess.check_output(
-                ["gh", "api", f"repos/{repo}/commits/{run_json.get('headSha')}/pulls"],
-                text=True,
+    refs: list = []
+    # Only pull-request events inherit PR membership. A push to the default
+    # branch whose sha happens to be a merge commit must not adopt the merged
+    # PR: push and merge-group runs thread by branch only.
+    if (run_json.get("event") or "") in PR_EVENTS:
+        try:
+            refs = json.loads(
+                subprocess.check_output(
+                    ["gh", "api", f"repos/{repo}/commits/{run_json.get('headSha')}/pulls"],
+                    text=True,
+                )
             )
-        )
-        run_json["pullRequests"] = [
-            {"number": pr.get("number"), "url": pr.get("html_url", "")}
-            for pr in refs
-            if pr.get("number") is not None
-        ]
-    except Exception:  # noqa: BLE001 - PR metadata is best-effort
-        run_json["pullRequests"] = []
+        except Exception:  # noqa: BLE001 - PR metadata is best-effort
+            refs = []
+    run_json["pullRequests"] = pr_refs_for_event(run_json.get("event") or "", refs)
     logs = subprocess.run(
         ["gh", "run", "view", run_id, "--repo", repo, "--log", "--failed"],
         text=True,
@@ -370,6 +417,17 @@ def collect(run_id: str, repo: str) -> tuple[dict, str]:
         check=False,
     ).stdout
     return run_json, logs
+
+
+def commit_date(repo: str, sha: str | None) -> str | None:
+    """ISO commit timestamp for a (possibly short) sha, best-effort."""
+    if not sha:
+        return None
+    try:
+        payload = gh_json("api", f"repos/{repo}/commits/{sha}")
+        return payload.get("commit", {}).get("committer", {}).get("date")
+    except Exception:  # noqa: BLE001 - freshness check must stay best-effort
+        return None
 
 
 def fetch_annotations(repo: str, sha: str) -> dict[str, list[str]]:
@@ -613,6 +671,17 @@ def resolve_green_runs(repo: str, run_json: dict) -> str:
         if kind is None:
             continue
         number = issue["number"]
+        # Out-of-order guard: the green run must be no older than the failure
+        # revision recorded on the issue. Different concurrency groups let
+        # runs complete in either order; a stale green run keeps the issue.
+        marker_sha = issue.get("marker", {}).get("sha")
+        failure_committed = commit_date(repo, marker_sha)
+        if not green_run_is_current(run_json.get("createdAt"), failure_committed):
+            print(
+                f"ci-bot: keep #{number} open: green run {run_json.get('createdAt')} "
+                f"is not newer than failure {marker_sha} ({failure_committed})"
+            )
+            continue
         sha7 = run_json["headSha"][:7]
         comment = (
             f"✅ Green again on `{sha7}` — run "
@@ -752,6 +821,25 @@ def selftest() -> int:
     # Groq stays opt-in: without a key there is no call and no crash.
     os.environ.pop("GROQ_API_KEY", None)
     assert groq_diagnosis(run, []) is None
+
+    # PR membership only attaches to pull-request events: a push whose sha is
+    # a merge commit must not inherit the merged pull request's number.
+    merged = [{"number": 42, "html_url": "https://example.invalid/pr/42"}]
+    assert pr_refs_for_event("push", merged) == []
+    assert pr_refs_for_event("merge_group", merged) == []
+    pr_refs = pr_refs_for_event("pull_request", merged)
+    assert pr_refs == [{"number": 42, "url": "https://example.invalid/pr/42"}]
+    assert pr_refs_for_event("pull_request_target", merged)[0]["number"] == 42
+
+    # Stale green runs cannot close an issue tracking a newer failure.
+    newer_failure = "2026-10-24T10:00:00Z"
+    older_green = "2026-10-24T09:00:00.000+00:00"
+    current_green = "2026-10-24T11:00:00Z"
+    assert green_run_is_current(older_green, newer_failure) is False
+    assert green_run_is_current(current_green, newer_failure) is True
+    # Missing timestamps fail closed: the issue stays open.
+    assert green_run_is_current(None, newer_failure) is False
+    assert green_run_is_current(current_green, None) is False
 
     print("ci-bot selftest: all checks passed")
     return 0
