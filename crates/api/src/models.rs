@@ -1002,10 +1002,8 @@ mod tests {
 
     #[test]
     fn catalog_rows_accept_virtual_labels_and_writes_omit_empty_fields() {
-        let category: Category = serde_json::from_str(
-            r#"{"id":null,"name":"Boissons","from_products":true}"#,
-        )
-        .unwrap();
+        let category: Category =
+            serde_json::from_str(r#"{"id":null,"name":"Boissons","from_products":true}"#).unwrap();
         assert_eq!(category.id, None);
         assert!(category.from_products);
         let unit: Unit = serde_json::from_str(r#"{"id":4,"name":"Kg","symbol":"kg"}"#).unwrap();

@@ -17,10 +17,7 @@ impl ApiClient {
     /// `POST /api/scan/quick-product` — creates a minimal product from a
     /// scanned barcode. A 409 `DUPLICATE_PRODUCT` is reported through the
     /// normal [`ApiError`] so the UI can retry with `force_duplicate`.
-    pub async fn quick_product(
-        &self,
-        body: &QuickProductWrite,
-    ) -> Result<Product, ApiError> {
+    pub async fn quick_product(&self, body: &QuickProductWrite) -> Result<Product, ApiError> {
         self.post_data("/api/scan/quick-product", body).await
     }
 }

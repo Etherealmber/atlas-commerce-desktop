@@ -147,9 +147,13 @@ jobs:
           } | head -c 60000 > /tmp/quality-diagnostics.md
           # Never let diagnostics publishing flip an otherwise green job:
           # the "Announce result" step owns the gate.
+          # On pull_request events github.sha is the synthetic refs/pull/N/
+          # merge commit; check-runs attached to it are invisible, so target
+          # the real PR head sha (fallback to github.sha for push/dispatch).
+          head_sha="${{ github.event.pull_request.head.sha || github.sha }}"
           if ! err=$(gh api -X POST "repos/${{ github.repository }}/check-runs" \
             -f name="quality diagnostics" \
-            -f head_sha="${{ github.sha }}" \
+            -f head_sha="$head_sha" \
             -f status="completed" \
             -f conclusion="neutral" \
             -F "output[title]=Diagnostics fmt/clippy/rustdoc" \

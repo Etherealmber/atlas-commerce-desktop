@@ -14,10 +14,7 @@ impl ApiClient {
     }
 
     /// `POST /api/categories` — 409 `DUPLICATE_CATEGORY` on an existing name.
-    pub async fn create_category(
-        &self,
-        body: &CategoryWrite,
-    ) -> Result<Category, ApiError> {
+    pub async fn create_category(&self, body: &CategoryWrite) -> Result<Category, ApiError> {
         self.post_data("/api/categories", body).await
     }
 
@@ -41,11 +38,7 @@ impl ApiClient {
     }
 
     /// `PUT /api/units/:id` — renaming also re-labels the products.
-    pub async fn update_unit(
-        &self,
-        id: i64,
-        body: &UnitWrite,
-    ) -> Result<Unit, ApiError> {
+    pub async fn update_unit(&self, id: i64, body: &UnitWrite) -> Result<Unit, ApiError> {
         self.put_data(&format!("/api/units/{id}"), body).await
     }
 }

@@ -9,9 +9,9 @@
 //! The GROQ API key itself is a Worker-side secret (`wrangler secret put`);
 //! no endpoint accepts it from a client, so the desktop only displays state.
 
+use crate::ApiClient;
 use crate::error::ApiError;
 use crate::models::*;
-use crate::ApiClient;
 
 impl ApiClient {
     /// `GET /api/integrations/keys` (owner/admin).
