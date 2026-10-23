@@ -595,21 +595,23 @@ jobs:
           cat RELEASE_NOTES.md
           echo "--- note interne (update.json) ---"
           cat IN_APP_NOTE.txt
+      # Spotifast publishes through softprops/action-gh-release rather than
+      # the raw gh CLI: the action authenticates explicitly with the job's
+      # GITHUB_TOKEN (contents: write) instead of relying on gh's ambient
+      # auth detection, which failed with exit code 4 under the
+      # release-signing environment. It creates the tag through the API on
+      # the current commit, and re-runs update the same release instead of
+      # failing on an existing tag.
       - name: Create the GitHub Release (tag via API, no git push, always latest)
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
-            echo "La release $RELEASE_TAG existe déjà : mise à jour."
-            gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
-              --title "Atlas Commerce Desktop $RELEASE_TAG" \
-              --notes-file RELEASE_NOTES.md --latest
-          else
-            # --target creates the tag on this commit through the API.
-            gh release create "$RELEASE_TAG" --repo "$RELEASE_REPO" \
-              --target "$GITHUB_SHA" \
-              --title "Atlas Commerce Desktop $RELEASE_TAG" \
-              --notes-file RELEASE_NOTES.md --latest
-          fi
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Atlas Commerce Desktop ${{ needs.prepare.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          make_latest: 'true'
       - name: Source archive
         run: |
           set -euo pipefail
@@ -670,8 +672,17 @@ jobs:
             --key-env ATLAS_UPDATE_SIGNING_KEY
           native-packages verify-checksums dist/checksums.txt \
             --public-key assets/update-public-key.hex
+      # Same action as the create step: it resolves the existing release and
+      # uploads every artifact, regenerating checksums/signature first. A
+      # failed upload fails the job, so the announce step never needs gh.
       - name: Attach all assets
-        run: gh release upload "$RELEASE_TAG" --repo "$RELEASE_REPO" dist/* --clobber
+        id: upload
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: dist/*
+          fail_on_unmatched_files: true
       - name: Job summary
         if: always()
         run: |
@@ -687,25 +698,33 @@ jobs:
             echo "| Signature du manifeste | $([ "${{ vars.UPDATE_SIGNING_ENABLED }}" = true ] && echo "signé Ed25519" || echo "checksums seuls") |"
             echo "| Lien | [$url]($url) |"
             echo
-            echo "### Assets publiés"
-            echo
-            echo "| Fichier | Taille | SHA-256 |"
-            echo "| --- | --- | --- |"
-            cd dist
-            while IFS='  ' read -r hash file; do
-              [ -f "$file" ] || continue
-              size=$(du -h "$file" | cut -f1)
-              echo "| \`$file\` | $size | \`${hash:0:16}…\` |"
-            done < checksums.txt
+            if [ -f dist/checksums.txt ]; then
+              echo "### Assets publiés"
+              echo
+              echo "| Fichier | Taille | SHA-256 |"
+              echo "| --- | --- | --- |"
+              cd dist
+              while IFS='  ' read -r hash file; do
+                [ -f "$file" ] || continue
+                size=$(du -h "$file" | cut -f1)
+                echo "| \`$file\` | $size | \`${hash:0:16}…\` |"
+              done < checksums.txt
+            else
+              echo "### Assets"
+              echo
+              echo "Aucun asset produit — une étape amont a échoué, voir les annotations."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+      # No gh here: the upload step's own conclusion is the source of truth,
+      # and its action fails the job whenever an asset cannot be published.
       - name: Announce result
         if: always()
         run: |
-          url="https://github.com/${RELEASE_REPO}/releases/tag/${RELEASE_TAG}"
-          assets=$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
-          if [ "${assets:-0}" -gt 0 ]; then
-            echo "::notice title=release-published::$RELEASE_TAG ($assets assets, obligatoire=$RELEASE_MANDATORY, notes=$NOTES_MODE) — $url"
+          url="${{ steps.upload.outputs.url }}"
+          if [ -n "$url" ]; then
+            count=$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')
+            echo "::notice title=release-published::$RELEASE_TAG ($count fichiers publiés, obligatoire=$RELEASE_MANDATORY, notes=$NOTES_MODE) — $url"
           else
-            echo "::error title=release-publication::La release $RELEASE_TAG n'existe pas ou n'a aucun asset — voir le résumé du job."
+            echo "::error title=release-publication::La publication de $RELEASE_TAG a échoué — voir le résumé du job et les annotations."
             exit 1
           fi
