@@ -485,11 +485,11 @@ impl AtlasApp {
             if let Some(result) = job.poll() {
                 self.update_download_job = None;
                 match result {
-                Ok(()) => {
-                    self.update.stage = t!(self.locale, "Installing…").into_owned();
-                    self.wants_quit = true;
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                    Ok(()) => {
+                        self.update.stage = t!(self.locale, "Installing…").into_owned();
+                        self.wants_quit = true;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                     Err(error) => {
                         self.update.progress = None;
                         self.update.error = Some(error);
