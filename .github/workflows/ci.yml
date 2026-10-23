@@ -123,11 +123,15 @@ jobs:
         run: |
           mkdir -p "$LOG_DIR"
           set +e
-          cargo test --workspace 2>&1 | tee "$LOG_DIR/test.log"
+          cargo test --workspace --no-fail-fast 2>&1 | tee "$LOG_DIR/test.log"
           status=${PIPESTATUS[0]}
           if [ "$status" != 0 ]; then
-            grep -E "panicked at|FAILED|^error\[|assertion .* failed|test result: FAILED" "$LOG_DIR/test.log" \
-              | head -20 | while IFS= read -r line; do
+            # Strip ANSI colours before matching or the error lines no longer
+            # start at column one and slip past anchored patterns. Keep context
+            # around each hit so the failing assertion is self-contained.
+            sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR/test.log" \
+              | grep -B1 -A4 -E "error(\[E[0-9]+\])?:|panicked at|assertion .* failed|test result: FAILED|cannot find|mismatched types|borrow of|^failures:" \
+              | head -80 | while IFS= read -r line; do
               echo "::error title=test-failure::${line:0:400}"
             done
             exit "$status"
@@ -139,7 +143,8 @@ jobs:
           cargo test --workspace --doc 2>&1 | tee "$LOG_DIR/doc-tests.log"
           status=${PIPESTATUS[0]}
           if [ "$status" != 0 ]; then
-            grep -E "panicked at|FAILED|^error\[|assertion .* failed" "$LOG_DIR/doc-tests.log" \
+            sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR/doc-tests.log" \
+              | grep -E "error(\[E[0-9]+\])?:|panicked at|assertion .* failed|cannot find" \
               | head -20 | while IFS= read -r line; do
               echo "::error title=doc-test-failure::${line:0:400}"
             done
