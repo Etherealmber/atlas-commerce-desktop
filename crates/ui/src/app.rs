@@ -845,9 +845,12 @@ impl eframe::App for EframeShell {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // No white flash while the first frame builds: the dark theme's
-        // `--ac-bg` token (#111113), shared with the web and Android apps.
-        egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32()
+        // Match the active theme from the first frame on, so a light theme
+        // never flashes the dark background before the first UI frame.
+        // The dark token (#111113) is only the pre-first-frame fallback.
+        self.held
+            .last_clear_color
+            .unwrap_or_else(|| egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32())
     }
 
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
@@ -869,7 +872,13 @@ impl eframe::App for EframeShell {
         }
         self.held.scrolling.apply(ctx);
         let palette = self.held.palette(ctx);
-        crate::theme::apply(ctx, &palette);
+        // Keep the framebuffer clear colour in sync, and rebuild the global
+        // style only when the theme actually flips instead of every frame.
+        self.held.last_clear_color = Some(palette.window.to_normalized_gamma_f32());
+        if self.held.theme_applied_dark != Some(palette.dark) {
+            crate::theme::apply(ctx, &palette);
+            self.held.theme_applied_dark = Some(palette.dark);
+        }
 
         self.held.poll_background(ctx);
 

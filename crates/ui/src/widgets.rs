@@ -2,7 +2,7 @@
 //! They translate the web app's directives (compact pills, right-aligned
 //! dialog actions, one zinc palette) into egui.
 
-use egui::{Color32, RichText, Sense, Stroke, UiBuilder};
+use egui::{Color32, RichText, Sense, Stroke, TextWrapMode, UiBuilder};
 
 use crate::icons::Icon;
 use crate::theme::Palette;
@@ -16,6 +16,18 @@ pub fn overlay_at<R>(
 ) -> R {
     let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
     content(&mut child)
+}
+
+/// Runs `content` with text wrapping switched off. Action clusters on card
+/// rows (price + button columns) keep their natural width this way instead
+/// of being squeezed to a single character per line by a neighbouring label
+/// that is allowed to wrap.
+pub fn no_wrap_scope<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.scope(|ui| {
+        ui.style_mut().wrap = Some(false);
+        content(ui)
+    })
+    .inner
 }
 
 /// A compact status pill such as the web app's stock badges.
@@ -52,6 +64,9 @@ pub fn primary_button(
             .color(palette.on_accent)
             .strong(),
     )
+    // Extend instead of wrapping: a starved row used to collapse the label
+    // one character per line ("Ajuster le stock" rendered vertically).
+    .wrap_mode(TextWrapMode::Extend)
     .fill(if enabled {
         palette.accent
     } else {
@@ -64,6 +79,7 @@ pub fn primary_button(
 /// A neutral secondary button.
 pub fn secondary_button(ui: &mut egui::Ui, text: impl AsRef<str>, palette: &Palette) -> bool {
     let button = egui::Button::new(RichText::new(text.as_ref()).color(palette.text))
+        .wrap_mode(TextWrapMode::Extend)
         .fill(palette.surface)
         .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(8.0);
@@ -78,6 +94,7 @@ pub fn danger_button(
     enabled: bool,
 ) -> bool {
     let button = egui::Button::new(RichText::new(text.as_ref()).color(Color32::WHITE).strong())
+        .wrap_mode(TextWrapMode::Extend)
         .fill(if enabled {
             palette.danger
         } else {

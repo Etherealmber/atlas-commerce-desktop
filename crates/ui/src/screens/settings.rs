@@ -24,51 +24,67 @@ const REPOSITORY_URL: &str = "https://github.com/Etherealmber/atlas-commerce-des
 const RELEASES_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
 const POLL_CHOICES: [u64; 4] = [30, 60, 120, 300];
 
+/// Readable measure for the settings column; cards no longer stretch across
+/// the whole window on large displays.
+const SETTINGS_WIDTH: f32 = 880.0;
+
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
     // An avatar-menu entry may ask for a specific section; consume the focus
     // once and bring that cursor into the scroll area's view.
     let focus = app.settings_focus;
     app.settings_focus = SettingsFocus::General;
 
-    ui.add_space(8.0);
-    page_title(ui, t!(app.locale, "Settings"), palette);
-    ui.add_space(8.0);
+    // Center a capped column instead of stretching the forms edge to edge.
+    let available_width = ui.available_width();
+    let content_width = available_width.min(SETTINGS_WIDTH);
+    let side_margin = ((available_width - content_width) * 0.5).max(0.0);
+    ui.horizontal(|ui| {
+        ui.add_space(side_margin);
+        ui.vertical(|ui| {
+            ui.set_min_width(content_width);
+            ui.set_max_width(content_width);
 
-    if focus == SettingsFocus::Profile {
-        ui.scroll_to_cursor(Some(egui::Align::Min));
-    }
-    profile_section(app, ui, palette);
-    ui.add_space(18.0);
+            ui.add_space(8.0);
+            page_title(ui, t!(app.locale, "Settings"), palette);
+            ui.add_space(8.0);
 
-    application_section(app, ui, palette);
-    ui.add_space(18.0);
+            if focus == SettingsFocus::Profile {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
+            profile_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    appearance_section(app, ui, palette);
-    ui.add_space(18.0);
+            application_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    assist_section(app, ui, palette);
-    ui.add_space(18.0);
+            appearance_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    if is_admin(app) {
-        if focus == SettingsFocus::Integrations {
-            ui.scroll_to_cursor(Some(egui::Align::Min));
-        }
-        integrations_section(app, ui, palette);
-        ui.add_space(18.0);
-    }
+            assist_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    servers_section(app, ui, palette);
-    ui.add_space(18.0);
+            if is_admin(app) {
+                if focus == SettingsFocus::Integrations {
+                    ui.scroll_to_cursor(Some(egui::Align::Min));
+                }
+                integrations_section(app, ui, palette);
+                ui.add_space(18.0);
+            }
 
-    security_section(app, ui, palette);
-    ui.add_space(18.0);
+            servers_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    updates_section(app, ui, palette);
-    ui.add_space(24.0);
+            security_section(app, ui, palette);
+            ui.add_space(18.0);
 
-    if app.created_key.is_some() {
-        draw_created_key_modal(app, ui, palette);
-    }
+            updates_section(app, ui, palette);
+            ui.add_space(24.0);
+
+            if app.created_key.is_some() {
+                draw_created_key_modal(app, ui, palette);
+            }
+        });
+    });
 }
 
 fn is_admin(app: &AtlasApp) -> bool {

@@ -293,6 +293,12 @@ pub struct AtlasApp {
     pub show_requested: bool,
     /// Update-helper receipt, acknowledged on the first frame after relaunch.
     pub update_receipt: Option<fastframe_update::Receipt>,
+    /// Last clear colour handed to eframe, so a light theme never flashes
+    /// the hard-coded dark background on its first frames.
+    pub last_clear_color: Option<[f32; 4]>,
+    /// Dark flag the global egui style was last built for; skips the
+    /// per-frame global-style rebuild (a flicker/recompute source).
+    pub theme_applied_dark: Option<bool>,
 
     // ── persisted state ──
     pub settings: Settings,
@@ -504,6 +510,8 @@ impl AtlasApp {
             update_progress: Arc::new(Mutex::new((0, 0))),
             update_download_job: None,
             update_receipt: None,
+            last_clear_color: None,
+            theme_applied_dark: None,
             notices: Vec::new(),
             notices_expire_at: None,
         }
