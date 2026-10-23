@@ -23,6 +23,7 @@ pub mod expenses;
 pub mod integrations;
 pub mod models;
 pub mod probe;
+pub mod reports;
 pub mod scan;
 pub mod vendors;
 

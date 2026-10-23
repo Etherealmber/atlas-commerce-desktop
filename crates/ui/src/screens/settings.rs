@@ -20,8 +20,9 @@ use crate::widgets::{
 };
 use crate::{t, widgets};
 
-const REPOSITORY_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop";
-const RELEASES_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
+pub(crate) const REPOSITORY_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop";
+pub(crate) const RELEASES_URL: &str =
+    "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
 const POLL_CHOICES: [u64; 4] = [30, 60, 120, 300];
 
 /// Readable measure for the settings column; cards no longer stretch across
@@ -77,6 +78,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
             security_section(app, ui, palette);
             ui.add_space(18.0);
 
+            if focus == SettingsFocus::About {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
             updates_section(app, ui, palette);
             ui.add_space(24.0);
 

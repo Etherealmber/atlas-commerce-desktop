@@ -272,12 +272,15 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     };
 
+    // Owned `String`: the action closure below needs a unique `&mut app`,
+    // so no borrow of `app.dashboard` may still be alive when it runs.
     let currency = app
         .dashboard
         .data
         .as_ref()
         .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .unwrap_or("MAD")
+        .to_owned();
 
     ui.horizontal(|ui| {
         ui.label(
@@ -290,6 +293,17 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if secondary_button(ui, t!(app.locale, "Edit"), palette) {
                 app.client_editor = Some(ClientEditor::for_client(client));
             }
+            // Web parity: the printable situation report opens in the system
+            // browser through a short-lived report ticket (never the JWT).
+            if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
+                app.open_client_situation(client, true);
+            }
+            if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+                app.open_client_situation(client, false);
+            }
+            if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
+                app.open_client_invoices(client);
+            }
         });
     });
     ui.add_space(10.0);
@@ -300,7 +314,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             format!(
                 "{} : {}",
                 t!(app.locale, "Outstanding balance"),
-                money(client.balance_due, currency)
+                money(client.balance_due, &currency)
             ),
             palette,
         );
@@ -311,7 +325,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui,
         palette,
         t!(app.locale, "Credit limit"),
-        money(client.credit_limit, currency),
+        money(client.credit_limit, &currency),
     );
     detail_row(
         ui,
@@ -356,7 +370,10 @@ fn detail_row(
     value: impl AsRef<str>,
 ) {
     ui.horizontal(|ui| {
-        ui.set_width(ui.available_width());
+        // No set_width(available_width): pinning the whole row to the full
+        // available width starved the value column until label and value
+        // overlapped. Let the label take its natural width and push the
+        // value to the right edge instead.
         ui.label(
             RichText::new(label.as_ref())
                 .color(palette.secondary)

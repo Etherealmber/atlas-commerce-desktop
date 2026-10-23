@@ -144,6 +144,13 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 }
             }
 
+            // While a release is downloading, surface a live progress pill
+            // next to the bell instead of hiding the transfer on Settings.
+            if let Some((downloaded, total)) = app.update.progress {
+                draw_update_pill(ui, app, palette, downloaded, total);
+                ui.add_space(6.0);
+            }
+
             ui.add_space(8.0);
 
             // The pill takes the room left by the action cluster and the
@@ -277,6 +284,63 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
     );
 }
 
+/// Compact live download indicator shown beside the notification bell while
+/// a release is being fetched, so the transfer never hides on Settings.
+fn draw_update_pill(
+    ui: &mut egui::Ui,
+    app: &AtlasApp,
+    palette: &Palette,
+    downloaded: u64,
+    total: u64,
+) {
+    let fraction = if total > 0 {
+        (downloaded as f32 / total as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let percent = (fraction * 100.0).round() as u8;
+    let mega = |bytes: u64| format!("{:.1} Mo", bytes as f64 / 1_048_576.0);
+    let tooltip = format!(
+        "{} — {} / {}",
+        t!(app.locale, "Downloading update"),
+        mega(downloaded),
+        mega(total.max(downloaded))
+    );
+    let response = egui::Frame::NONE
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.outline))
+        .corner_radius(999.0)
+        .inner_margin(egui::Margin::symmetric(10, 0))
+        .show(ui, |ui| {
+            ui.set_height(30.0);
+            ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = 7.0;
+                icon(ui, Icon::Download, palette.accent, 14.0);
+                ui.label(
+                    RichText::new(format!("{percent} %"))
+                        .color(palette.text)
+                        .strong()
+                        .size(12.0),
+                );
+                let (track, _) = ui.allocate_exact_size(vec2(56.0, 4.0), Sense::hover());
+                ui.painter()
+                    .rect_filled(track, 999.0, palette.surface_active);
+                let fill_rect = egui::Rect::from_min_size(
+                    track.min,
+                    vec2(track.width() * fraction, track.height()),
+                );
+                ui.painter().rect_filled(fill_rect, 999.0, palette.accent);
+            });
+        })
+        .response;
+    let stage = app.update.stage.trim();
+    if stage.is_empty() {
+        response.on_hover_text(tooltip);
+    } else {
+        response.on_hover_text(format!("{tooltip}\n{stage}"));
+    }
+}
+
 /// Account popover anchored under the title-bar avatar.
 fn draw_profile_menu(
     app: &mut AtlasApp,
@@ -344,6 +408,29 @@ fn draw_profile_menu(
                     if settings_click {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::General;
+                        app.go(Route::Settings);
+                    }
+                    // Web parity (profile dropdown): release notes open on
+                    // GitHub in the browser, About jumps to the settings
+                    // section that carries version and repository links.
+                    let whats_new = menu_row(
+                        ui,
+                        palette,
+                        Icon::ExternalLink,
+                        t!(app.locale, "What's new"),
+                    )
+                    .clicked();
+                    if whats_new {
+                        app.profile_menu_open = false;
+                        if let Err(error) = open::that(crate::screens::settings::RELEASES_URL) {
+                            log::warn!("could not open releases: {error}");
+                        }
+                    }
+                    let about =
+                        menu_row(ui, palette, Icon::Info, t!(app.locale, "About")).clicked();
+                    if about {
+                        app.profile_menu_open = false;
+                        app.settings_focus = crate::state::SettingsFocus::About;
                         app.go(Route::Settings);
                     }
                     ui.separator();
@@ -419,26 +506,20 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         Screen::Shell(route) => Some(route),
         _ => None,
     };
-    // The worker's own badge counters drive the rail: low stock, unpaid
-    // invoices and open quick-sale tickets.
-    let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
-        badges.products_low + badges.invoices_unpaid + badges.vr_open
-    });
-
     // The Panel owns the fixed width and frame; contents just fill it.
     ui.add_space(6.0);
     for route in Route::ALL {
+        // The bell (notifications) and gear (settings) already live in the
+        // title bar; never duplicate them in the rail. The account card used
+        // to be pinned here as well — the avatar now owns that surface.
+        if matches!(route, Route::Notifications | Route::Settings) {
+            continue;
+        }
         let (which, label) = route_meta(route);
         let is_active = active == Some(route);
         let response = rail_row(ui, palette, which, label, is_active);
-        if route == Route::Notifications && alert_count > 0 {
-            badge(ui, &response, palette, alert_count);
-        }
         if response.clicked() {
             app.go(route);
-            if route == Route::Notifications && app.alerts.data.is_none() {
-                app.load_alerts();
-            }
             if route == Route::Clients && app.clients.data.is_none() {
                 app.load_clients();
             }
@@ -464,10 +545,6 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     }
-
-    ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-        draw_user_card(app, ui, palette);
-    });
 }
 
 fn rail_row(
@@ -478,8 +555,13 @@ fn rail_row(
     is_active: bool,
 ) -> egui::Response {
     let height = 42.0;
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
+    // Reserve the row with a passive hover sense first. The icon and label
+    // are painted through overlay child UIs whose widgets register their own
+    // hover rectangles and used to swallow presses landing on the text; the
+    // click interaction below is therefore registered last, so the full row
+    // (icon and label text included) is one clickable surface.
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let hovered = ui.rect_contains_pointer(rect);
     if is_active {
         ui.painter().rect_filled(rect, 10.0, palette.surface_active);
         ui.painter().rect_filled(
@@ -490,7 +572,7 @@ fn rail_row(
             2.0,
             palette.accent,
         );
-    } else if response.hovered() {
+    } else if hovered {
         ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
     }
     let tint = if is_active {
@@ -527,76 +609,9 @@ fn rail_row(
             });
         },
     );
-    response
-}
-
-fn badge(ui: &egui::Ui, row: &egui::Response, palette: &Palette, count: i64) {
-    let text = if count > 99 {
-        "99+".to_owned()
-    } else {
-        count.to_string()
-    };
-    let galley =
-        ui.painter()
-            .layout_no_wrap(text, egui::FontId::proportional(11.5), palette.on_accent);
-    let width = (galley.size().x + 12.0).max(20.0);
-    let rect = egui::Rect::from_min_size(
-        egui::pos2(row.rect.right() - width - 8.0, row.rect.center().y - 9.0),
-        vec2(width, 18.0),
-    );
-    ui.painter().rect_filled(rect, 9.0, palette.accent);
-    ui.painter().galley(
-        egui::pos2(
-            rect.center().x - galley.size().x / 2.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        palette.on_accent,
-    );
-}
-
-fn draw_user_card(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    let Some(session) = app.session.clone() else {
-        return;
-    };
-    let host = app
-        .server_store
-        .selected_url()
-        .map(atlas_core::ServerUrl::host)
-        .unwrap_or_else(|| "—".to_owned());
-    widgets::card(palette).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            icon(ui, Icon::User, palette.accent, 20.0);
-            ui.vertical(|ui| {
-                ui.label(
-                    RichText::new(if session.display_name.is_empty() {
-                        session.username.clone()
-                    } else {
-                        session.display_name.clone()
-                    })
-                    .color(palette.text)
-                    .strong()
-                    .size(13.5),
-                );
-                ui.label(RichText::new(host).color(palette.dim).size(11.5));
-            });
-        });
-        ui.add_space(6.0);
-        if secondary_button(ui, t!(app.locale, "Sign out"), palette) {
-            app.confirm_dialog = Some(Confirm {
-                title: t!(app.locale, "Sign out").into_owned(),
-                body: t!(
-                    app.locale,
-                    "You will need to sign in again to reach this server."
-                )
-                .into_owned(),
-                confirm_label: t!(app.locale, "Sign out").into_owned(),
-                danger: true,
-                action: ConfirmAction::SignOut,
-            });
-        }
-    });
+    // Last interaction wins for overlapping rectangles, so registering the
+    // row click after the overlay widgets keeps the label text clickable.
+    ui.interact(rect, egui::Id::new(("rail-row", label)), Sense::click())
 }
 
 // ── Routed content ─────────────────────────────────────────────────────────
