@@ -86,19 +86,35 @@ jobs:
           # so strip them before the anchored grep (like the test job does),
           # otherwise clippy/rustc errors slip through with a green job.
           strip() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
-          failed=0
-          for pair in "fmt $LOG_DIR/fmt.log" "clippy-defaut $LOG_DIR/clippy-default.log" "clippy-toutes-features $LOG_DIR/clippy-all-features.log" "rustdoc $LOG_DIR/doc.log"; do
-            set -- $pair
-            name="$1"; file="$2"
-            [ -f "$file" ] || continue
-            # rustfmt failures start with "Diff in"; cargo tools with error/warning.
-            hits=$(strip "$file" | grep -E '^(error|warning)(\[[[:alnum:]]+\])?:|^Diff in ' -A 4 | head -60)
-            if [ -n "$hits" ]; then
-              failed=1
-              msg=$(printf '%s' "$hits" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | tr '\n' '|' | sed 's/|/%0A/g' | head -c 1500)
-              echo "::error title=quality/${name}::${msg}"
+          # Emit one annotation per ~1400-byte chunk so the full diagnostic
+          # (not just the first lines) is readable through the checks API.
+          emit_chunks() {
+            local name="$1" file="$2" pattern="$3"
+            [ -f "$file" ] || return 0
+            local hits
+            if [ -z "$pattern" ]; then
+              hits=$(strip "$file")
+            else
+              hits=$(strip "$file" | grep -E "$pattern" -A 6 | head -300)
             fi
-          done
+            [ -n "$hits" ] || return 0
+            local chunk=0
+            while [ -n "$hits" ]; do
+              local part msg
+              part=$(printf '%s' "$hits" | head -c 1400)
+              msg=$(printf '%s' "$part" | sed 's/%/%25/g' | tr '\n' '|' | sed 's/|/%0A/g')
+              echo "::error title=quality/${name}-${chunk}::${msg}"
+              hits=$(printf '%s' "$hits" | tail -c +1401)
+              chunk=$((chunk + 1))
+            done
+            return 1
+          }
+          failed=0
+          # fmt.log only contains rustfmt diffs: ship the whole file.
+          emit_chunks fmt "$LOG_DIR/fmt.log" "" || failed=1
+          emit_chunks clippy-defaut "$LOG_DIR/clippy-default.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
+          emit_chunks clippy-toutes-features "$LOG_DIR/clippy-all-features.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
+          emit_chunks rustdoc "$LOG_DIR/doc.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
           if [ "$failed" -eq 1 ]; then
             echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
             exit 1

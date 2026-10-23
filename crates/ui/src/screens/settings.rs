@@ -24,7 +24,7 @@ const REPOSITORY_URL: &str = "https://github.com/Etherealmber/atlas-commerce-des
 const RELEASES_URL: &str = "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
 const POLL_CHOICES: [u64; 4] = [30, 60, 120, 300];
 
-pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Palette) {
+pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
     // An avatar-menu entry may ask for a specific section; consume the focus
     // once and bring that cursor into the scroll area's view.
     let focus = app.settings_focus;
@@ -995,7 +995,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         });
 
-        if let Some(manifest) = app.update.last_manifest.clone()
+        if app.update.last_manifest.is_some()
             && app.update.progress.is_none()
             && primary_button(ui, t!(app.locale, "Download and install"), palette, true)
         {
