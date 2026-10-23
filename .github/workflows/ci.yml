@@ -154,13 +154,15 @@ jobs:
         if: always()
         shell: bash
         run: |
-          total=$(grep -hoE '[0-9]+ passed' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}')
-          failed=$(grep -hcE 'test result: FAILED|^error(\[|:)' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}')
-          if [ "$failed" != 0 ]; then
+          # || true keeps the assignment alive under set -e + pipefail: grep
+          # exits 1 when a pattern has no match, which would abort the step.
+          total=$(grep -hoE '[0-9]+ passed' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
+          failed=$(grep -hcE 'test result: FAILED|^error(\[|:)' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
+          if [ "${failed:-0}" != 0 ]; then
             echo "::error title=tests (${{ matrix.os }})::Échecs de tests ou erreurs de compilation — voir l'artefact test-logs-${{ matrix.os }}."
             exit 1
           fi
-          echo "::notice title=tests (${{ matrix.os }})::$total tests OK (unitaires + documentation) et build release réussi."
+          echo "::notice title=tests (${{ matrix.os }}):$total tests OK (unitaires + documentation) et build release réussi."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -210,9 +212,9 @@ jobs:
         if: always()
         run: |
           if grep -q "No issues found" "$LOG_DIR/osv.log"; then
-            pkgs=$(grep -oE 'found [0-9]+ packages' "$LOG_DIR/osv.log" | grep -oE '[0-9]+' | head -1)
+            pkgs=$(grep -oE 'found [0-9]+ packages' "$LOG_DIR/osv.log" | grep -oE '[0-9]+' | head -1) || true
             filtered=$(grep -c "filtered out" "$LOG_DIR/osv.log" || true)
-            echo "::notice title=vulnerability scan::$pkgs paquets analysés ; $filtered avis RUSTSEC non maintenus filtrés (osv-scanner.toml) ; aucune vulnérabilité."
+            echo "::notice title=vulnerability scan::${pkgs:-0} paquets analysés ; ${filtered:-0} avis RUSTSEC non maintenus filtrés (osv-scanner.toml) ; aucune vulnérabilité."
           else
             echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
             exit 1
