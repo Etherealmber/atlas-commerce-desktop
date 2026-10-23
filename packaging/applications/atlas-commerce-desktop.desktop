@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Atlas Commerce Desktop
+GenericName=Stock Management
+Comment=Client natif pour la plateforme Atlas Commerce
+Exec=atlas-commerce-desktop %u
+Terminal=false
+Categories=Office;Business;Finance;
+Keywords=stock;inventory;commerce;sales;atlas;
+Icon=atlas-commerce-desktop
+StartupNotify=true
+StartupWMClass=atlas-commerce-desktop
+# The e-mail verify link and the QR handoff arrive through this scheme.
+MimeType=x-scheme-handler/atlascommerce;

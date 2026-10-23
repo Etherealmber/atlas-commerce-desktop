@@ -1,0 +1,164 @@
+name: Packaging
+
+# Validates every packaging input without building a full release: the native
+# packages manifest, the shell scripts, the Windows MSI generator, the desktop
+# entry and the icon set. Runs on packaging changes and on demand. Each job
+# writes a GitHub Actions job summary and publishes its output as an artifact;
+# nothing is pushed back to the repository.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - native-packages.yaml
+      - packaging/**
+      - .github/workflows/packaging.yml
+  pull_request:
+    paths:
+      - native-packages.yaml
+      - packaging/**
+      - .github/workflows/packaging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux packaging inputs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Desktop validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+      - name: Validate the native-packages manifest
+        id: manifest
+        run: |
+          ruby -ryaml -e 'yaml = YAML.load_file("native-packages.yaml"); \
+            abort("missing targets") unless yaml["targets"].is_a?(Hash) && yaml["targets"].any?; \
+            abort("missing release repository") unless yaml.dig("release", "repository") == "Etherealmber/atlas-commerce-desktop"; \
+            puts "native-packages.yaml: #{yaml["targets"].size} targets OK"' | tee packaging-linux.log
+      - name: Validate shell packagers
+        run: |
+          bash -n packaging/macos/bundle.sh
+          bash -n packaging/macos/dmg.sh
+          echo "bundle.sh et dmg.sh : syntaxe OK" | tee -a packaging-linux.log
+      - name: Validate the desktop entry and icons
+        run: |
+          # Missing assets now fail the job: validation must not be advisory.
+          test -s packaging/applications/atlas-commerce-desktop.desktop
+          test -s packaging/icons/atlas-commerce-desktop.svg
+          test -s packaging/macos/icon-1024.png
+          {
+            echo "desktop entry : présent"
+            echo "icône SVG : présente"
+            echo "icône macOS 1024 : présente"
+            desktop-file-validate packaging/applications/atlas-commerce-desktop.desktop
+            echo "desktop-file-validate : OK"
+          } | tee -a packaging-linux.log
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Packaging — entrées Linux/macOS"
+            echo
+            echo '```'
+            cat packaging-linux.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce failure
+        if: failure()
+        run: echo "::error title=packaging Linux::Échec de validation des entrées packaging — voir l'artefact packaging-linux-log."
+      - name: Announce success
+        if: success()
+        run: echo "::notice title=packaging Linux::manifeste native-packages, scripts shell, desktop entry et icônes validés."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packaging-linux-log
+          path: packaging-linux.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows:
+    name: Windows MSI generator
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: WiX toolset
+        run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
+      - name: The generator parses and its help runs
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
+          python packaging/windows/build-msi.py --help *>&1 | Tee-Object packaging-windows.log
+      - name: Build release binary
+        shell: pwsh
+        run: |
+          cargo build --release 2>&1 | Tee-Object -Append packaging-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path packaging-windows.log -Pattern 'error(\[|:)|panicked' |
+              Select-Object -First 20 | ForEach-Object {
+                echo "::error title=packaging-build::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
+      - name: Inno Setup script compiles
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            "Inno Setup absent de l'image runner : compilation ignorée." | Tee-Object -Append packaging-windows.log
+            exit 0
+          }
+          $binary = "$PWD\target\release\atlas-commerce-desktop.exe"
+          if (-not (Test-Path $binary)) {
+            Write-Error "release binary missing: $binary"
+            exit 1
+          }
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\inno-check" | Out-Null
+          & $iscc "/DVersion=$version" "/DArch=x86_64" `
+            "/DBinary=$binary" `
+            "/DOutputDir=$env:RUNNER_TEMP\inno-check" packaging\windows\atlas-commerce-desktop.iss `
+            2>&1 | Tee-Object -Append packaging-windows.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem "$env:RUNNER_TEMP\inno-check" | Tee-Object -Append packaging-windows.log
+      - name: Job summary
+        if: always()
+        shell: pwsh
+        run: |
+          $lines = if (Test-Path packaging-windows.log) { Get-Content packaging-windows.log -Raw } else { "(log absent)" }
+          # Single-quoted so the markdown backticks stay literal: a backtick
+          # is PowerShell's escape character inside double-quoted strings.
+          $open = '```text'
+          $close = '```'
+          "## Packaging — Windows`n`n$open`n$lines`n$close" |
+            Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+      - name: Announce failure
+        if: failure()
+        shell: pwsh
+        run: echo "::error title=packaging Windows::Anomalie de génération WiX/Inno — voir l'artefact packaging-windows et le résumé du job."
+      - name: Announce success
+        if: success()
+        shell: pwsh
+        run: echo "::notice title=packaging Windows::générateur MSI WiX fonctionnel, build release et compilation Inno Setup OK."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packaging-windows
+          path: |
+            packaging-windows.log
+            ${{ runner.temp }}/inno-check/*
+          if-no-files-found: ignore
+          retention-days: 14

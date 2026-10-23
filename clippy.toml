@@ -1,0 +1,1 @@
+# Keep the lint surface deliberate; CI runs `clippy -D warnings`.

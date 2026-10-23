@@ -1,0 +1,41 @@
+# OSV-Scanner configuration for the Atlas Commerce desktop workspace.
+#
+# Every entry below is an `informational = "unmaintained"` RUSTSEC notice on
+# a transitive, Linux-only dependency: it does not describe an exploitable
+# vulnerability and no patched release exists. Exceptions are scoped per
+# advisory ID so any new (security) advisory still fails the scan, and each
+# one expires a year after addition so the decision is re-evaluated.
+#
+# The file sits next to Cargo.lock at the repository root, which is where
+# osv-scanner's automatic configuration discovery looks for it. A config-less
+# run of the same lockfile reports exactly these three IDs and nothing else.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370" # zvariant 5.15.1
+ignoreUntil = 2027-10-23
+reason = """
+Linux-only transitive dependency via zbus/atspi (eframe accessibility and the
+ksni system-tray integration). Upstream unmaintained notice published
+2026-10-16 with no patched release; Windows and macOS builds do not include
+this crate.
+"""
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371" # zbus_names 4.3.5
+ignoreUntil = 2027-10-23
+reason = """
+Linux-only transitive dependency via zbus/atspi (eframe accessibility and the
+ksni system-tray integration). Upstream unmaintained notice published
+2026-10-16 with no patched release; Windows and macOS builds do not include
+this crate.
+"""
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372" # zvariant_derive 5.15.1
+ignoreUntil = 2027-10-23
+reason = """
+Linux-only transitive dependency via zbus/atspi (eframe accessibility and the
+ksni system-tray integration). Upstream unmaintained notice published
+2026-10-16 with no patched release; Windows and macOS builds do not include
+this crate.
+"""

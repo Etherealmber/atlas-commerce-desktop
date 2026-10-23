@@ -1,0 +1,20 @@
+[package]
+name = "atlas-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Async reqwest client for the Atlas Commerce Cloudflare Worker REST API."
+
+[dependencies]
+atlas-core.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+reqwest.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

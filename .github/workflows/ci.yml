@@ -1,0 +1,256 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Captured tool output is published as a build artifact, never pushed to a
+  # branch: every job below tees its logs into ci-logs/ and summarises itself
+  # in the GitHub Actions job summary.
+  LOG_DIR: ci-logs
+
+jobs:
+  quality:
+    name: quality (fmt, clippy, docs)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins the exact toolchain; the action honours it.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: GUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
+            cmake
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: quality
+      - name: Formatting
+        run: |
+          mkdir -p "$LOG_DIR"
+          cargo fmt --all --check 2>&1 | tee "$LOG_DIR/fmt.log"
+      - name: Clippy (default features)
+        run: cargo clippy --all-targets -- -D warnings 2>&1 | tee "$LOG_DIR/clippy-default.log"
+      - name: Clippy (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings 2>&1 | tee "$LOG_DIR/clippy-all-features.log"
+      - name: Rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --all-features --no-deps 2>&1 | tee "$LOG_DIR/doc.log"
+      - name: Job summary
+        if: always()
+        run: |
+          status() {
+            if [ -f "$1" ] && grep -qE '^(error|warning)(\[[[:alnum:]]+\])?:' "$1"; then
+              echo "anomalies (voir l'artefact de logs)"
+            else
+              echo "OK"
+            fi
+          }
+          {
+            echo "## Qualité (fmt, clippy, docs)"
+            echo
+            echo "| Contrôle | Résultat |"
+            echo "| --- | --- |"
+            echo "| rustfmt \`--check\` | $(status "$LOG_DIR/fmt.log") |"
+            echo "| clippy features par défaut | $(status "$LOG_DIR/clippy-default.log") |"
+            echo "| clippy toutes features | $(status "$LOG_DIR/clippy-all-features.log") |"
+            echo "| rustdoc (\`-D warnings\`) | $(status "$LOG_DIR/doc.log") |"
+            echo
+            echo "Toolchain : \`$(rustc --version)\` — \`$(cargo --version)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      # One-line API-readable mirror of the job summary: annotations survive
+      # where artifact downloads and job logs are not reachable.
+      - name: Announce result
+        if: always()
+        run: |
+          if grep -hqE '^(error|warning)(\[[[:alnum:]]+\])?:' "$LOG_DIR"/*.log; then
+            echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
+            exit 1
+          fi
+          echo "::notice title=quality::rustfmt, clippy (défaut + toutes features) et rustdoc : OK, aucune alerte."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-logs
+          path: ${{ env.LOG_DIR }}/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.os }}
+      # bash (Git Bash on Windows) gives every runner the same tee-based capture.
+      # On failure, panic and assertion lines are re-emitted as workflow-command
+      # annotations so they remain readable through the check-runs API.
+      - name: Tests
+        shell: bash
+        run: |
+          mkdir -p "$LOG_DIR"
+          set +e
+          cargo test --workspace --no-fail-fast 2>&1 | tee "$LOG_DIR/test.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" != 0 ]; then
+            # Strip ANSI colours before matching or the error lines no longer
+            # start at column one and slip past anchored patterns. Keep context
+            # around each hit so the failing assertion is self-contained.
+            sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR/test.log" \
+              | grep -B1 -A4 -E "error(\[E[0-9]+\])?:|panicked at|assertion .* failed|test result: FAILED|cannot find|mismatched types|borrow of|^failures:" \
+              | head -80 | while IFS= read -r line; do
+              echo "::error title=test-failure::${line:0:400}"
+            done
+            exit "$status"
+          fi
+      - name: Documentation tests
+        shell: bash
+        run: |
+          set +e
+          cargo test --workspace --doc 2>&1 | tee "$LOG_DIR/doc-tests.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" != 0 ]; then
+            sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR/doc-tests.log" \
+              | grep -E "error(\[E[0-9]+\])?:|panicked at|assertion .* failed|cannot find" \
+              | head -20 | while IFS= read -r line; do
+              echo "::error title=doc-test-failure::${line:0:400}"
+            done
+            exit "$status"
+          fi
+      - name: Release build
+        shell: bash
+        run: cargo build --release --workspace 2>&1 | tee "$LOG_DIR/release-build.log"
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Tests — ${{ matrix.os }}"
+            echo
+            echo "### Résultats cargo test"
+            echo '```'
+            grep -E "test result:|running [0-9]+ test" "$LOG_DIR/test.log" || echo "(aucune ligne de résultat trouvée)"
+            echo '```'
+            echo
+            echo "### Tests de documentation"
+            echo '```'
+            grep -E "test result:|running [0-9]+ test" "$LOG_DIR/doc-tests.log" || echo "(aucune ligne de résultat trouvée)"
+            echo '```'
+            echo
+            echo "Toolchain : \`$(rustc --version)\`"
+            if [ -f target/release/atlas-commerce-desktop ] || [ -f target/release/atlas-commerce-desktop.exe ]; then
+              bin=$(ls target/release/atlas-commerce-desktop* 2>/dev/null | head -1)
+              echo "Binaire release : \`$bin\` — $(du -h "$bin" | cut -f1)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        shell: bash
+        run: |
+          # || true keeps the assignment alive under set -e + pipefail: grep
+          # exits 1 when a pattern has no match, which would abort the step.
+          total=$(grep -hoE '[0-9]+ passed' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
+          failed=$(grep -hcE 'test result: FAILED|^error(\[|:)' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
+          if [ "${failed:-0}" != 0 ]; then
+            # Keep commas/colons/parentheses out of the workflow-command
+            # properties: they break the parser and the annotation vanishes.
+            echo "::error title=tests-${{ matrix.os }}::Échecs de tests ou erreurs de compilation — voir l'artefact test-logs-${{ matrix.os }}."
+            exit 1
+          fi
+          echo "::notice title=tests-${{ matrix.os }}::$total tests OK (unitaires + documentation) et build release réussi sur ${{ matrix.os }}."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-logs-${{ matrix.os }}
+          path: ${{ env.LOG_DIR }}/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  scan:
+    name: vulnerability scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate the lockfile the scanner reads
+        run: cargo generate-lockfile
+      # Same pinned image google/osv-scanner-action wraps, invoked directly so
+      # the full scanner output can be captured as an artifact. One explicit
+      # input: the generated Cargo.lock (a full-tree scan would also see the
+      # reference checkouts in CI). osv-scanner.toml next to the lockfile
+      # documents the scoped, time-limited exceptions for unmaintained
+      # transitive crates; any new advisory still fails this job.
+      - name: OSV scanner
+        run: |
+          mkdir -p "$LOG_DIR"
+          set -o pipefail
+          docker run --rm -v "$PWD":/src -w /src \
+            ghcr.io/google/osv-scanner-action:v2.7.0 \
+            scan source --lockfile=Cargo.lock 2>&1 | tee "$LOG_DIR/osv.log"
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Analyse de vulnérabilités (OSV)"
+            echo
+            echo "### Paquets et filtres"
+            echo '```'
+            grep -E "Scanned .* and found|filtered out|Filtered [0-9]+|No issues found|Total [0-9]+ packages" "$LOG_DIR/osv.log" || true
+            echo '```'
+            if grep -q "No issues found" "$LOG_DIR/osv.log"; then
+              echo "**Résultat : aucune vulnérabilité signalée.**"
+            else
+              echo "**Résultat : des éléments sont signalés, voir \`osv.log\` dans les artefacts.**"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Announce result
+        if: always()
+        run: |
+          if grep -q "No issues found" "$LOG_DIR/osv.log"; then
+            pkgs=$(grep -oE 'found [0-9]+ packages' "$LOG_DIR/osv.log" | grep -oE '[0-9]+' | head -1) || true
+            filtered=$(grep -c "filtered out" "$LOG_DIR/osv.log" || true)
+            echo "::notice title=vulnerability scan::${pkgs:-0} paquets analysés ; ${filtered:-0} avis RUSTSEC non maintenus filtrés (osv-scanner.toml) ; aucune vulnérabilité."
+          else
+            echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vulnerability-logs
+          path: ${{ env.LOG_DIR }}/
+          if-no-files-found: ignore
+          retention-days: 14
