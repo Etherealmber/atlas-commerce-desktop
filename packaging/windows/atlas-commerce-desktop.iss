@@ -1,4 +1,4 @@
-﻿; The universal Windows installer, built with Inno Setup 6.3 or later.
+; The universal Windows installer, built with Inno Setup 6.3 or later.
 ; One setup.exe carries both the x64 (Intel/AMD) and the ARM64 binaries and
 ; installs the one matching the machine, so the user never has to choose an
 ; architecture. The release workflow compiles it in the windows-installer
@@ -47,11 +47,11 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ; One installer for every supported 64-bit Windows PC: x64 machines get the
 ; Intel/AMD binary, ARM machines the native ARM64 binary (no emulation).
-; Identifiers are OR-joined with "or", matching Inno's 64BitThreeArch
-; example (space-separated lists are accepted for some directives but the
-; explicit form is the documented one for architecture lists).
-ArchitecturesAllowed=x64compatible or arm64
-ArchitecturesInstallIn64BitMode=x64compatible or arm64
+; Space-separated identifier lists, the documented syntax for both
+; architecture directives and the form used by production universal
+; installers (e.g. ExplorerTabUtility).
+ArchitecturesAllowed=x64compatible arm64
+ArchitecturesInstallIn64BitMode=x64compatible arm64
 MinVersion=10.0
 LicenseFile=..\..\LICENSE
 OutputDir={#OutputDir}
@@ -107,7 +107,7 @@ Root: HKCU; Subkey: "Software\Classes\AtlasCommerceDesktop.atlascommerce\shell\o
 Root: HKCU; Subkey: "Software\{#AppIdentity}\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\{#AppIdentity}\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Client natif pour la plateforme Atlas Commerce"
 Root: HKCU; Subkey: "Software\{#AppIdentity}\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExeName}"",0"
-Root: HKCU; Subkey: "Software\{#AppIdentity}\Capabilities"; ValueType: string; ValueName: "URLAssociations"; ValueType: "atlascommerce"; ValueData: "AtlasCommerceDesktop.atlascommerce"
+Root: HKCU; Subkey: "Software\{#AppIdentity}\Capabilities\URLAssociations"; ValueType: string; ValueName: "atlascommerce"; ValueData: "AtlasCommerceDesktop.atlascommerce"
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppIdentity}"; ValueData: "Software\{#AppIdentity}\Capabilities"; Flags: uninsdeletevalue
 
 [Run]
