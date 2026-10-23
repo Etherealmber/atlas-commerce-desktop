@@ -70,14 +70,12 @@ jobs:
             cat packaging-linux.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Announce result
-        if: always()
-        run: |
-          if grep -qiE 'error|abort' packaging-linux.log; then
-            echo "::error title=packaging Linux::Échec de validation des entrées packaging — voir l'artefact packaging-linux-log."
-            exit 1
-          fi
-          echo "::notice title=packaging Linux::manifeste native-packages, scripts shell, desktop entry et icônes validés."
+      - name: Announce failure
+        if: failure()
+        run: echo "::error title=packaging Linux::Échec de validation des entrées packaging — voir l'artefact packaging-linux-log."
+      - name: Announce success
+        if: success()
+        run: echo "::notice title=packaging Linux::manifeste native-packages, scripts shell, desktop entry et icônes validés."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -132,16 +130,20 @@ jobs:
         shell: pwsh
         run: |
           $lines = if (Test-Path packaging-windows.log) { Get-Content packaging-windows.log -Raw } else { "(log absent)" }
-          ("## Packaging — Windows`n`n```text`n$lines`n```") | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
-      - name: Announce result
-        if: always()
+          # Single-quoted so the markdown backticks stay literal: a backtick
+          # is PowerShell's escape character inside double-quoted strings.
+          $open = '```text'
+          $close = '```'
+          "## Packaging — Windows`n`n$open`n$lines`n$close" |
+            Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+      - name: Announce failure
+        if: failure()
         shell: pwsh
-        run: |
-          if ((Test-Path packaging-windows.log) -and (Select-String -Path packaging-windows.log -Pattern 'error|failed' -Quiet)) {
-            echo "::error title=packaging Windows::Anomalie de génération WiX/Inno — voir l'artefact packaging-windows."
-            exit 1
-          }
-          echo "::notice title=packaging Windows::générateur MSI WiX fonctionnel, build release et compilation Inno Setup OK."
+        run: echo "::error title=packaging Windows::Anomalie de génération WiX/Inno — voir l'artefact packaging-windows et le résumé du job."
+      - name: Announce success
+        if: success()
+        shell: pwsh
+        run: echo "::notice title=packaging Windows::générateur MSI WiX fonctionnel, build release et compilation Inno Setup OK."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
