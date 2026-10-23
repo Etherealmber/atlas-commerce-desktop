@@ -24,7 +24,8 @@ pub fn overlay_at<R>(
 /// that is allowed to wrap.
 pub fn no_wrap_scope<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.scope(|ui| {
-        ui.style_mut().wrap = Some(false);
+        // The fork's Style carries `wrap_mode` (no legacy `wrap: bool`).
+        ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
         content(ui)
     })
     .inner
