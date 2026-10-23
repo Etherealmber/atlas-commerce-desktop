@@ -1,4 +1,4 @@
-; The universal Windows installer, built with Inno Setup 6.3 or later.
+﻿; The universal Windows installer, built with Inno Setup 6.3 or later.
 ; One setup.exe carries both the x64 (Intel/AMD) and the ARM64 binaries and
 ; installs the one matching the machine, so the user never has to choose an
 ; architecture. The release workflow compiles it in the windows-installer
