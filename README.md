@@ -121,11 +121,11 @@ modification de l'interface :
 
 ## Paquets et publication
 
-Voir [PACKAGING.md](PACKAGING.md) pour le détail des installeurs Windows
-(Inno Setup + MSI WiX), du bundle macOS universel (lipo, DMG, signature
-conditionnelle), des paquets Linux (AppImage + zsync, deb, rpm) et des
-workflows GitHub Actions (`ci.yml`, `release.yml`, `packaging.yml`,
-`dependabot.yml`).
+Voir [PACKAGING.md](PACKAGING.md) pour le détail de l'installeur Windows
+universel Inno Setup (un seul `setup.exe` pour x64 et ARM64), du bundle
+macOS universel (lipo, DMG, signature conditionnelle), des paquets Linux
+(AppImage + zsync, deb, rpm) et des workflows GitHub Actions (`ci.yml`,
+`release.yml`, `packaging.yml`, `ci-bot.yml`, `dependabot.yml`).
 
 ## Remerciements
 

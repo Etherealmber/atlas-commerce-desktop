@@ -1,30 +1,29 @@
-﻿; The Windows installer, built with Inno Setup 6.3 or later from a release
-; binary (the release workflow does this on every tag):
+; The universal Windows installer, built with Inno Setup 6.3 or later.
+; One setup.exe carries both the x64 (Intel/AMD) and the ARM64 binaries and
+; installs the one matching the machine, so the user never has to choose an
+; architecture. The release workflow compiles it in the windows-installer
+; job from the two release binaries:
 ;
-;   iscc /DVersion=0.1.0 /DArch=x86_64 /DBinary=...\atlas-commerce-desktop.exe ^
+;   iscc /DVersion=0.1.0 ^
+;        /DBinaryX64=...\x64\atlas-commerce-desktop.exe ^
+;        /DBinaryArm64=...\arm64\atlas-commerce-desktop.exe ^
 ;        /DOutputDir=dist packaging\windows\atlas-commerce-desktop.iss
 ;
-; Arch is x86_64 or aarch64, as in the Rust target triple, so the installer
-; is named like the zip next to it. It needs no administrator rights: the
-; program goes to the user's own Programs folder with a Start menu entry,
-; and a running copy is closed before an update replaces it.
+; It needs no administrator rights: the program goes to the user's own
+; Programs folder with a Start menu entry, and a running copy is closed
+; before an update replaces it.
 
 #ifndef Version
   #error Version must be defined on the ISCC command line
 #endif
-#ifndef Arch
-  #error Arch must be defined on the ISCC command line (x86_64 or aarch64)
+#ifndef BinaryX64
+  #error BinaryX64 must be defined on the ISCC command line
 #endif
-#ifndef Binary
-  #error Binary must be defined on the ISCC command line
+#ifndef BinaryArm64
+  #error BinaryArm64 must be defined on the ISCC command line
 #endif
 #ifndef OutputDir
   #error OutputDir must be defined on the ISCC command line
-#endif
-#if Arch == "aarch64"
-  #define InnoArch "arm64"
-#else
-  #define InnoArch "x64compatible"
 #endif
 
 #define AppName "Atlas Commerce Desktop"
@@ -46,12 +45,17 @@ DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-ArchitecturesAllowed={#InnoArch}
-ArchitecturesInstallIn64BitMode={#InnoArch}
+; One installer for every supported 64-bit Windows PC: x64 machines get the
+; Intel/AMD binary, ARM machines the native ARM64 binary (no emulation).
+; Space-separated identifier lists, the documented syntax for both
+; architecture directives and the form used by production universal
+; installers (e.g. ExplorerTabUtility).
+ArchitecturesAllowed=x64compatible arm64
+ArchitecturesInstallIn64BitMode=x64compatible arm64
 MinVersion=10.0
 LicenseFile=..\..\LICENSE
 OutputDir={#OutputDir}
-OutputBaseFilename=atlas-commerce-desktop-v{#Version}-{#Arch}-pc-windows-msvc-setup
+OutputBaseFilename=atlas-commerce-desktop-v{#Version}-setup
 SetupIconFile=atlas-commerce-desktop.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -76,7 +80,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Créer un raccourci sur le bureau"; GroupDescription: "Raccourcis supplémentaires :"; Flags: unchecked
 
 [Files]
-Source: "{#Binary}"; DestDir: "{app}"; Flags: ignoreversion
+; Same destination name for both architectures; the Check functions decide
+; which single source is installed on this machine. solidbreak separates
+; the two same-named files inside the solid LZMA archive.
+Source: "{#BinaryX64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: IsX64; Flags: ignoreversion
+Source: "{#BinaryArm64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: IsARM64; Flags: ignoreversion solidbreak
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "atlas-commerce-desktop-installer.txt"; DestDir: "{app}"; Flags: ignoreversion
@@ -106,21 +114,6 @@ Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueN
 Filename: "{app}\{#AppExeName}"; Description: "Lancer {#AppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-#if Arch == "x86_64"
-// x64compatible lets this installer run on an ARM PC under emulation, and a
-// copy installed from it keeps updating to x64. The ARM installer runs
-// natively, so point to it. A silent install (an update) goes ahead.
-function InitializeSetup(): Boolean;
-begin
-  Result := True;
-  if IsArm64 and not WizardSilent then
-    Result := MsgBox('Ce PC utilise un processeur ARM. Le programme d''installation ' +
-      'ARM (aarch64) fonctionne nativement, plus vite et avec moins d''énergie.' + #13#10#13#10 +
-      'Installer quand même la version pour processeurs Intel et AMD ?',
-      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
-end;
-#endif
-
 procedure CloseInstalledApp;
 var
   Locator, Services, Processes, Process, Path: Variant;

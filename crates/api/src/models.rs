@@ -659,6 +659,56 @@ pub struct VendorId {
     pub id: i64,
 }
 
+// ── Catalog: categories and units ────────────────────────────────────────
+
+/// A product category. Rows with `id == None` are virtual labels derived
+/// from products that have no matching row in `product_categories` yet
+/// (`from_products: true`); they cannot be edited through the API.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Category {
+    #[serde(default)]
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub sort_order: i64,
+    #[serde(default)]
+    pub from_products: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CategoryWrite {
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub description: String,
+    pub sort_order: i64,
+}
+
+/// A product measurement unit. Same virtual-label rule as [`Category`].
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Unit {
+    #[serde(default)]
+    pub id: Option<i64>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub sort_order: i64,
+    #[serde(default)]
+    pub from_products: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct UnitWrite {
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub symbol: String,
+    pub sort_order: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +791,33 @@ mod tests {
         assert!(json.get("email").is_none());
         let id: VendorId = serde_json::from_str(r#"{"id":9}"#).unwrap();
         assert_eq!(id.id, 9);
+    }
+
+    #[test]
+    fn catalog_rows_accept_virtual_labels_and_writes_omit_empty_fields() {
+        let category: Category = serde_json::from_str(
+            r#"{"id":null,"name":"Boissons","from_products":true}"#,
+        )
+        .unwrap();
+        assert_eq!(category.id, None);
+        assert!(category.from_products);
+        let unit: Unit = serde_json::from_str(r#"{"id":4,"name":"Kg","symbol":"kg"}"#).unwrap();
+        assert_eq!(unit.id, Some(4));
+        assert_eq!(unit.symbol, "kg");
+        let category_write = CategoryWrite {
+            name: "Snacks".to_owned(),
+            sort_order: 2,
+            ..CategoryWrite::default()
+        };
+        let json = serde_json::to_value(&category_write).unwrap();
+        assert_eq!(json["name"], "Snacks");
+        assert!(json.get("description").is_none());
+        let unit_write = UnitWrite {
+            name: "Litre".to_owned(),
+            symbol: "L".to_owned(),
+            sort_order: 0,
+        };
+        assert_eq!(serde_json::to_value(&unit_write).unwrap()["symbol"], "L");
     }
 
     #[test]
