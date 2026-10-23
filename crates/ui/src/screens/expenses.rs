@@ -224,13 +224,10 @@ fn expense_row(
                             .strong()
                             .size(13.5),
                     );
-                    // Named binding: the Cow borrows the temporary label
-                    // string, which must outlive the array literal below.
-                    let method = crate::i18n::gettext(
-                        locale,
-                        payment_label(expense.payment_method.as_str()).as_str(),
-                    )
-                    .to_string();
+                    // Named bindings: gettext's Cow may borrow the label,
+                    // so the temporary source string must outlive the call.
+                    let method_key = payment_label(expense.payment_method.as_str());
+                    let method = crate::i18n::gettext(locale, method_key.as_str()).to_string();
                     let subline = [
                         expense.expense_date.clone(),
                         expense.category.clone(),
@@ -358,11 +355,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 .color(palette.secondary)
                                 .size(12.5),
                         );
+                        let method_key = payment_label(editor.payment_method.as_str());
+                        let method_text =
+                            crate::i18n::gettext(locale, method_key.as_str()).to_string();
                         egui::ComboBox::from_id_salt("expense-payment-method")
-                            .selected_text(crate::i18n::gettext(
-                                locale,
-                                payment_label(editor.payment_method.as_str()).as_str(),
-                            ))
+                            .selected_text(method_text)
                             .show_ui(ui, |ui| {
                                 for (key, label) in PAYMENT_METHODS {
                                     ui.selectable_value(
