@@ -159,10 +159,12 @@ jobs:
           total=$(grep -hoE '[0-9]+ passed' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
           failed=$(grep -hcE 'test result: FAILED|^error(\[|:)' "$LOG_DIR"/*.log 2>/dev/null | awk '{s += $1} END {print s + 0}') || true
           if [ "${failed:-0}" != 0 ]; then
-            echo "::error title=tests (${{ matrix.os }})::Échecs de tests ou erreurs de compilation — voir l'artefact test-logs-${{ matrix.os }}."
+            # Keep commas/colons/parentheses out of the workflow-command
+            # properties: they break the parser and the annotation vanishes.
+            echo "::error title=tests-${{ matrix.os }}::Échecs de tests ou erreurs de compilation — voir l'artefact test-logs-${{ matrix.os }}."
             exit 1
           fi
-          echo "::notice title=tests (${{ matrix.os }}):$total tests OK (unitaires + documentation) et build release réussi."
+          echo "::notice title=tests-${{ matrix.os }}::$total tests OK (unitaires + documentation) et build release réussi sur ${{ matrix.os }}."
       - uses: actions/upload-artifact@v4
         if: always()
         with:

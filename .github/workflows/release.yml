@@ -573,7 +573,7 @@ jobs:
           url="https://github.com/${RELEASE_REPO}/releases/tag/${RELEASE_TAG}"
           assets=$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
           if [ "${assets:-0}" -gt 0 ]; then
-            echo "::notice title=release publiée::$RELEASE_TAG ($assets assets, pré-version=$RELEASE_PRERELEASE, notes=$NOTES_MODE) — $url"
+            echo "::notice title=release published::$RELEASE_TAG ($assets assets, pré-version=$RELEASE_PRERELEASE, notes=$NOTES_MODE) — $url"
           else
             echo "::error title=publication release::La release $RELEASE_TAG n'existe pas ou n'a aucun asset — voir le résumé du job."
             exit 1
