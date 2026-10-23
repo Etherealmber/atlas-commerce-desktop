@@ -120,6 +120,33 @@ jobs:
             exit 1
           fi
           echo "::notice title=quality::rustfmt, clippy (défaut + toutes features) et rustdoc : OK, aucune alerte."
+      # Full diagnostics as a neutral check-run: workflow commands are capped
+      # at 10 annotations per step, while the checks API accepts a large
+      # output.text payload readable through `gh api` (artifacts may live on
+      # network-restricted storage). Neutral conclusion: gating stays owned
+      # by the "Announce result" step above.
+      - name: Publish diagnostics check-run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          strip() { sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null || true; }
+          {
+            for pair in "fmt $LOG_DIR/fmt.log" "clippy-defaut $LOG_DIR/clippy-default.log" "clippy-toutes-features $LOG_DIR/clippy-all-features.log" "rustdoc $LOG_DIR/doc.log"; do
+              set -- $pair
+              echo "## $1"
+              echo '```text'
+              strip "$2"
+              echo '```'
+            done
+          } | head -c 60000 > /tmp/quality-diagnostics.md
+          gh api -X POST "repos/${{ github.repository }}/check-runs" \
+            -f name="quality diagnostics" \
+            -f head_sha="${{ github.sha }}" \
+            -f status="completed" \
+            -f conclusion="neutral" \
+            -F "output[title]=Diagnostics fmt/clippy/rustdoc" \
+            -F "output[text]=@/tmp/quality-diagnostics.md" > /dev/null
       - uses: actions/upload-artifact@v7
         if: always()
         with:
