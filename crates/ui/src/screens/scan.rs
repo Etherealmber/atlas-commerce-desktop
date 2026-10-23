@@ -32,7 +32,7 @@ pub struct ScanState {
 }
 
 /// The "create from barcode" dialog.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct QuickProductDraft {
     pub barcode: String,
     pub name: String,
