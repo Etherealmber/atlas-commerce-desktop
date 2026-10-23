@@ -108,7 +108,8 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     let available = ui.available_width();
     let cols = ((available + gap) / 180.0).floor() as usize;
     let cols = cols.clamp(1, cards.len());
-    let card_width = ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
+    let card_width =
+        ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
     ui.horizontal_wrapped(|ui| {
         for (which, label, value, warn) in cards {
             metric_card(ui, palette, which, &label, &value, warn, card_width);

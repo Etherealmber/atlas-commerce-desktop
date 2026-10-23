@@ -98,11 +98,14 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         });
         let response = inner.response.interact(egui::Sense::click());
+        // `on_hover_cursor` consumes the response, so capture the click
+        // state before handing it over.
+        let clicked = response.clicked();
         if route.is_some() {
             response.on_hover_cursor(egui::CursorIcon::PointingHand);
         }
         if let Some(route) = route
-            && response.clicked()
+            && clicked
         {
             app.go(route);
             if route == crate::state::Route::Sales && app.invoices.data.is_none() {

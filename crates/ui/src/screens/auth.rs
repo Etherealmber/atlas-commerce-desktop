@@ -46,7 +46,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             box_size * 0.47,
             egui::Stroke::new(1.0, palette.outline),
         );
-        widgets::overlay_at(
+        crate::widgets::overlay_at(
             ui,
             egui::Rect::from_center_size(center, egui::Vec2::splat(56.0)),
             |ui| {
@@ -71,7 +71,8 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
         // Slim indeterminate track with a sweeping accent segment.
         let track_width = 220.0_f32.min(screen.x * 0.6);
-        let (track, _) = ui.allocate_exact_size(egui::vec2(track_width, 4.0), egui::Sense::hover());
+        let (track, _) =
+            ui.allocate_exact_size(egui::vec2(track_width, 4.0), egui::Sense::hover());
         ui.painter()
             .rect_filled(track, 999.0, palette.surface_active);
         let span = 0.34;
@@ -87,7 +88,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
         ui.add_space(14.0);
         ui.horizontal_centered(|ui| {
-            widgets::icon(ui, Icon::ShieldCheck, palette.secondary, 14.0);
+            icon(ui, Icon::ShieldCheck, palette.secondary, 14.0);
             ui.add_space(6.0);
             ui.label(
                 RichText::new(t!(app.locale, "Securing your workspace…"))
