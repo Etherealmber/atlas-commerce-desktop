@@ -270,6 +270,7 @@ pub struct AtlasApp {
     // ── editors / dialogs ──
     pub product_editor: Option<ProductEditor>,
     pub client_editor: Option<ClientEditor>,
+    pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
     pub quick_sale: Option<QuickSaleDraft>,
     pub confirm_dialog: Option<crate::dialogs::Confirm>,
