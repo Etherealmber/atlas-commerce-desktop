@@ -9,13 +9,13 @@ que ces endpoints — aucun contrat n'est deviné.
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
   normalisés en `:id`).
-- Le desktop en couvre **26**, soit environ 8 %. Tous les endpoints appelés
+- Le desktop en couvre **32**, soit environ 10 %. Tous les endpoints appelés
   par le client existent à l'identique dans le worker : aucun appel hors
   contrat.
 - Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
   connexion (avec OTP, lien magique et session QR), tableau de bord, produits,
-  clients (CRM), fournisseurs, ventes/factures (liste), notifications, agent,
-  paramètres, coquille.
+  catalogue (catégories et unités), clients (CRM), fournisseurs,
+  ventes/factures (liste), notifications, agent, paramètres, coquille.
 
 ## Matrice par domaine
 
@@ -43,8 +43,8 @@ que ces endpoints — aucun contrat n'est deviné.
 | `mobile-actions` | 0 | 6 |
 | `vendors` | 3 | 6 |
 | `expenses` | 0 | 5 |
-| `categories` | 0 | 4 |
-| `units` | 0 | 4 |
+| `categories` | 3 | 4 |
+| `units` | 3 | 4 |
 | `agent` | 1 | 3 |
 | `delivery-notes` | 0 | 3 |
 | `kits` | 0 | 3 |
@@ -118,7 +118,11 @@ entrée de navigation, et ne modifie jamais le contrat du worker.
 2. **Catalogue et stock** — CRUD `products` avec variantes et images
    (`catalog`), `categories`, `units`, `kits`, `inventory` (emplacements,
    lots, inventaires cycliques, réappro, valorisation), `scan`,
-   historique des mouvements.
+   historique des mouvements. *Catégories et unités déjà livrées
+   (liste, création, modification ; les suppressions à confirmation de mot
+   de passe restent à venir). Produits : lecture, recherche, création et
+   ajustement de stock déjà livrés ; variantes, images et suppressions à
+   venir.*
 3. **Achats** — `vendors`, `bills` (réception, paiements, rapprochement),
    `expenses`, demandes de stock. *Le CRUD fournisseurs
    (`GET/POST/PUT /api/vendors`) est déjà livré ; restent les suppressions

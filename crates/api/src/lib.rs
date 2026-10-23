@@ -14,6 +14,7 @@
 
 pub mod agent;
 pub mod auth;
+pub mod catalog;
 pub mod clients;
 pub mod commerce;
 pub mod error;

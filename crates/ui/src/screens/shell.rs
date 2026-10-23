@@ -19,6 +19,7 @@ fn route_meta(route: Route) -> (Icon, &'static str) {
     match route {
         Route::Dashboard => (Icon::Dashboard, "Tableau de bord"),
         Route::Products => (Icon::Package, "Produits"),
+        Route::Catalog => (Icon::Boxes, "Catalogue"),
         Route::Clients => (Icon::Users, "Clients"),
         Route::Vendors => (Icon::Store, "Fournisseurs"),
         Route::Sales => (Icon::Receipt, "Ventes"),
@@ -151,6 +152,14 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     }
                     if route == Route::Vendors && app.vendors.data.is_none() {
                         app.load_vendors();
+                    }
+                    if route == Route::Catalog {
+                        if app.categories.data.is_none() {
+                            app.load_categories();
+                        }
+                        if app.units.data.is_none() {
+                            app.load_units();
+                        }
                     }
                     if route == Route::Sales && app.invoices.data.is_none() {
                         app.load_invoices();
@@ -309,6 +318,9 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 }
                 Screen::Shell(Route::Clients) => {
                     super::clients::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Catalog) => {
+                    super::catalog::draw(app, ui, palette);
                 }
                 Screen::Shell(Route::Vendors) => {
                     super::vendors::draw(app, ui, palette);

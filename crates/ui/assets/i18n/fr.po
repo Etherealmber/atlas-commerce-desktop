@@ -641,3 +641,64 @@ msgstr "Fournisseur mis à jour."
 
 msgid "Vendors"
 msgstr "Fournisseurs"
+
+# ── Catalog (categories and units) ──
+msgid "Catalog"
+msgstr "Catalogue"
+
+msgid "Categories"
+msgstr "Catégories"
+
+msgid "Category created."
+msgstr "Catégorie créée."
+
+msgid "Category updated."
+msgstr "Catégorie mise à jour."
+
+msgid "Created categories appear here."
+msgstr "Les catégories créées apparaissent ici."
+
+msgid "Created units appear here."
+msgstr "Les unités créées apparaissent ici."
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Edit category"
+msgstr "Modifier la catégorie"
+
+msgid "Edit unit"
+msgstr "Modifier l'unité"
+
+msgid "from products"
+msgstr "issue des produits"
+
+msgid "New category"
+msgstr "Nouvelle catégorie"
+
+msgid "New unit"
+msgstr "Nouvelle unité"
+
+msgid "No category yet"
+msgstr "Aucune catégorie"
+
+msgid "No unit yet"
+msgstr "Aucune unité"
+
+msgid "Sort order"
+msgstr "Ordre de tri"
+
+msgid "Symbol"
+msgstr "Symbole"
+
+msgid "The sort order must be a whole number."
+msgstr "L'ordre de tri doit être un nombre entier."
+
+msgid "Unit created."
+msgstr "Unité créée."
+
+msgid "Unit updated."
+msgstr "Unité mise à jour."
+
+msgid "Units"
+msgstr "Unités"
