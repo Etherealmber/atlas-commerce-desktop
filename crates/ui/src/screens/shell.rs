@@ -230,7 +230,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut app.top_search)
                             .id(egui::Id::new("titlebar-search"))
-                            .frame(false)
+                            .frame(egui::Frame::NONE)
                             .hint_text(t!(app.locale, "Search a product…"))
                             .desired_width(width - 42.0)
                             .clip_text(true),

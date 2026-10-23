@@ -802,7 +802,7 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .size(12.5),
                     );
                     if secondary_button(ui, t!(app.locale, "Copy"), palette) {
-                        ui.ctx().copy_text(fingerprint);
+                        ui.ctx().copy_text(fingerprint.to_owned());
                     }
                 });
             },
