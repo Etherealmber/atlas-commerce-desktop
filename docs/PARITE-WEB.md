@@ -83,7 +83,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Quotes` | Non (devis) |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Non (reçus) |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; les actions `Factures` et `Situation` (synthèse / détail complet) ouvrent le navigateur via ticket de rapport ; manque prix par client, imports et suppressions OTP |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` ouvre la page web filtrée par identifiant client (session navigateur), et `Situation` (synthèse / détail complet) ouvre le rapport imprimable via ticket `link-ticket` ; manque prix par client, imports et suppressions OTP |
 | `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; les factures fournisseurs (`Bills`) restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Non (RH et pointage) |

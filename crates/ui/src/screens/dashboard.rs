@@ -103,13 +103,20 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     ];
     // A fixed 4-column grid starved narrow windows (each card demanded at
     // least 168px, so the row overflowed its card). Pick a column count from
-    // the real available width and let the row wrap instead.
+    // the real available width and let the row wrap instead. The card frame
+    // adds 34px around the content (2×16 margin + 2×1 stroke), so the column
+    // math runs on outer widths.
+    const FRAME_OVERHEAD: f32 = 34.0;
     let gap = 12.0_f32;
     let available = ui.available_width();
-    let cols = ((available + gap) / 180.0).floor() as usize;
+    let min_outer = 180.0 + FRAME_OVERHEAD;
+    let cols = ((available + gap) / min_outer).floor() as usize;
     let cols = cols.clamp(1, cards.len());
-    let card_width = ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(120.0);
+    let outer_width =
+        ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(140.0);
+    let card_width = (outer_width - FRAME_OVERHEAD).max(120.0);
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
         for (which, label, value, warn) in cards {
             metric_card(ui, palette, which, &label, &value, warn, card_width);
         }
@@ -249,18 +256,18 @@ fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     let bar_width = (slot * 0.30).max(2.0);
     let bar_gap = (slot * 0.08).min(2.0);
     let font = egui::FontId::proportional(10.5);
-    // Measure a sample label and thin the labels so two of them can never
-    // paint over the same pixels (the old "Nov 2Déc 2Jan…" garble).
-    let sample = data
+    // Measure the *widest* label and thin the labels so two of them can
+    // never paint over the same pixels (the old "Nov 2Déc 2Jan…" garble).
+    let label_width = data
         .monthly_series
-        .first()
-        .map(|point| short_month(&point.label))
-        .unwrap_or_default();
-    let label_width = ui
-        .painter()
-        .layout_no_wrap(sample, font.clone(), palette.dim)
-        .size()
-        .x;
+        .iter()
+        .map(|point| {
+            ui.painter()
+                .layout_no_wrap(short_month(&point.label), font.clone(), palette.dim)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max);
     let label_step = ((label_width + 8.0) / slot).ceil().max(1.0) as usize;
     for (index, point) in data.monthly_series.iter().enumerate() {
         let center = rect.left() + slot * index as f32 + slot / 2.0;

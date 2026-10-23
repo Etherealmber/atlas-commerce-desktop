@@ -242,12 +242,12 @@ impl AtlasApp {
         let Some(api) = self.client.clone() else {
             return;
         };
+        // Only the stable client ID goes in the query: a `q` name search
+        // would hide older invoices after the client is renamed (the web
+        // page treats `q` as an additional text filter, not part of the key).
         let url = match url::Url::parse_with_params(
             &format!("{}/invoices", api.base_url()),
-            &[
-                ("client", client.id.to_string()),
-                ("q", client.name.clone()),
-            ],
+            &[("client", client.id.to_string())],
         ) {
             Ok(url) => url,
             Err(error) => {
