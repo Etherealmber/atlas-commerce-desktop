@@ -547,6 +547,62 @@ const fn default_weekly_limit() -> u64 {
     100_000
 }
 
+// ── Clients (CRM) ────────────────────────────────────────────────────────
+
+/// One row of `GET /api/clients`. The worker adds the computed
+/// `balance_due` (unpaid, non-cancelled invoices); every column gets a
+/// default so server-side additions never break deserialization.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Client {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub ice: String,
+    #[serde(default)]
+    pub if_number: String,
+    #[serde(default)]
+    pub address: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub phone: String,
+    #[serde(default)]
+    pub email: String,
+    /// Worker integer flag (0/1); the desktop presents it as a checkbox.
+    #[serde(default)]
+    pub tax_exempt: i64,
+    #[serde(default)]
+    pub credit_limit: f64,
+    /// Computed server-side: sum of unpaid invoice remainders.
+    #[serde(default)]
+    pub balance_due: f64,
+}
+
+/// Create/update payload for `POST` and `PUT /api/clients[/:id]`.
+/// Field names and validation mirror `validateClientWrite` in the worker:
+/// name 1..=200, optional valid email, credit limit in 0..=1e12, phone and
+/// ICE capped at 40 characters.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ClientWrite {
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub ice: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub if_number: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub address: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub city: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub phone: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub email: String,
+    pub tax_exempt: bool,
+    pub credit_limit: f64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -584,6 +640,29 @@ mod tests {
         assert_eq!(badges.vr_open, 1);
         assert_eq!(badges.invoices_unpaid, 0);
         assert_eq!(NavBadges::default().employees_pay_due, 0);
+    }
+
+    #[test]
+    fn client_accepts_partial_payload_and_writes_worker_fields() {
+        let client: Client =
+            serde_json::from_str(r#"{"id":7,"name":"SARL Atlas","tax_exempt":1}"#).unwrap();
+        assert_eq!(client.id, 7);
+        assert_eq!(client.name, "SARL Atlas");
+        assert_eq!(client.tax_exempt, 1);
+        assert_eq!(client.balance_due, 0.0);
+        let write = ClientWrite {
+            name: "Nouveau".to_owned(),
+            credit_limit: 1500.0,
+            tax_exempt: true,
+            ..ClientWrite::default()
+        };
+        let json = serde_json::to_value(&write).unwrap();
+        assert_eq!(json["name"], "Nouveau");
+        assert_eq!(json["tax_exempt"], true);
+        assert_eq!(json["credit_limit"], 1500.0);
+        // Empty optional strings are omitted so a PUT stays a partial update.
+        assert!(json.get("ice").is_none());
+        assert!(json.get("email").is_none());
     }
 
     #[test]

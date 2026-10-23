@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod auth;
+pub mod clients;
 pub mod dashboard;
 pub mod notifications;
 pub mod products;

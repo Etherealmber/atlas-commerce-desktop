@@ -19,6 +19,7 @@ fn route_meta(route: Route) -> (Icon, &'static str) {
     match route {
         Route::Dashboard => (Icon::Dashboard, "Tableau de bord"),
         Route::Products => (Icon::Package, "Produits"),
+        Route::Clients => (Icon::Users, "Clients"),
         Route::Sales => (Icon::Receipt, "Ventes"),
         Route::Agent => (Icon::Bot, "Agent IA"),
         Route::Notifications => (Icon::Bell, "Notifications"),
@@ -143,6 +144,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     app.go(route);
                     if route == Route::Notifications && app.alerts.data.is_none() {
                         app.load_alerts();
+                    }
+                    if route == Route::Clients && app.clients.data.is_none() {
+                        app.load_clients();
                     }
                     if route == Route::Sales && app.invoices.data.is_none() {
                         app.load_invoices();
@@ -298,6 +302,9 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 }
                 Screen::Shell(Route::Products) => {
                     super::products::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Clients) => {
+                    super::clients::draw(app, ui, palette);
                 }
                 Screen::Shell(Route::Sales) => {
                     super::sales::draw(app, ui, palette);
