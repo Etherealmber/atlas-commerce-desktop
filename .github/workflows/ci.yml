@@ -153,6 +153,7 @@ jobs:
             -f status="completed" \
             -f conclusion="neutral" \
             -F "output[title]=Diagnostics fmt/clippy/rustdoc" \
+            -F "output[summary]=Journaux bruts fmt/clippy/rustdoc (60 Ko max)." \
             -F "output[text]=@/tmp/quality-diagnostics.md" 2>&1 > /dev/null); then
             echo "::warning title=quality::publish failed: $(printf '%s' "$err" | tr '\n' ' ' | head -c 800)"
           fi
