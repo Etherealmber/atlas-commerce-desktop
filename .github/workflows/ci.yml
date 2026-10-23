@@ -26,6 +26,11 @@ jobs:
     name: quality (fmt, clippy, docs)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Read-only by default; checks:write is only used by the diagnostics
+    # check-run step below. No branch writes are ever performed.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
       # rust-toolchain.toml pins the exact toolchain; the action honours it.
@@ -140,13 +145,16 @@ jobs:
               echo '```'
             done
           } | head -c 60000 > /tmp/quality-diagnostics.md
+          # Never let diagnostics publishing flip an otherwise green job:
+          # the "Announce result" step owns the gate.
           gh api -X POST "repos/${{ github.repository }}/check-runs" \
             -f name="quality diagnostics" \
             -f head_sha="${{ github.sha }}" \
             -f status="completed" \
             -f conclusion="neutral" \
             -F "output[title]=Diagnostics fmt/clippy/rustdoc" \
-            -F "output[text]=@/tmp/quality-diagnostics.md" > /dev/null
+            -F "output[text]=@/tmp/quality-diagnostics.md" > /dev/null \
+            || echo "::warning title=quality::impossible de publier le check-run de diagnostics"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
