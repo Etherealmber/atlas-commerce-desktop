@@ -119,13 +119,18 @@ impl ServerUrl {
         let explicit_scheme = trimmed[..first_slash]
             .split_once(':')
             .filter(|(scheme, rest)| {
-                let valid_scheme =
-                    !scheme.is_empty()
-                        && scheme.chars().next().is_some_and(char::is_ascii_alphabetic)
-                        && scheme
-                            .chars()
-                            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-                let looks_like_port = !rest.is_empty() && rest.bytes().all(u8::is_ascii_digit);
+                let valid_scheme = !scheme.is_empty()
+                    && scheme
+                        .chars()
+                        .next()
+                        .is_some_and(|first| first.is_ascii_alphabetic())
+                    && scheme
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+                // Closures, not fn pointers: is_ascii_digit takes &u8, while
+                // Iterator::all passes u8 by value.
+                let looks_like_port =
+                    !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit());
                 valid_scheme && !looks_like_port
             })
             .map(|(scheme, _)| scheme);
