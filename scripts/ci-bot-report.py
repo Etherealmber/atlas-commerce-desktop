@@ -341,6 +341,37 @@ def issue_marker(run_json: dict) -> str:
     )
 
 
+def replace_marker(body: str, fresh_marker: str) -> str:
+    """Swap the identity marker inside an issue body, preserving the rest.
+
+    Bodies without a marker (older issues) get the marker prepended so the
+    staleness guard always has a current failure revision to compare against.
+    """
+    if not body:
+        return fresh_marker
+    if MARKER_RE.search(body):
+        return MARKER_RE.sub(fresh_marker, body, count=1)
+    return f"{fresh_marker}\n\n{body}"
+
+
+def refresh_issue_marker(repo: str, number: int, existing_body: str, run_json: dict) -> None:
+    """Persist the current run's marker onto a reused issue (best-effort).
+
+    Without this, a green run would compare its timestamp against the first
+    failure recorded in the body even after newer revisions kept failing.
+    """
+    updated = replace_marker(existing_body or "", issue_marker(run_json))
+    if updated == (existing_body or ""):
+        return
+    subprocess.run(
+        ["gh", "issue", "edit", str(number), "--repo", repo, "--body-file", "-"],
+        input=updated,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
 def parse_marker(body: str) -> dict[str, str]:
     match = MARKER_RE.search(body or "")
     if not match:
@@ -627,6 +658,7 @@ def triage(repo: str, run_json: dict, body: str) -> str:
         kind = marker_matches(issue.get("marker", {}), run_json)
         if kind == "sha":
             number = issue["number"]
+            refresh_issue_marker(repo, number, issue.get("body", ""), run_json)
             comment = (
                 f"Re-detected on run [{run_json['displayTitle']}]({run_json['url']}).\n\n{body}"
             )
@@ -639,6 +671,7 @@ def triage(repo: str, run_json: dict, body: str) -> str:
         kind = marker_matches(issue.get("marker", {}), run_json)
         if kind == "thread":
             number = issue["number"]
+            refresh_issue_marker(repo, number, issue.get("body", ""), run_json)
             comment = (
                 f"Still failing on `{sha7}` — run "
                 f"[{run_json['displayTitle']}]({run_json['url']}).\n\n"
@@ -840,6 +873,17 @@ def selftest() -> int:
     # Missing timestamps fail closed: the issue stays open.
     assert green_run_is_current(None, newer_failure) is False
     assert green_run_is_current(current_green, None) is False
+
+    # Reusing a thread issue refreshes the body marker while keeping the body.
+    old_marker = issue_marker(dict(run, headSha="111222333"))
+    body = f"{old_marker}\n\n# Failure\nConcrete guidance stays intact."
+    new_marker = issue_marker(run)
+    updated = replace_marker(body, new_marker)
+    assert new_marker in updated and old_marker not in updated
+    assert "Concrete guidance stays intact." in updated
+    # A legacy body without a marker gets one prepended, nothing is dropped.
+    legacy = replace_marker("# Old issue\nNo marker here.", new_marker)
+    assert legacy.startswith(new_marker) and "No marker here." in legacy
 
     print("ci-bot selftest: all checks passed")
     return 0
