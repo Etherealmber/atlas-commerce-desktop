@@ -129,7 +129,12 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .strong()
                     .size(14.5),
                 );
-                pill(ui, role_label(app), palette.surface_active, palette.secondary);
+                pill(
+                    ui,
+                    role_label(app),
+                    palette.surface_active,
+                    palette.secondary,
+                );
             });
         });
 
@@ -232,7 +237,10 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         if switch_row(
             ui,
             palette,
-            t!(app.locale, "Keep running in the notification area when closed"),
+            t!(
+                app.locale,
+                "Keep running in the notification area when closed"
+            ),
             Some(&t!(
                 app.locale,
                 "Closing the window hides the app instead of quitting it."
@@ -248,7 +256,10 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             ui,
             palette,
             t!(app.locale, "Start at login"),
-            Some(&t!(app.locale, "Launches Atlas Commerce when the computer starts.")),
+            Some(&t!(
+                app.locale,
+                "Launches Atlas Commerce when the computer starts."
+            )),
             &mut autostart,
         ) {
             apply_autostart(autostart, app.settings.start_hidden);
@@ -261,7 +272,10 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 ui,
                 palette,
                 t!(app.locale, "Start hidden in the notification area"),
-                Some(&t!(app.locale, "No window opens until you click the tray icon.")),
+                Some(&t!(
+                    app.locale,
+                    "No window opens until you click the tray icon."
+                )),
                 &mut app.settings.start_hidden,
             ) {
                 apply_autostart(true, app.settings.start_hidden);
@@ -285,7 +299,10 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             ui,
             palette,
             t!(app.locale, "Native notifications for stock alerts"),
-            Some(&t!(app.locale, "High-severity alerts also raise a system notification.")),
+            Some(&t!(
+                app.locale,
+                "High-severity alerts also raise a system notification."
+            )),
             &mut app.settings.notifications_enabled,
         ) {
             app.save_settings();
@@ -296,7 +313,10 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             ui,
             palette,
             t!(app.locale, "Custom window title bar"),
-            Some(&t!(app.locale, "Draws the caption bar inside the application.")),
+            Some(&t!(
+                app.locale,
+                "Draws the caption bar inside the application."
+            )),
             &mut app.settings.custom_titlebar,
         ) {
             fastframe_titlebar::set_enabled(app.settings.custom_titlebar);
@@ -342,7 +362,10 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
             ui,
             palette,
             t!(app.locale, "Language"),
-            Some(&t!(app.locale, "French is the default; the English catalog is built in.")),
+            Some(&t!(
+                app.locale,
+                "French is the default; the English catalog is built in."
+            )),
             |ui| {
                 let options = [
                     (Locale::French.native_name(), Locale::French),
@@ -361,7 +384,10 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
             ui,
             palette,
             t!(app.locale, "Theme"),
-            Some(&t!(app.locale, "System follows the operating system appearance.")),
+            Some(&t!(
+                app.locale,
+                "System follows the operating system appearance."
+            )),
             |ui| {
                 // Bind the translated labels so the borrowed strings outlive
                 // the array that references them.
@@ -525,14 +551,26 @@ fn api_key_row(
             );
             let mut meta = vec![format!("{} : {}", t!(app.locale, "Scopes"), key.scopes)];
             if let Some(created) = &key.created_at {
-                meta.push(format!("{} : {}", t!(app.locale, "Created"), short_date(created)));
+                meta.push(format!(
+                    "{} : {}",
+                    t!(app.locale, "Created"),
+                    short_date(created)
+                ));
             }
             if let Some(last) = &key.last_used_at {
-                meta.push(format!("{} : {}", t!(app.locale, "Last use"), short_date(last)));
+                meta.push(format!(
+                    "{} : {}",
+                    t!(app.locale, "Last use"),
+                    short_date(last)
+                ));
             } else {
                 meta.push(t!(app.locale, "Never used").into_owned());
             }
-            ui.label(RichText::new(meta.join("  ·  ")).color(palette.dim).size(11.0));
+            ui.label(
+                RichText::new(meta.join("  ·  "))
+                    .color(palette.dim)
+                    .size(11.0),
+            );
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             if danger_button(ui, t!(app.locale, "Revoke"), palette, true) {
@@ -949,34 +987,31 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui,
             palette,
             t!(app.locale, "Check for updates on launch"),
-            Some(&t!(app.locale, "GitHub Releases are the only update source.")),
+            Some(&t!(
+                app.locale,
+                "GitHub Releases are the only update source."
+            )),
             &mut app.settings.update_check_on_start,
         ) {
             app.save_settings();
         }
 
         ui.add_space(10.0);
-        setting_row(
-            ui,
-            palette,
-            t!(app.locale, "Channel"),
-            None,
-            |ui| {
-                let stable = t!(app.locale, "Stable");
-                let prerelease = t!(app.locale, "Pre-release");
-                let options = [
-                    (stable.as_ref(), UpdateChannel::Stable),
-                    (prerelease.as_ref(), UpdateChannel::Prerelease),
-                ];
-                if let Some(channel) =
-                    segmented(ui, palette, &options, Some(app.settings.update_channel))
-                {
-                    app.settings.update_channel = channel;
-                    app.save_settings();
-                    app.check_for_updates(false);
-                }
-            },
-        );
+        setting_row(ui, palette, t!(app.locale, "Channel"), None, |ui| {
+            let stable = t!(app.locale, "Stable");
+            let prerelease = t!(app.locale, "Pre-release");
+            let options = [
+                (stable.as_ref(), UpdateChannel::Stable),
+                (prerelease.as_ref(), UpdateChannel::Prerelease),
+            ];
+            if let Some(channel) =
+                segmented(ui, palette, &options, Some(app.settings.update_channel))
+            {
+                app.settings.update_channel = channel;
+                app.save_settings();
+                app.check_for_updates(false);
+            }
+        });
 
         ui.add_space(12.0);
         ui.horizontal(|ui| {
@@ -1010,9 +1045,12 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 0
             };
             ui.label(
-                RichText::new(format!("{} : {percent} %", t!(app.locale, "Downloading update")))
-                    .color(palette.secondary)
-                    .size(12.5),
+                RichText::new(format!(
+                    "{} : {percent} %",
+                    t!(app.locale, "Downloading update")
+                ))
+                .color(palette.secondary)
+                .size(12.5),
             );
             ui.add(egui::ProgressBar::new(f32::from(percent) / 100.0));
         }

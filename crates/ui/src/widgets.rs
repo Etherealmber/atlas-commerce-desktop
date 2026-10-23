@@ -237,7 +237,8 @@ pub fn icon_circle_button(
         egui::Color32::from_black_alpha(18)
     };
     if enabled && response.hovered() {
-        ui.painter().circle_filled(rect.center(), 15.0, palette.surface_hover);
+        ui.painter()
+            .circle_filled(rect.center(), 15.0, palette.surface_hover);
     } else {
         ui.painter().circle_filled(rect.center(), 15.0, fill);
     }
@@ -292,11 +293,9 @@ pub fn switch(ui: &mut egui::Ui, value: &mut bool, palette: &Palette) -> egui::R
     if response.clicked() {
         *value = !*value;
     }
-    let t = ui.ctx().animate_bool_with_easing(
-        response.id,
-        *value,
-        egui::emath::easing::cubic_out,
-    );
+    let t = ui
+        .ctx()
+        .animate_bool_with_easing(response.id, *value, egui::emath::easing::cubic_out);
     let track_off = palette.surface_active;
     let track = track_off.lerp_to_gamma(palette.accent, t);
     ui.painter().rect_filled(rect, HEIGHT / 2.0, track);
@@ -333,14 +332,15 @@ pub fn setting_row<R>(
         .horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.add_space(2.0);
-                ui.label(RichText::new(title.as_ref()).color(palette.text).size(13.5).strong());
+                ui.label(
+                    RichText::new(title.as_ref())
+                        .color(palette.text)
+                        .size(13.5)
+                        .strong(),
+                );
                 if let Some(description) = description {
                     ui.add_space(2.0);
-                    ui.label(
-                        RichText::new(description)
-                            .color(palette.dim)
-                            .size(11.5),
-                    );
+                    ui.label(RichText::new(description).color(palette.dim).size(11.5));
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), control)
@@ -359,7 +359,9 @@ pub fn switch_row(
     value: &mut bool,
 ) -> bool {
     let before = *value;
-    setting_row(ui, palette, title, description, |ui| switch(ui, value, palette));
+    setting_row(ui, palette, title, description, |ui| {
+        switch(ui, value, palette)
+    });
     *value != before
 }
 
@@ -423,8 +425,7 @@ pub fn fab(
         .interactable(true)
         .show(ctx, |ui| {
             let full = 56.0;
-            let (rect, response) =
-                ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
+            let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
             let hover = ctx.animate_bool(
                 egui::Id::new(("atlas-fab-hover", id_salt)),
                 response.hovered(),

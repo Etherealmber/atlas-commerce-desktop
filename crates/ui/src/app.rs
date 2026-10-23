@@ -207,7 +207,9 @@ impl AtlasApp {
         let Some(client) = self.client.clone() else {
             return;
         };
-        let job = self.runner.spawn(async move { client.list_api_keys().await });
+        let job = self
+            .runner
+            .spawn(async move { client.list_api_keys().await });
         self.api_keys.start(job);
     }
 
@@ -227,9 +229,9 @@ impl AtlasApp {
         if name.is_empty() {
             return;
         }
-        let job = self.runner.spawn(async move {
-            client.create_api_key(&name, scopes.as_str()).await
-        });
+        let job = self
+            .runner
+            .spawn(async move { client.create_api_key(&name, scopes.as_str()).await });
         self.key_create_job = Some(job);
     }
 
@@ -486,7 +488,9 @@ impl AtlasApp {
         // With no viewport (hidden to tray) headless_frame returns
         // Headless::Show from the same flag instead.
         if self.show_requested
-            && ctx.input(|input| input.viewport().visible()).unwrap_or(false)
+            && ctx
+                .input(|input| input.viewport().visible())
+                .unwrap_or(false)
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         }

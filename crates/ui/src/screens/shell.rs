@@ -41,7 +41,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .exact_size(TITLEBAR_HEIGHT)
         .resizable(false)
         .show_separator_line(false)
-        .frame(egui::Frame::NONE.fill(palette.window).inner_margin(egui::Margin::same(0)))
+        .frame(
+            egui::Frame::NONE
+                .fill(palette.window)
+                .inner_margin(egui::Margin::same(0)),
+        )
         .show(ui, |ui| {
             draw_titlebar(app, ui, ctx, palette);
         });
@@ -60,7 +64,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         });
 
     egui::CentralPanel::no_frame()
-        .frame(egui::Frame::NONE.fill(palette.window).inner_margin(egui::Margin::same(0)))
+        .frame(
+            egui::Frame::NONE
+                .fill(palette.window)
+                .inner_margin(egui::Margin::same(0)),
+        )
         .show(ui, |ui| {
             draw_content(app, ui, ctx, palette);
         });
@@ -123,13 +131,9 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
             }
 
             let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
-            let alert_count = app
-                .nav_badges
-                .data
-                .as_ref()
-                .map_or(0, |badges| {
-                    badges.products_low + badges.invoices_unpaid + badges.vr_open
-                });
+            let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
+                badges.products_low + badges.invoices_unpaid + badges.vr_open
+            });
             if alert_count > 0 {
                 paint_titlebar_badge(ui, &bell, palette, alert_count);
             }
@@ -144,8 +148,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             // The pill takes the room left by the action cluster and the
             // navigation arrows, clamped to a readable range.
-            let search_width = (ui.available_width() - 2.0 * 30.0 - 18.0)
-                .clamp(120.0, 420.0);
+            let search_width = (ui.available_width() - 2.0 * 30.0 - 18.0).clamp(120.0, 420.0);
             draw_search_pill(app, ui, palette, search_width);
 
             ui.add_space(8.0);
@@ -249,22 +252,15 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
 }
 
 /// Small accent counter at a title-bar button's top-right corner.
-fn paint_titlebar_badge(
-    ui: &mut egui::Ui,
-    button: &egui::Response,
-    palette: &Palette,
-    count: i64,
-) {
+fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Palette, count: i64) {
     let text = if count > 9 {
         "9+".to_owned()
     } else {
         count.to_string()
     };
-    let galley = ui.painter().layout_no_wrap(
-        text,
-        egui::FontId::proportional(10.5),
-        palette.on_accent,
-    );
+    let galley =
+        ui.painter()
+            .layout_no_wrap(text, egui::FontId::proportional(10.5), palette.on_accent);
     let width = (galley.size().x + 8.0).max(15.0);
     let rect = egui::Rect::from_min_size(
         egui::pos2(button.rect.right() - width + 2.0, button.rect.top() - 2.0),
@@ -381,11 +377,9 @@ fn menu_row(
     which: Icon,
     label: impl AsRef<str>,
 ) -> egui::Response {
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
     if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 8.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
     }
     widgets::overlay_at(
         ui,
@@ -403,11 +397,7 @@ fn menu_row(
         ),
         |ui| {
             ui.horizontal_centered(|ui| {
-                ui.label(
-                    RichText::new(label.as_ref())
-                        .color(palette.text)
-                        .size(13.5),
-                );
+                ui.label(RichText::new(label.as_ref()).color(palette.text).size(13.5));
             });
         },
     );

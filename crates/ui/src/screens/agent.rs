@@ -9,9 +9,7 @@ use crate::icons::Icon;
 use crate::state::{AtlasApp, ChatMessage};
 use crate::t;
 use crate::theme::Palette;
-use crate::widgets::{
-    card, empty_state, fab, icon, info_banner, page_title, pill, primary_button,
-};
+use crate::widgets::{card, empty_state, fab, icon, info_banner, page_title, pill, primary_button};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session; a failed attempt waits out the
