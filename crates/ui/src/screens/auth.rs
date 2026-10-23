@@ -95,9 +95,9 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     // Version pinned to the bottom of the splash.
     let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let galley = ui
-        .painter()
-        .layout_no_wrap(version, egui::FontId::proportional(11.5), palette.dim);
+    let galley =
+        ui.painter()
+            .layout_no_wrap(version, egui::FontId::proportional(11.5), palette.dim);
     ui.painter().galley(
         egui::pos2(screen.x / 2.0 - galley.size().x / 2.0, screen.y - 34.0),
         galley,

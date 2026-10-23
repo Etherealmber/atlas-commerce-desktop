@@ -281,9 +281,7 @@ impl AtlasApp {
                 url::Url::parse(&format!("{}/api/reports/client-situation", api.base_url()))
                     .map_err(|error| {
                         log::warn!("invalid report link: {error}");
-                        atlas_api::ApiError::client(
-                            t!(locale, "Invalid report link.").into_owned(),
-                        )
+                        atlas_api::ApiError::client(t!(locale, "Invalid report link.").into_owned())
                     })?;
             url.query_pairs_mut()
                 .append_pair("rt", &ticket.rt)
