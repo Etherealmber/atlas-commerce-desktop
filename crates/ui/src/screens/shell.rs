@@ -604,13 +604,19 @@ fn draw_user_card(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
     // Android-style entrance: each navigation replays a quick cubic-out
     // fade while the content rises ~18 px into place. The id carries the
-    // animation token, so a fresh navigation starts from zero.
-    let entrance = ctx.animate_bool_with_time_and_easing(
-        egui::Id::new(("shell-route-enter", app.anim_token)),
-        true,
-        0.24,
-        egui::emath::easing::cubic_out,
-    );
+    // animation token, so a fresh navigation starts from zero. The very
+    // first shell entry (token 0) stays static: a fade from opacity zero
+    // on a cold window reads as launch flicker, not as navigation.
+    let entrance = if app.anim_token == 0 {
+        1.0
+    } else {
+        ctx.animate_bool_with_time_and_easing(
+            egui::Id::new(("shell-route-enter", app.anim_token)),
+            true,
+            0.24,
+            egui::emath::easing::cubic_out,
+        )
+    };
     egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
