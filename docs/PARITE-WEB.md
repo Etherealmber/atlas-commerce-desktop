@@ -9,7 +9,7 @@ que ces endpoints — aucun contrat n'est deviné.
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
   normalisés en `:id`).
-- Le desktop en couvre **38**, soit environ 12 %. Tous les endpoints appelés
+- Le desktop en couvre **43**, soit environ 13 %. Tous les endpoints appelés
   par le client existent à l'identique dans le worker : aucun appel hors
   contrat.
 - Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
@@ -24,7 +24,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | Domaine | Couverts | Total |
 |---|--:|--:|
 | `admin` | 0 | 39 |
-| `auth` | 9 | 29 |
+| `auth` | 10 | 29 |
 | `invoices` | 1 | 24 |
 | `inventory` | 0 | 17 |
 | `reports` | 0 | 17 |
@@ -33,7 +33,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `employees` | 0 | 14 |
 | `public` | 0 | 13 |
 | `clients` | 3 | 12 |
-| `settings` | 0 | 11 |
+| `settings` | 1 | 11 |
 | `attendance` | 0 | 9 |
 | `receipts` | 0 | 9 |
 | `catalog` | 0 | 8 |
@@ -41,7 +41,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `stock` | 0 | 7 |
 | `v1` (API partenaire externe) | 0 | 7 |
 | `export` | 0 | 6 |
-| `integrations` | 0 | 6 |
+| `integrations` | 3 | 6 |
 | `mobile-actions` | 0 | 6 |
 | `vendors` | 3 | 6 |
 | `expenses` | 2 | 5 |
@@ -134,7 +134,12 @@ entrée de navigation, et ne modifie jamais le contrat du worker.
 5. **Finance et pilotage** — les 17 `reports`, `balance`, `bank`
    (rapprochement CSV), `ledger`, `fiscal` (clôture de période), `export/*`.
 6. **Administration et réglages** — `admin` (utilisateurs, audit,
-   sauvegardes, configuration, clés d'intégration, webhooks), `settings`
-   serveur, `integrity`, `import` de données, `mobile-actions`.
+   sauvegardes, configuration, webhooks), `settings` serveur, `integrity`,
+   `import` de données, `mobile-actions`. *Les clés d'intégration
+   (`GET/POST/DELETE /api/integrations/keys`) et l'état du fournisseur
+   d'assistance (`GET /api/settings/assist-provider`) sont livrés ; restent
+   les webhooks et la sauvegarde/restauration.*
 7. **Compléments d'authentification** — webauthn, appareils de confiance,
-   avatars, et les écrans natifs remplaçant About/WhatsNew.
+   et les écrans natifs remplaçant About/WhatsNew. *L'édition du profil
+   (`PATCH /api/auth/me`, nom affiché, e-mail, téléphone, note, URL d'avatar)
+   est livrée ; le mot de passe reste verrouillé côté serveur.*

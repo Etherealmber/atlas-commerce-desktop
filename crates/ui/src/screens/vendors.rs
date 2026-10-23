@@ -12,8 +12,8 @@ use crate::icons::Icon;
 use crate::state::AtlasApp;
 use crate::theme::Palette;
 use crate::widgets::{
-    card, empty_state, error_banner, icon, info_banner, labelled_field, page_title,
-    primary_button, secondary_button,
+    card, empty_state, error_banner, icon, info_banner, labelled_field, page_title, primary_button,
+    secondary_button,
 };
 use crate::{t, widgets};
 
@@ -159,17 +159,14 @@ fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .map(|data| data.currency())
         .unwrap_or("MAD");
     let selected = app.selected_vendor;
-    for vendor in vendors
-        .iter()
-        .filter(|vendor| {
-            let q = query.as_str();
-            query.is_empty()
-                || vendor.name.to_lowercase().contains(q)
-                || vendor.city.to_lowercase().contains(q)
-                || vendor.phone.contains(q)
-                || vendor.ice.to_lowercase().contains(q)
-        })
-    {
+    for vendor in vendors.iter().filter(|vendor| {
+        let q = query.as_str();
+        query.is_empty()
+            || vendor.name.to_lowercase().contains(q)
+            || vendor.city.to_lowercase().contains(q)
+            || vendor.phone.contains(q)
+            || vendor.ice.to_lowercase().contains(q)
+    }) {
         let is_active = selected == Some(vendor.id);
         let height = 58.0;
         let (rect, response) =
@@ -184,10 +181,7 @@ fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         }
         widgets::overlay_at(
             ui,
-            egui::Rect::from_min_size(
-                rect.min + vec2(8.0, 0.0),
-                rect.size() - vec2(16.0, 0.0),
-            ),
+            egui::Rect::from_min_size(rect.min + vec2(8.0, 0.0), rect.size() - vec2(16.0, 0.0)),
             |ui| {
                 ui.horizontal_centered(|ui| {
                     icon(ui, Icon::Store, palette.secondary, 18.0);
@@ -213,22 +207,19 @@ fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .size(11.5),
                         );
                     });
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let tint = if vendor.balance_due > 0.001 {
-                                palette.text
-                            } else {
-                                palette.dim
-                            };
-                            ui.label(
-                                RichText::new(money(vendor.balance_due, currency))
-                                    .color(tint)
-                                    .strong()
-                                    .size(12.5),
-                            );
-                        },
-                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let tint = if vendor.balance_due > 0.001 {
+                            palette.text
+                        } else {
+                            palette.dim
+                        };
+                        ui.label(
+                            RichText::new(money(vendor.balance_due, currency))
+                                .color(tint)
+                                .strong()
+                                .size(12.5),
+                        );
+                    });
                 });
             },
         );
@@ -246,7 +237,10 @@ fn vendor_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui,
             Icon::Store,
             t!(app.locale, "No vendor selected"),
-            t!(app.locale, "Choose a vendor on the left to see its details."),
+            t!(
+                app.locale,
+                "Choose a vendor on the left to see its details."
+            ),
             palette,
         );
         return;
@@ -288,10 +282,20 @@ fn vendor_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     detail_row(ui, palette, "ICE", blank(&vendor.ice));
-    detail_row(ui, palette, t!(app.locale, "Tax ID (IF)"), blank(&vendor.if_number));
+    detail_row(
+        ui,
+        palette,
+        t!(app.locale, "Tax ID (IF)"),
+        blank(&vendor.if_number),
+    );
     detail_row(ui, palette, t!(app.locale, "Phone"), blank(&vendor.phone));
     detail_row(ui, palette, t!(app.locale, "Email"), blank(&vendor.email));
-    detail_row(ui, palette, t!(app.locale, "Address"), blank(&vendor.address));
+    detail_row(
+        ui,
+        palette,
+        t!(app.locale, "Address"),
+        blank(&vendor.address),
+    );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&vendor.city));
 }
 
@@ -317,11 +321,7 @@ fn detail_row(
                 .size(12.5),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                RichText::new(value.as_ref())
-                    .color(palette.text)
-                    .size(13.0),
-            );
+            ui.label(RichText::new(value.as_ref()).color(palette.text).size(13.0));
         });
     });
     ui.add_space(6.0);
@@ -346,12 +346,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New vendor")
             };
-            ui.label(
-                RichText::new(title)
-                    .color(palette.text)
-                    .strong()
-                    .size(17.0),
-            );
+            ui.label(RichText::new(title).color(palette.text).strong().size(17.0));
             ui.add_space(10.0);
 
             if let Some(editor) = app.vendor_editor.as_mut() {
@@ -371,7 +366,13 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.add_space(8.0);
                 labelled_field(ui, t!(locale, "Email"), &mut editor.email, palette, false);
                 ui.add_space(8.0);
-                labelled_field(ui, t!(locale, "Address"), &mut editor.address, palette, false);
+                labelled_field(
+                    ui,
+                    t!(locale, "Address"),
+                    &mut editor.address,
+                    palette,
+                    false,
+                );
                 ui.add_space(8.0);
                 labelled_field(ui, t!(locale, "City"), &mut editor.city, palette, false);
             }

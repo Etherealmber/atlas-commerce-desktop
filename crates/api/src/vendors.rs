@@ -19,11 +19,7 @@ impl ApiClient {
     }
 
     /// `PUT /api/vendors/:id` — the worker answers with `{ id }` only.
-    pub async fn update_vendor(
-        &self,
-        id: i64,
-        body: &VendorWrite,
-    ) -> Result<VendorId, ApiError> {
+    pub async fn update_vendor(&self, id: i64, body: &VendorWrite) -> Result<VendorId, ApiError> {
         self.put_data(&format!("/api/vendors/{id}"), body).await
     }
 }

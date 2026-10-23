@@ -505,7 +505,16 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .corner_radius(8.0),
                         )
                         .on_hover_text(label.as_ref());
-                    icon(ui, icon_kind, if selected { palette.accent } else { palette.secondary }, 15.0);
+                    icon(
+                        ui,
+                        icon_kind,
+                        if selected {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        15.0,
+                    );
                     if response.clicked() {
                         if candidate == LoginTab::Qr && !app.qr.active {
                             start_qr_session(app);

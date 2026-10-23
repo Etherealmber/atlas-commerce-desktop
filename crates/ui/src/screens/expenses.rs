@@ -78,12 +78,7 @@ impl ExpenseEditor {
                 self.category.trim().to_owned()
             },
             description: self.description.trim().to_owned(),
-            amount: self
-                .amount
-                .trim()
-                .replace(',', ".")
-                .parse()
-                .unwrap_or(0.0),
+            amount: self.amount.trim().replace(',', ".").parse().unwrap_or(0.0),
             payment_method: self.payment_method.clone(),
             expense_date: self.expense_date.trim().to_owned(),
             vendor_name: self.vendor_name.trim().to_owned(),
@@ -205,15 +200,16 @@ fn expense_row(
     }
     widgets::overlay_at(
         ui,
-        egui::Rect::from_min_size(
-            rect.min + vec2(8.0, 0.0),
-            rect.size() - vec2(16.0, 0.0),
-        ),
+        egui::Rect::from_min_size(rect.min + vec2(8.0, 0.0), rect.size() - vec2(16.0, 0.0)),
         |ui| {
             ui.horizontal_centered(|ui| {
                 icon(
                     ui,
-                    if is_income { Icon::TrendingUp } else { Icon::Wallet },
+                    if is_income {
+                        Icon::TrendingUp
+                    } else {
+                        Icon::Wallet
+                    },
                     palette.secondary,
                     18.0,
                 );
@@ -276,8 +272,20 @@ fn draw_totals(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let net = earned - spent;
     let width = ((ui.available_width() - 24.0) / 3.0).max(160.0);
     ui.horizontal(|ui| {
-        stat_card(ui, palette, width, &t!(app.locale, "Expenses"), &money(spent, currency));
-        stat_card(ui, palette, width, &t!(app.locale, "Income"), &money(earned, currency));
+        stat_card(
+            ui,
+            palette,
+            width,
+            &t!(app.locale, "Expenses"),
+            &money(spent, currency),
+        );
+        stat_card(
+            ui,
+            palette,
+            width,
+            &t!(app.locale, "Income"),
+            &money(earned, currency),
+        );
         stat_card(
             ui,
             palette,
@@ -293,12 +301,7 @@ fn stat_card(ui: &mut egui::Ui, palette: &Palette, width: f32, label: &str, valu
         ui.set_width(width);
         ui.label(RichText::new(label).color(palette.secondary).size(12.0));
         ui.add_space(4.0);
-        ui.label(
-            RichText::new(value)
-                .color(palette.text)
-                .strong()
-                .size(17.0),
-        );
+        ui.label(RichText::new(value).color(palette.text).strong().size(17.0));
     });
 }
 

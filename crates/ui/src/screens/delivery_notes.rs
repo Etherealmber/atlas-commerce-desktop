@@ -122,10 +122,7 @@ fn note_row(
     }
     widgets::overlay_at(
         ui,
-        egui::Rect::from_min_size(
-            rect.min + vec2(8.0, 0.0),
-            rect.size() - vec2(16.0, 0.0),
-        ),
+        egui::Rect::from_min_size(rect.min + vec2(8.0, 0.0), rect.size() - vec2(16.0, 0.0)),
         |ui| {
             ui.horizontal_centered(|ui| {
                 icon(ui, Icon::Truck, palette.secondary, 18.0);

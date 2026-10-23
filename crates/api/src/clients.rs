@@ -18,11 +18,7 @@ impl ApiClient {
     }
 
     /// `PUT /api/clients/:id` — the worker applies only present fields.
-    pub async fn update_client(
-        &self,
-        id: i64,
-        body: &ClientWrite,
-    ) -> Result<Client, ApiError> {
+    pub async fn update_client(&self, id: i64, body: &ClientWrite) -> Result<Client, ApiError> {
         self.put_data(&format!("/api/clients/{id}"), body).await
     }
 }

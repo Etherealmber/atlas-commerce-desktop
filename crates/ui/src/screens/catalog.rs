@@ -151,7 +151,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         for (tab, label, which) in [
-            (CatalogTab::Categories, t!(app.locale, "Categories"), Icon::Boxes),
+            (
+                CatalogTab::Categories,
+                t!(app.locale, "Categories"),
+                Icon::Boxes,
+            ),
             (CatalogTab::Units, t!(app.locale, "Units"), Icon::SquarePen),
         ] {
             let active = app.catalog_tab == tab;
@@ -164,22 +168,32 @@ fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .stroke(egui::Stroke::new(1.0, palette.outline))
                 .corner_radius(10.0)
                 .inner_margin(egui::Margin::symmetric(14, 8));
-            let response = frame.show(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    icon(
-                        ui,
-                        which,
-                        if active { palette.accent } else { palette.secondary },
-                        15.0,
-                    );
-                    ui.label(
-                        RichText::new(label)
-                            .color(if active { palette.text } else { palette.secondary })
-                            .strong()
-                            .size(13.0),
-                    );
-                });
-            }).response;
+            let response = frame
+                .show(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        icon(
+                            ui,
+                            which,
+                            if active {
+                                palette.accent
+                            } else {
+                                palette.secondary
+                            },
+                            15.0,
+                        );
+                        ui.label(
+                            RichText::new(label)
+                                .color(if active {
+                                    palette.text
+                                } else {
+                                    palette.secondary
+                                })
+                                .strong()
+                                .size(13.0),
+                        );
+                    });
+                })
+                .response;
             if response.clicked() {
                 app.catalog_tab = tab;
             }
@@ -221,8 +235,8 @@ fn categories_tab(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         let virtual_label = t!(app.locale, "from products").to_string();
         for category in &categories {
-            let subtitle = (!category.description.is_empty())
-                .then_some(category.description.as_str());
+            let subtitle =
+                (!category.description.is_empty()).then_some(category.description.as_str());
             let response = list_row(
                 ui,
                 palette,
@@ -309,12 +323,7 @@ fn list_row(
         egui::Rect::from_min_size(rect.min + vec2(10.0, 0.0), rect.size() - vec2(20.0, 0.0)),
         |ui| {
             ui.horizontal_centered(|ui| {
-                ui.label(
-                    RichText::new(title)
-                        .color(palette.text)
-                        .strong()
-                        .size(13.5),
-                );
+                ui.label(RichText::new(title).color(palette.text).strong().size(13.5));
                 if virtual_row {
                     widgets::pill(ui, virtual_label, palette.outline, palette.secondary);
                 }
@@ -436,10 +445,7 @@ fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
             ui.add_space(12.0);
             widgets::dialog_actions(ui, |ui| {
-                let saving = app
-                    .unit_editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.saving);
+                let saving = app.unit_editor.as_ref().is_some_and(|editor| editor.saving);
                 if secondary_button(ui, t!(locale, "Cancel"), palette) {
                     app.unit_editor = None;
                 }

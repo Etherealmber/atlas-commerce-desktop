@@ -26,6 +26,11 @@ jobs:
     name: quality (fmt, clippy, docs)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Read-only by default; checks:write is only used by the diagnostics
+    # check-run step below. No branch writes are ever performed.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
       # rust-toolchain.toml pins the exact toolchain; the action honours it.
@@ -76,16 +81,86 @@ jobs:
             echo
             echo "Toolchain : \`$(rustc --version)\` — \`$(cargo --version)\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      # One-line API-readable mirror of the job summary: annotations survive
-      # where artifact downloads and job logs are not reachable.
+      # API-readable mirror of the job summary: one annotation per tool with
+      # the actual diagnostic lines embedded. Annotations survive where
+      # artifact downloads and job logs are not reachable.
       - name: Announce result
         if: always()
         run: |
-          if grep -hqE '^(error|warning)(\[[[:alnum:]]+\])?:' "$LOG_DIR"/*.log; then
+          # CARGO_TERM_COLOR=always prefixes diagnostics with ANSI escapes,
+          # so strip them before the anchored grep (like the test job does),
+          # otherwise clippy/rustc errors slip through with a green job.
+          strip() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
+          # Emit one annotation per ~1400-byte chunk so the full diagnostic
+          # (not just the first lines) is readable through the checks API.
+          emit_chunks() {
+            local name="$1" file="$2" pattern="$3"
+            [ -f "$file" ] || return 0
+            local hits
+            if [ -z "$pattern" ]; then
+              hits=$(strip "$file")
+            else
+              hits=$(strip "$file" | grep -E "$pattern" -A 6 | head -300)
+            fi
+            [ -n "$hits" ] || return 0
+            local chunk=0
+            while [ -n "$hits" ]; do
+              local part msg
+              part=$(printf '%s' "$hits" | head -c 1400)
+              msg=$(printf '%s' "$part" | sed 's/%/%25/g' | tr '\n' '|' | sed 's/|/%0A/g')
+              echo "::error title=quality/${name}-${chunk}::${msg}"
+              hits=$(printf '%s' "$hits" | tail -c +1401)
+              chunk=$((chunk + 1))
+            done
+            return 1
+          }
+          failed=0
+          # fmt.log only contains rustfmt diffs: ship the whole file.
+          emit_chunks fmt "$LOG_DIR/fmt.log" "" || failed=1
+          emit_chunks clippy-defaut "$LOG_DIR/clippy-default.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
+          emit_chunks clippy-toutes-features "$LOG_DIR/clippy-all-features.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
+          emit_chunks rustdoc "$LOG_DIR/doc.log" '^(error|warning)(\[[[:alnum:]]+\])?:' || failed=1
+          if [ "$failed" -eq 1 ]; then
             echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
             exit 1
           fi
           echo "::notice title=quality::rustfmt, clippy (défaut + toutes features) et rustdoc : OK, aucune alerte."
+      # Full diagnostics as a neutral check-run: workflow commands are capped
+      # at 10 annotations per step, while the checks API accepts a large
+      # output.text payload readable through `gh api` (artifacts may live on
+      # network-restricted storage). Neutral conclusion: gating stays owned
+      # by the "Announce result" step above.
+      - name: Publish diagnostics check-run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          strip() { sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null || true; }
+          {
+            for pair in "fmt $LOG_DIR/fmt.log" "clippy-defaut $LOG_DIR/clippy-default.log" "clippy-toutes-features $LOG_DIR/clippy-all-features.log" "rustdoc $LOG_DIR/doc.log"; do
+              set -- $pair
+              echo "## $1"
+              echo '```text'
+              strip "$2"
+              echo '```'
+            done
+          } | head -c 60000 > /tmp/quality-diagnostics.md
+          # Never let diagnostics publishing flip an otherwise green job:
+          # the "Announce result" step owns the gate.
+          # On pull_request events github.sha is the synthetic refs/pull/N/
+          # merge commit; check-runs attached to it are invisible, so target
+          # the real PR head sha (fallback to github.sha for push/dispatch).
+          head_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if ! err=$(gh api -X POST "repos/${{ github.repository }}/check-runs" \
+            -f name="quality diagnostics" \
+            -f head_sha="$head_sha" \
+            -f status="completed" \
+            -f conclusion="neutral" \
+            -F "output[title]=Diagnostics fmt/clippy/rustdoc" \
+            -F "output[summary]=Journaux bruts fmt/clippy/rustdoc (60 Ko max)." \
+            -F "output[text]=@/tmp/quality-diagnostics.md" 2>&1 > /dev/null); then
+            echo "::warning title=quality::publish failed: $(printf '%s' "$err" | tr '\n' ' ' | head -c 800)"
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -172,12 +172,7 @@ pub fn draw_icon(size: usize) -> Vec<u8> {
 
 /// Shortest distance from point (`px`, `py`) to the segment joining `start`
 /// and `end`.
-fn distance_to_segment(
-    px: f32,
-    py: f32,
-    start: (f32, f32),
-    end: (f32, f32),
-) -> f32 {
+fn distance_to_segment(px: f32, py: f32, start: (f32, f32), end: (f32, f32)) -> f32 {
     let vx = end.0 - start.0;
     let vy = end.1 - start.1;
     let length_sq = vx * vx + vy * vy;

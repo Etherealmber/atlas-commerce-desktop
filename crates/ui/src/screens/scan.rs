@@ -79,11 +79,7 @@ impl QuickProductDraft {
 }
 
 fn parse_amount(value: &str) -> f64 {
-    value
-        .trim()
-        .replace(',', ".")
-        .parse::<f64>()
-        .unwrap_or(0.0)
+    value.trim().replace(',', ".").parse::<f64>().unwrap_or(0.0)
 }
 
 /// Draws the scan bar and, when present, the match card and dialog.
@@ -103,9 +99,7 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .margin(egui::Margin::symmetric(10, 8))
                     .desired_width((ui.available_width() - 220.0).max(160.0)),
             );
-            if code_response.lost_focus()
-                && ui.input(|input| input.key_pressed(egui::Key::Enter))
-            {
+            if code_response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 start_lookup(app);
             }
             let busy = app.scan.lookup_job.is_some();
@@ -173,12 +167,7 @@ fn draw_result(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .clone()
                     .filter(|name| !name.is_empty())
                     .unwrap_or_else(|| product.name.clone());
-                ui.label(
-                    RichText::new(title)
-                        .color(palette.text)
-                        .strong()
-                        .size(14.5),
-                );
+                ui.label(RichText::new(title).color(palette.text).strong().size(14.5));
                 let subline = [
                     product.sku.clone().unwrap_or_default(),
                     product.barcode.clone().unwrap_or_default(),
@@ -235,13 +224,25 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.add_space(10.0);
 
             if let Some(draft) = app.scan.quick.as_mut() {
-                labelled_field(ui, t!(locale, "Barcode"), &mut draft.barcode, palette, false);
+                labelled_field(
+                    ui,
+                    t!(locale, "Barcode"),
+                    &mut draft.barcode,
+                    palette,
+                    false,
+                );
                 ui.add_space(8.0);
                 labelled_field(ui, t!(locale, "Name"), &mut draft.name, palette, false);
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        labelled_field(ui, t!(locale, "Sale price"), &mut draft.price, palette, false);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Sale price"),
+                            &mut draft.price,
+                            palette,
+                            false,
+                        );
                     });
                     ui.vertical(|ui| {
                         labelled_field(ui, t!(locale, "Cost"), &mut draft.cost, palette, false);
@@ -250,10 +251,22 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        labelled_field(ui, t!(locale, "Initial stock"), &mut draft.stock, palette, false);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Initial stock"),
+                            &mut draft.stock,
+                            palette,
+                            false,
+                        );
                     });
                     ui.vertical(|ui| {
-                        labelled_field(ui, t!(locale, "Category"), &mut draft.category, palette, false);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Category"),
+                            &mut draft.category,
+                            palette,
+                            false,
+                        );
                     });
                 });
                 ui.add_space(8.0);
@@ -308,10 +321,7 @@ fn submit_quick(app: &mut AtlasApp) {
         return;
     };
     if draft.barcode.trim().is_empty() {
-        app.scan.error = Some(
-            t!(app.locale, "The barcode is required.")
-                .into_owned(),
-        );
+        app.scan.error = Some(t!(app.locale, "The barcode is required.").into_owned());
         return;
     }
     let force = app.scan.duplicate;

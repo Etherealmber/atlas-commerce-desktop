@@ -9,7 +9,7 @@ use crate::icons::Icon;
 use crate::state::{AtlasApp, ChatMessage};
 use crate::t;
 use crate::theme::Palette;
-use crate::widgets::{card, empty_state, icon, info_banner, page_title, pill, primary_button};
+use crate::widgets::{card, empty_state, fab, icon, info_banner, page_title, pill, primary_button};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session; a failed attempt waits out the
@@ -109,6 +109,26 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             send_message(app);
         }
     });
+
+    // Android-style floating action button: start a fresh conversation.
+    // It floats over the bottom-right corner regardless of scroll position.
+    let new_chat = fab(
+        ui.ctx(),
+        palette,
+        Icon::Plus,
+        "agent-new-conversation",
+        &t!(app.locale, "New conversation"),
+    );
+    if new_chat.clicked() && !app.agent.busy {
+        app.agent.messages.clear();
+        app.agent.thread_id = format!(
+            "desktop-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        );
+    }
 }
 
 fn chat_bubble(ui: &mut egui::Ui, palette: &Palette, message: &ChatMessage) {

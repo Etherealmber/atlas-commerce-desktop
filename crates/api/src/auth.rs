@@ -59,6 +59,12 @@ impl ApiClient {
         self.get_data("/api/auth/me").await
     }
 
+    /// `PATCH /api/auth/me` — editable profile fields only. The worker
+    /// rejects role, username and password changes on this endpoint.
+    pub async fn update_me(&self, patch: &MeUpdate) -> Result<Me, ApiError> {
+        self.patch_data("/api/auth/me", patch).await
+    }
+
     /// `GET /api/auth/devices`.
     pub async fn devices(&self) -> Result<Vec<TrustedDevice>, ApiError> {
         self.get_data("/api/auth/devices").await

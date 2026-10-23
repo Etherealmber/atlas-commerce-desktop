@@ -842,6 +842,81 @@ pub struct QuickProductWrite {
     pub low_stock_threshold: f64,
 }
 
+// ── Profile (PATCH /api/auth/me) ───────────────────────────────────────────
+
+/// Self profile edit. The worker rejects role, username and password changes
+/// on this endpoint (`ROLE_LOCKED` / `USERNAME_LOCKED` / `PASSWORD_LOCKED`),
+/// so none of those fields are ever sent here.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct MeUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "avatar_url")]
+    pub avatar_url: Option<String>,
+}
+
+// ── Public API keys (owner/admin integrations) ─────────────────────────────
+
+/// One row of `GET /api/integrations/keys`. The raw secret is never returned
+/// again after creation; only the 12-character prefix survives.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ApiKey {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, rename = "key_prefix")]
+    pub key_prefix: String,
+    #[serde(default)]
+    pub scopes: String,
+    /// D1 returns the SQLite integer (0/1), not a JSON boolean.
+    #[serde(default, rename = "is_active")]
+    pub is_active: i64,
+    #[serde(default, rename = "last_used_at")]
+    pub last_used_at: Option<String>,
+    #[serde(default, rename = "created_at")]
+    pub created_at: Option<String>,
+}
+
+/// The 201 response of `POST /api/integrations/keys`, carrying the full
+/// secret exactly once.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CreatedApiKey {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, rename = "key_prefix")]
+    pub key_prefix: String,
+    #[serde(default)]
+    pub scopes: Option<String>,
+    // The raw secret is returned exactly once by the worker; no default: a
+    // missing secret must fail loudly instead of showing an empty modal.
+    pub key: String,
+    #[serde(default, rename = "created_at")]
+    pub created_at: Option<String>,
+}
+
+/// `GET /api/settings/assist-provider` — the AI provider is configured with
+/// a server-side Worker secret; the client can only display its state.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AssistProvider {
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default, rename = "groqConfigured")]
+    pub groq_configured: bool,
+    #[serde(default, rename = "mistralConfigured")]
+    pub mistral_configured: bool,
+    #[serde(default, rename = "geminiConfigured")]
+    pub gemini_configured: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -928,10 +1003,8 @@ mod tests {
 
     #[test]
     fn catalog_rows_accept_virtual_labels_and_writes_omit_empty_fields() {
-        let category: Category = serde_json::from_str(
-            r#"{"id":null,"name":"Boissons","from_products":true}"#,
-        )
-        .unwrap();
+        let category: Category =
+            serde_json::from_str(r#"{"id":null,"name":"Boissons","from_products":true}"#).unwrap();
         assert_eq!(category.id, None);
         assert!(category.from_products);
         let unit: Unit = serde_json::from_str(r#"{"id":4,"name":"Kg","symbol":"kg"}"#).unwrap();
@@ -951,6 +1024,45 @@ mod tests {
             sort_order: 0,
         };
         assert_eq!(serde_json::to_value(&unit_write).unwrap()["symbol"], "L");
+    }
+
+    #[test]
+    fn integration_models_match_worker_shapes() {
+        // D1 hands is_active back as an integer, mirroring the SELECT in
+        // GET /api/integrations/keys.
+        let key: ApiKey = serde_json::from_str(
+            r#"{"id":7,"name":"Caisse","key_prefix":"atlas_abc123","scopes":"read","is_active":1,"last_used_at":null,"created_at":"2026-10-23 10:00:00"}"#,
+        )
+        .unwrap();
+        assert_eq!(key.id, 7);
+        assert_eq!(key.is_active, 1);
+        assert!(key.last_used_at.is_none());
+
+        let created: CreatedApiKey = serde_json::from_str(
+            r#"{"id":8,"name":"Atelier","key_prefix":"atlas_zzz","scopes":"read,write","key":"atlas_secret","created_at":null}"#,
+        )
+        .unwrap();
+        assert_eq!(created.key, "atlas_secret");
+
+        // The assist provider answers with camelCase booleans.
+        let assist: AssistProvider =
+            serde_json::from_str(r#"{"provider":"groq","groqConfigured":true,"mistralConfigured":false,"geminiConfigured":false}"#)
+                .unwrap();
+        assert!(assist.groq_configured);
+        assert!(!assist.gemini_configured);
+
+        // Absent optional fields must not break a partial PATCH response.
+        let me: Me = serde_json::from_str(r#"{"username":"lox","role":"owner"}"#).unwrap();
+        assert_eq!(me.username.as_deref(), Some("lox"));
+        assert!(me.email.is_none());
+
+        let update = MeUpdate {
+            display_name: Some("Lox".to_owned()),
+            ..MeUpdate::default()
+        };
+        let json = serde_json::to_value(&update).unwrap();
+        assert_eq!(json["display_name"], "Lox");
+        assert!(json.get("email").is_none());
     }
 
     #[test]

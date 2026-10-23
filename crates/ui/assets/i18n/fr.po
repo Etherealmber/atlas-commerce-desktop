@@ -16,6 +16,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+msgid "A name and an explicit scope are required before generating."
+msgstr "Un nom et un périmètre explicite sont requis avant la génération."
+
 msgid "A required update is available"
 msgstr "Une mise à jour obligatoire est disponible"
 
@@ -27,6 +30,12 @@ msgstr "Un code de vérification a été envoyé par e-mail."
 
 msgid "AI Agent"
 msgstr "Agent IA"
+
+msgid "API key revoked."
+msgstr "Clé API révoquée."
+
+msgid "API keys"
+msgstr "Clés API"
 
 msgid "About"
 msgstr "À propos"
@@ -49,23 +58,38 @@ msgstr "Ajouter ou configurer un serveur"
 msgid "Add this server"
 msgstr "Ajouter ce serveur"
 
+msgid "Address"
+msgstr "Adresse"
+
 msgid "Adjust stock"
 msgstr "Ajuster le stock"
 
 msgid "Adjustment"
 msgstr "Ajustement"
 
+msgid "Administrator"
+msgstr "Administrateur"
+
 msgid "Allow Atlas Commerce in the system's Login Items settings."
 msgstr "Autorisez Atlas Commerce dans les réglages des éléments de connexion du système."
 
+msgid "Amount"
+msgstr "Montant"
+
 msgid "Appearance"
 msgstr "Apparence"
+
+msgid "Application"
+msgstr "Application"
 
 msgid "Apply"
 msgstr "Appliquer"
 
 msgid "Ask anything about your shop"
 msgstr "Posez toutes vos questions sur votre boutique"
+
+msgid "Assistant provider"
+msgstr "Fournisseur de l'assistant"
 
 msgid "Atlas Cloud or your own hosted Atlas Commerce worker."
 msgstr "Atlas Cloud ou votre propre serveur Atlas Commerce hébergé."
@@ -79,8 +103,29 @@ msgstr "Code-barres"
 msgid "Cancel"
 msgstr "Annuler"
 
+msgid "Cancelled"
+msgstr "Annulé"
+
+msgid "Card"
+msgstr "Carte"
+
+msgid "Cash"
+msgstr "Espèces"
+
+msgid "Catalog"
+msgstr "Catalogue"
+
+msgid "Categories"
+msgstr "Catégories"
+
 msgid "Category"
 msgstr "Catégorie"
+
+msgid "Category created."
+msgstr "Catégorie créée."
+
+msgid "Category updated."
+msgstr "Catégorie mise à jour."
 
 msgid "Change server"
 msgstr "Changer de serveur"
@@ -97,32 +142,116 @@ msgstr "Rechercher les mises à jour maintenant"
 msgid "Check for updates on launch"
 msgstr "Rechercher les mises à jour au démarrage"
 
+msgid "Checking for updates…"
+msgstr "Vérification des mises à jour…"
+
 msgid "Checking…"
 msgstr "Vérification…"
+
+msgid "Choose a client on the left to see its details."
+msgstr "Choisissez un client à gauche pour voir ses détails."
+
+msgid "Choose a scope explicitly; none is applied by default."
+msgstr "Choisissez explicitement un périmètre ; aucun n'est appliqué par défaut."
 
 msgid "Choose a server first."
 msgstr "Choisissez d'abord un serveur."
 
+msgid "Choose a vendor on the left to see its details."
+msgstr "Choisissez un fournisseur à gauche pour voir ses détails."
+
 msgid "Choose your server"
 msgstr "Choisissez votre serveur"
+
+msgid "City"
+msgstr "Ville"
+
+msgid "Client created."
+msgstr "Client créé."
 
 msgid "Client name"
 msgstr "Nom du client"
 
+msgid "Client updated."
+msgstr "Client mis à jour."
+
+msgid "Clients"
+msgstr "Clients"
+
 msgid "Close"
 msgstr "Fermer"
+
+msgid "Closing the window hides the app instead of quitting it."
+msgstr "Fermer la fenêtre masque l'application au lieu de la quitter."
 
 msgid "Code expired."
 msgstr "Code expiré."
 
+msgid "Company check"
+msgstr "Chèque société"
+
+msgid "Company transfer"
+msgstr "Virement société"
+
+msgid "Configured"
+msgstr "Configuré"
+
+msgid "Confirmed"
+msgstr "Confirmé"
+
 msgid "Copy"
 msgstr "Copier"
+
+msgid "Copy and close"
+msgstr "Copier et fermer"
+
+msgid "Copy this key now"
+msgstr "Copiez cette clé maintenant"
+
+msgid "Cost"
+msgstr "Coût"
+
+msgid "Create an API key"
+msgstr "Créer une clé API"
+
+msgid "Create anyway"
+msgstr "Créer quand même"
+
+msgid "Create from barcode"
+msgstr "Créer depuis un code-barres"
+
+msgid "Create one below to connect an external tool."
+msgstr "Créez-en une ci-dessous pour connecter un outil externe."
 
 msgid "Create products before recording a sale."
 msgstr "Créez des produits avant d'enregistrer une vente."
 
 msgid "Create your first product to get started."
 msgstr "Créez votre premier produit pour commencer."
+
+msgid "Created"
+msgstr "Créée le"
+
+msgid "Created categories appear here."
+msgstr "Les catégories créées apparaissent ici."
+
+msgid "Created clients appear here."
+msgstr "Les clients créés apparaissent ici."
+
+msgid "Created delivery notes appear here."
+msgstr "Les bons de livraison créés apparaissent ici."
+
+msgid "Created units appear here."
+msgstr "Les unités créées apparaissent ici."
+
+msgid "Created vendors appear here."
+msgstr "Les fournisseurs créés apparaissent ici."
+
+msgid "Credit limit"
+msgstr "Limite de crédit"
+
+msgid "Credit limit (MAD)"
+msgstr "Limite de crédit (MAD)"
 
 msgid "Current balance"
 msgstr "Solde actuel"
@@ -133,8 +262,23 @@ msgstr "Barre de titre personnalisée"
 msgid "Daily quota"
 msgstr "Quota quotidien"
 
+msgid "Dark"
+msgstr "Sombre"
+
 msgid "Dashboard"
 msgstr "Tableau de bord"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Delivery note created."
+msgstr "Bon de livraison créé."
+
+msgid "Delivery notes"
+msgstr "Bons de livraison"
+
+msgid "Description"
+msgstr "Description"
 
 msgid "Device fingerprint"
 msgstr "Empreinte de l'appareil"
@@ -151,14 +295,41 @@ msgstr "Abandonner"
 msgid "Discard changes?"
 msgstr "Abandonner les modifications ?"
 
+msgid "Display name"
+msgstr "Nom affiché"
+
 msgid "Download and install"
 msgstr "Télécharger et installer"
 
 msgid "Downloading update"
 msgstr "Téléchargement de la mise à jour"
 
+msgid "Draft"
+msgstr "Brouillon"
+
+msgid "Draws the caption bar inside the application."
+msgstr "Dessine la barre de titre à l'intérieur de l'application."
+
 msgid "E-mail verification code (6 digits)"
 msgstr "Code de vérification e-mail (6 chiffres)"
+
+msgid "Edit"
+msgstr "Modifier"
+
+msgid "Edit category"
+msgstr "Modifier la catégorie"
+
+msgid "Edit client"
+msgstr "Modifier le client"
+
+msgid "Edit unit"
+msgstr "Modifier l'unité"
+
+msgid "Edit vendor"
+msgstr "Modifier le fournisseur"
+
+msgid "Email"
+msgstr "E-mail"
 
 msgid "Enter the complete code received by e-mail."
 msgstr "Saisissez le code complet reçu par e-mail."
@@ -166,14 +337,41 @@ msgstr "Saisissez le code complet reçu par e-mail."
 msgid "Enter your username and password."
 msgstr "Saisissez votre nom d'utilisateur et votre mot de passe."
 
+msgid "Entry saved."
+msgstr "Écriture enregistrée."
+
+msgid "Expense"
+msgstr "Dépense"
+
+msgid "Expenses"
+msgstr "Dépenses"
+
 msgid "Forget"
 msgstr "Oublier"
+
+msgid "French is the default; the English catalog is built in."
+msgstr "Le français est la langue par défaut ; le catalogue anglais est intégré."
 
 msgid "General"
 msgstr "Général"
 
+msgid "Generate key"
+msgstr "Générer la clé"
+
 msgid "Get started"
 msgstr "Commencer"
+
+msgid "GitHub Releases are the only update source."
+msgstr "GitHub Releases est la seule source de mise à jour."
+
+msgid "High-severity alerts also raise a system notification."
+msgstr "Les alertes de gravité haute déclenchent aussi une notification système."
+
+msgid "ICE is too long (40 characters max)."
+msgstr "ICE trop long (40 caractères maximum)."
+
+msgid "Income"
+msgstr "Recettes"
 
 msgid "Incomplete login — try again."
 msgstr "Connexion incomplète — réessayez."
@@ -184,8 +382,17 @@ msgstr "Stock initial"
 msgid "Invoice history"
 msgstr "Historique des factures"
 
+msgid "Issue date"
+msgstr "Date d'émission"
+
+msgid "It will not be shown again after this dialog closes."
+msgstr "Elle ne sera plus affichée après la fermeture de cette fenêtre."
+
 msgid "Keep running in the notification area when closed"
 msgstr "Rester exécuté dans la zone de notification à la fermeture"
+
+msgid "Key name"
+msgstr "Nom de la clé"
 
 msgid "Label (optional)"
 msgstr "Libellé (facultatif)"
@@ -193,11 +400,26 @@ msgstr "Libellé (facultatif)"
 msgid "Language"
 msgstr "Langue"
 
+msgid "Last use"
+msgstr "Dernière utilisation"
+
 msgid "Latest version"
 msgstr "Dernière version"
 
+msgid "Launches Atlas Commerce when the computer starts."
+msgstr "Lance Atlas Commerce au démarrage de l'ordinateur."
+
+msgid "Light"
+msgstr "Clair"
+
+msgid "Load API keys"
+msgstr "Charger les clés API"
+
 msgid "Load devices"
 msgstr "Charger les appareils"
+
+msgid "Load status"
+msgstr "Charger l'état"
 
 msgid "Login failed."
 msgstr "Échec de la connexion."
@@ -223,11 +445,20 @@ msgstr "Réduire"
 msgid "Monthly activity"
 msgstr "Activité mensuelle"
 
+msgid "My profile"
+msgstr "Mon profil"
+
 msgid "Name"
 msgstr "Nom"
 
+msgid "Native Rust client for the Atlas Commerce platform. No telemetry."
+msgstr "Client natif Rust pour la plateforme Atlas Commerce. Aucune télémétrie."
+
 msgid "Native and fast stock management"
 msgstr "Gestion de stock native et rapide"
+
+msgid "Native desktop client"
+msgstr "Client de bureau natif"
 
 msgid "Native notifications are off. Enable them in settings."
 msgstr "Les notifications natives sont désactivées. Activez-les dans les réglages."
@@ -235,11 +466,47 @@ msgstr "Les notifications natives sont désactivées. Activez-les dans les régl
 msgid "Native notifications for stock alerts"
 msgstr "Notifications natives pour les alertes de stock"
 
+msgid "Net balance"
+msgstr "Solde net"
+
+msgid "Never used"
+msgstr "Jamais utilisée"
+
+msgid "New API key"
+msgstr "Nouvelle clé API"
+
+msgid "New category"
+msgstr "Nouvelle catégorie"
+
+msgid "New client"
+msgstr "Nouveau client"
+
 msgid "New code"
 msgstr "Nouveau code"
 
+msgid "New conversation"
+msgstr "Nouvelle conversation"
+
+msgid "New delivery note"
+msgstr "Nouveau bon de livraison"
+
+msgid "New entry"
+msgstr "Nouvelle écriture"
+
 msgid "New product"
 msgstr "Nouveau produit"
+
+msgid "New unit"
+msgstr "Nouvelle unité"
+
+msgid "New vendor"
+msgstr "Nouveau fournisseur"
+
+msgid "No"
+msgstr "Non"
+
+msgid "No API key yet"
+msgstr "Aucune clé API pour le moment"
 
 msgid "No account yet? Ask your shop's Atlas administrator."
 msgstr "Pas encore de compte ? Demandez à l'administrateur Atlas de votre boutique."
@@ -247,14 +514,32 @@ msgstr "Pas encore de compte ? Demandez à l'administrateur Atlas de votre bouti
 msgid "No alert"
 msgstr "Aucune alerte"
 
+msgid "No category yet"
+msgstr "Aucune catégorie"
+
+msgid "No client selected"
+msgstr "Aucun client sélectionné"
+
+msgid "No client yet"
+msgstr "Aucun client"
+
 msgid "No data yet"
 msgstr "Aucune donnée pour le moment"
+
+msgid "No delivery note yet"
+msgstr "Aucun bon de livraison pour le moment"
+
+msgid "No expense yet"
+msgstr "Aucune dépense pour le moment"
 
 msgid "No history yet"
 msgstr "Aucun historique pour le moment"
 
 msgid "No invoice yet"
 msgstr "Aucune facture pour le moment"
+
+msgid "No matching entry"
+msgstr "Aucune écriture correspondante"
 
 msgid "No product available"
 msgstr "Aucun produit disponible"
@@ -268,8 +553,26 @@ msgstr "Aucune vente pour le moment"
 msgid "No trusted device"
 msgstr "Aucun appareil de confiance"
 
+msgid "No unit yet"
+msgstr "Aucune unité"
+
+msgid "No vendor selected"
+msgstr "Aucun fournisseur sélectionné"
+
+msgid "No vendor yet"
+msgstr "Aucun fournisseur"
+
+msgid "No window opens until you click the tray icon."
+msgstr "Aucune fenêtre ne s'ouvre tant que vous ne cliquez pas sur l'icône de la zone de notification."
+
+msgid "Not configured"
+msgstr "Non configuré"
+
 msgid "Not tracked"
 msgstr "Non suivi"
+
+msgid "Notes (optional)"
+msgstr "Notes (facultatif)"
 
 msgid "Notifications"
 msgstr "Notifications"
@@ -286,11 +589,32 @@ msgstr "Ouvrir le dépôt du projet"
 msgid "Open settings"
 msgstr "Ouvrir les réglages"
 
+msgid "Other"
+msgstr "Autre"
+
+msgid "Outstanding balance"
+msgstr "Solde dû"
+
 msgid "Overdue"
 msgstr "En retard"
 
+msgid "Owner"
+msgstr "Propriétaire"
+
 msgid "Password"
 msgstr "Mot de passe"
+
+msgid "Password changes are handled by an administrator, not from this screen."
+msgstr "Le mot de passe ne peut pas être modifié depuis cet écran ; demandez à un administrateur."
+
+msgid "Payment method"
+msgstr "Mode de paiement"
+
+msgid "Personal note"
+msgstr "Note personnelle"
+
+msgid "Phone"
+msgstr "Téléphone"
 
 msgid "Phone QR"
 msgstr "QR téléphone"
@@ -300,6 +624,9 @@ msgstr "Téléphone approuvé — finalisation…"
 
 msgid "Phone connected — confirm on the phone."
 msgstr "Téléphone connecté — confirmez sur le téléphone."
+
+msgid "Phone is too long (40 characters max)."
+msgstr "Téléphone trop long (40 caractères maximum)."
 
 msgid "Pre-release"
 msgstr "Préversion"
@@ -315,6 +642,21 @@ msgstr "Produit créé."
 
 msgid "Products"
 msgstr "Produits"
+
+msgid "Profile"
+msgstr "Profil"
+
+msgid "Profile picture URL"
+msgstr "URL de la photo de profil"
+
+msgid "Profile updated."
+msgstr "Profil mis à jour."
+
+msgid "Provider"
+msgstr "Fournisseur"
+
+msgid "Public keys let external tools call the Atlas Commerce API on this shop's behalf."
+msgstr "Les clés publiques permettent à des outils externes d'appeler l'API Atlas Commerce pour le compte de ce magasin."
 
 msgid "Quantity"
 msgstr "Quantité"
@@ -334,6 +676,12 @@ msgstr "Statistiques rapides"
 msgid "Quit"
 msgstr "Quitter"
 
+msgid "Read and write"
+msgstr "Lecture et écriture"
+
+msgid "Read only"
+msgstr "Lecture seule"
+
 msgid "Reason (optional)"
 msgstr "Motif (facultatif)"
 
@@ -343,14 +691,23 @@ msgstr "Factures récentes"
 msgid "Record sale"
 msgstr "Enregistrer la vente"
 
+msgid "Recorded expenses and income appear here."
+msgstr "Les dépenses et recettes enregistrées apparaissent ici."
+
 msgid "Recorded sales appear here."
 msgstr "Les ventes enregistrées apparaissent ici."
+
+msgid "Reference (optional)"
+msgstr "Référence (facultatif)"
 
 msgid "Refresh"
 msgstr "Actualiser"
 
 msgid "Refresh interval"
 msgstr "Intervalle d'actualisation"
+
+msgid "Release notes"
+msgstr "Notes de version"
 
 msgid "Remove"
 msgstr "Supprimer"
@@ -361,14 +718,23 @@ msgstr "Supprimer le serveur ?"
 msgid "Restore"
 msgstr "Restaurer"
 
+msgid "Retry"
+msgstr "Réessayer"
+
 msgid "Revoke"
 msgstr "Révoquer"
+
+msgid "Revoke API key?"
+msgstr "Révoquer la clé API ?"
 
 msgid "Revoke device?"
 msgstr "Révoquer l'appareil ?"
 
 msgid "SKU"
 msgstr "SKU"
+
+msgid "Sale price"
+msgstr "Prix de vente"
 
 msgid "Sales"
 msgstr "Ventes"
@@ -382,20 +748,38 @@ msgstr "Enregistrer"
 msgid "Save and continue"
 msgstr "Enregistrer et continuer"
 
+msgid "Save profile"
+msgstr "Enregistrer le profil"
+
 msgid "Saved accounts on this server will be removed from this device."
 msgstr "Les comptes enregistrés sur ce serveur seront supprimés de cet appareil."
 
 msgid "Saved servers"
 msgstr "Serveurs enregistrés"
 
+msgid "Scan or type a barcode / SKU, then press Enter"
+msgstr "Scannez ou saisissez un code-barres / SKU, puis Entrée"
+
 msgid "Scan with your phone"
 msgstr "Scannez avec votre téléphone"
+
+msgid "Scopes"
+msgstr "Périmètres"
 
 msgid "Search"
 msgstr "Rechercher"
 
+msgid "Search a product…"
+msgstr "Rechercher un produit…"
+
+msgid "Search by description, category, vendor or reference"
+msgstr "Rechercher par description, catégorie, fournisseur ou référence"
+
 msgid "Search by name, SKU or barcode"
 msgstr "Rechercher par nom, SKU ou code-barres"
+
+msgid "Search by name, city, phone or ICE"
+msgstr "Rechercher par nom, ville, téléphone ou ICE"
 
 msgid "Security"
 msgstr "Sécurité"
@@ -433,6 +817,12 @@ msgstr "Se connecter"
 msgid "Sign out"
 msgstr "Se déconnecter"
 
+msgid "Sort order"
+msgstr "Ordre de tri"
+
+msgid "Source repository"
+msgstr "Dépôt source"
+
 msgid "Stable"
 msgstr "Stable"
 
@@ -441,6 +831,9 @@ msgstr "Démarrer à la connexion"
 
 msgid "Start hidden in the notification area"
 msgstr "Démarrer masqué dans la zone de notification"
+
+msgid "Stock"
+msgstr "Stock"
 
 msgid "Stock in"
 msgstr "Entrée de stock"
@@ -457,17 +850,71 @@ msgstr "Valeur du stock"
 msgid "Stock, sales and product questions are answered from your data."
 msgstr "Les questions sur le stock, les ventes et les produits trouvent réponse dans vos données."
 
+msgid "Symbol"
+msgstr "Symbole"
+
+msgid "System"
+msgstr "Système"
+
+msgid "System follows the operating system appearance."
+msgstr "Suit l'apparence du système d'exploitation."
+
+msgid "Tax ID (IF)"
+msgstr "Identifiant fiscal (IF)"
+
 msgid "That device will have to sign in again."
 msgstr "Cet appareil devra se reconnecter."
 
 msgid "The AI agent is not available for this account."
 msgstr "L'agent IA n'est pas disponible pour ce compte."
 
+msgid "The amount must be a positive number."
+msgstr "Le montant doit être un nombre positif."
+
+msgid "The barcode is required."
+msgstr "Le code-barres est obligatoire."
+
+msgid "The client name is required."
+msgstr "Le nom du client est obligatoire."
+
+msgid "The client name must be 200 characters or fewer."
+msgstr "Le nom du client doit contenir 200 caractères au maximum."
+
+msgid "The credit limit must be a number between 0 and 1,000,000,000,000."
+msgstr "La limite de crédit doit être un nombre entre 0 et 1 000 000 000 000."
+
+msgid "The description is required."
+msgstr "La description est obligatoire."
+
+msgid "The description must be 300 characters or fewer."
+msgstr "La description doit contenir 300 caractères au maximum."
+
+msgid "The e-mail address is invalid."
+msgstr "L'adresse e-mail est invalide."
+
+msgid "The identifier cannot be changed."
+msgstr "L'identifiant ne peut pas être modifié."
+
+msgid "The language model is configured on the server with a secret key; the desktop client never holds it."
+msgstr "Le modèle de langage est configuré sur le serveur avec une clé secrète ; le client bureau ne la détient jamais."
+
+msgid "The name is required."
+msgstr "Le nom est obligatoire."
+
+msgid "The name must be 200 characters or fewer."
+msgstr "Le nom doit comporter 200 caractères au maximum."
+
 msgid "The product information has not been saved."
 msgstr "Les informations du produit n'ont pas été enregistrées."
 
+msgid "The sort order must be a whole number."
+msgstr "L'ordre de tri doit être un nombre entier."
+
 msgid "Theme"
 msgstr "Thème"
+
+msgid "This barcode already exists. Save again to create the product anyway."
+msgstr "Ce code-barres existe déjà. Enregistrez à nouveau pour créer le produit quand même."
 
 msgid "This device"
 msgstr "Cet appareil"
@@ -478,6 +925,9 @@ msgstr "Cette version ne peut plus communiquer avec le serveur en sécurité. Me
 msgid "Tip: open the link in the e-mail — this app verifies it without typing."
 msgstr "Astuce : ouvrez le lien dans l'e-mail — cette application le vérifie sans saisie."
 
+msgid "Tools using this key will immediately lose access."
+msgstr "Les outils utilisant cette clé perdront immédiatement l'accès."
+
 msgid "Total"
 msgstr "Total"
 
@@ -487,11 +937,26 @@ msgstr "Total dû"
 msgid "Trusted devices"
 msgstr "Appareils de confiance"
 
+msgid "Try another search term."
+msgstr "Essayez un autre terme de recherche."
+
 msgid "Unit"
 msgstr "Unité"
 
+msgid "Unit created."
+msgstr "Unité créée."
+
+msgid "Unit updated."
+msgstr "Unité mise à jour."
+
+msgid "Units"
+msgstr "Unités"
+
 msgid "Unpaid sales"
 msgstr "Ventes impayées"
+
+msgid "Update available"
+msgstr "Mise à jour disponible"
 
 msgid "Update now"
 msgstr "Mettre à jour maintenant"
@@ -499,11 +964,32 @@ msgstr "Mettre à jour maintenant"
 msgid "Updates"
 msgstr "Mises à jour"
 
+msgid "Updates and about"
+msgstr "Mises à jour et à propos"
+
 msgid "Use"
 msgstr "Utiliser"
 
+msgid "User"
+msgstr "Utilisateur"
+
 msgid "Username"
 msgstr "Nom d'utilisateur"
+
+msgid "VAT exempt"
+msgstr "Exonéré de TVA"
+
+msgid "Vendor (optional)"
+msgstr "Fournisseur (facultatif)"
+
+msgid "Vendor created."
+msgstr "Fournisseur créé."
+
+msgid "Vendor updated."
+msgstr "Fournisseur mis à jour."
+
+msgid "Vendors"
+msgstr "Fournisseurs"
 
 msgid "Verify"
 msgstr "Vérifier"
@@ -520,320 +1006,21 @@ msgstr "Bienvenue sur Atlas Commerce"
 msgid "Write a message…"
 msgstr "Écrivez un message…"
 
+msgid "Yes"
+msgstr "Oui"
+
+msgid "You are on the latest version."
+msgstr "Vous utilisez la dernière version."
+
 msgid "You will need to sign in again to reach this server."
 msgstr "Vous devrez vous reconnecter pour accéder à ce serveur."
 
 msgid "Your stock, sales and AI assistant in one native application."
 msgstr "Votre stock, vos ventes et votre assistant IA dans une application native."
 
-msgid "invoices"
-msgstr "factures"
-
-# ── Clients / CRM ──
-msgid "Address"
-msgstr "Adresse"
-
-msgid "Choose a client on the left to see its details."
-msgstr "Choisissez un client à gauche pour voir ses détails."
-
-msgid "City"
-msgstr "Ville"
-
-msgid "Client created."
-msgstr "Client créé."
-
-msgid "Client updated."
-msgstr "Client mis à jour."
-
-msgid "Clients"
-msgstr "Clients"
-
-msgid "Created clients appear here."
-msgstr "Les clients créés apparaissent ici."
-
-msgid "Credit limit"
-msgstr "Limite de crédit"
-
-msgid "Credit limit (MAD)"
-msgstr "Limite de crédit (MAD)"
-
-msgid "Edit"
-msgstr "Modifier"
-
-msgid "Edit client"
-msgstr "Modifier le client"
-
-msgid "Email"
-msgstr "E-mail"
-
-msgid "ICE is too long (40 characters max)."
-msgstr "ICE trop long (40 caractères maximum)."
-
-msgid "New client"
-msgstr "Nouveau client"
-
-msgid "No"
-msgstr "Non"
-
-msgid "No client selected"
-msgstr "Aucun client sélectionné"
-
-msgid "No client yet"
-msgstr "Aucun client"
-
-msgid "Outstanding balance"
-msgstr "Solde dû"
-
-msgid "Phone"
-msgstr "Téléphone"
-
-msgid "Phone is too long (40 characters max)."
-msgstr "Téléphone trop long (40 caractères maximum)."
-
-msgid "Search by name, city, phone or ICE"
-msgstr "Rechercher par nom, ville, téléphone ou ICE"
-
-msgid "Tax ID (IF)"
-msgstr "Identifiant fiscal (IF)"
-
-msgid "The credit limit must be a number between 0 and 1,000,000,000,000."
-msgstr "La limite de crédit doit être un nombre entre 0 et 1 000 000 000 000."
-
-msgid "The e-mail address is invalid."
-msgstr "L'adresse e-mail est invalide."
-
-msgid "The name is required."
-msgstr "Le nom est obligatoire."
-
-msgid "The name must be 200 characters or fewer."
-msgstr "Le nom doit comporter 200 caractères au maximum."
-
-msgid "VAT exempt"
-msgstr "Exonéré de TVA"
-
-msgid "Yes"
-msgstr "Oui"
-
-# ── Vendors / purchasing ──
-msgid "Choose a vendor on the left to see its details."
-msgstr "Choisissez un fournisseur à gauche pour voir ses détails."
-
-msgid "Created vendors appear here."
-msgstr "Les fournisseurs créés apparaissent ici."
-
-msgid "Edit vendor"
-msgstr "Modifier le fournisseur"
-
-msgid "New vendor"
-msgstr "Nouveau fournisseur"
-
-msgid "No vendor selected"
-msgstr "Aucun fournisseur sélectionné"
-
-msgid "No vendor yet"
-msgstr "Aucun fournisseur"
-
-msgid "Vendor created."
-msgstr "Fournisseur créé."
-
-msgid "Vendor updated."
-msgstr "Fournisseur mis à jour."
-
-msgid "Vendors"
-msgstr "Fournisseurs"
-
-# ── Catalog (categories and units) ──
-msgid "Catalog"
-msgstr "Catalogue"
-
-msgid "Categories"
-msgstr "Catégories"
-
-msgid "Category created."
-msgstr "Catégorie créée."
-
-msgid "Category updated."
-msgstr "Catégorie mise à jour."
-
-msgid "Created categories appear here."
-msgstr "Les catégories créées apparaissent ici."
-
-msgid "Created units appear here."
-msgstr "Les unités créées apparaissent ici."
-
-msgid "Description"
-msgstr "Description"
-
-msgid "Edit category"
-msgstr "Modifier la catégorie"
-
-msgid "Edit unit"
-msgstr "Modifier l'unité"
-
 msgid "from products"
 msgstr "issue des produits"
 
-msgid "New category"
-msgstr "Nouvelle catégorie"
+msgid "invoices"
+msgstr "factures"
 
-msgid "New unit"
-msgstr "Nouvelle unité"
-
-msgid "No category yet"
-msgstr "Aucune catégorie"
-
-msgid "No unit yet"
-msgstr "Aucune unité"
-
-msgid "Sort order"
-msgstr "Ordre de tri"
-
-msgid "Symbol"
-msgstr "Symbole"
-
-msgid "The sort order must be a whole number."
-msgstr "L'ordre de tri doit être un nombre entier."
-
-msgid "Unit created."
-msgstr "Unité créée."
-
-msgid "Unit updated."
-msgstr "Unité mise à jour."
-
-msgid "Units"
-msgstr "Unités"
-
-msgid "Native desktop client"
-msgstr "Client de bureau natif"
-
-msgid "Expenses"
-msgstr "Dépenses"
-
-msgid "New entry"
-msgstr "Nouvelle écriture"
-
-msgid "Search by description, category, vendor or reference"
-msgstr "Rechercher par description, catégorie, fournisseur ou référence"
-
-msgid "No expense yet"
-msgstr "Aucune dépense pour le moment"
-
-msgid "Recorded expenses and income appear here."
-msgstr "Les dépenses et recettes enregistrées apparaissent ici."
-
-msgid "No matching entry"
-msgstr "Aucune écriture correspondante"
-
-msgid "Try another search term."
-msgstr "Essayez un autre terme de recherche."
-
-msgid "Cash"
-msgstr "Espèces"
-
-msgid "Card"
-msgstr "Carte"
-
-msgid "Company transfer"
-msgstr "Virement société"
-
-msgid "Company check"
-msgstr "Chèque société"
-
-msgid "Other"
-msgstr "Autre"
-
-msgid "Income"
-msgstr "Recettes"
-
-msgid "Net balance"
-msgstr "Solde net"
-
-msgid "The description is required."
-msgstr "La description est obligatoire."
-
-msgid "The description must be 300 characters or fewer."
-msgstr "La description doit contenir 300 caractères au maximum."
-
-msgid "The amount must be a positive number."
-msgstr "Le montant doit être un nombre positif."
-
-msgid "Amount"
-msgstr "Montant"
-
-msgid "Payment method"
-msgstr "Mode de paiement"
-
-msgid "Date"
-msgstr "Date"
-
-msgid "Vendor (optional)"
-msgstr "Fournisseur (facultatif)"
-
-msgid "Reference (optional)"
-msgstr "Référence (facultatif)"
-
-msgid "Notes (optional)"
-msgstr "Notes (facultatif)"
-
-msgid "Expense"
-msgstr "Dépense"
-
-msgid "Entry saved."
-msgstr "Écriture enregistrée."
-
-msgid "Delivery notes"
-msgstr "Bons de livraison"
-
-msgid "New delivery note"
-msgstr "Nouveau bon de livraison"
-
-msgid "No delivery note yet"
-msgstr "Aucun bon de livraison pour le moment"
-
-msgid "Created delivery notes appear here."
-msgstr "Les bons de livraison créés apparaissent ici."
-
-msgid "Confirmed"
-msgstr "Confirmé"
-
-msgid "Draft"
-msgstr "Brouillon"
-
-msgid "Cancelled"
-msgstr "Annulé"
-
-msgid "Issue date"
-msgstr "Date d'émission"
-
-msgid "The client name is required."
-msgstr "Le nom du client est obligatoire."
-
-msgid "The client name must be 200 characters or fewer."
-msgstr "Le nom du client doit contenir 200 caractères au maximum."
-
-msgid "Delivery note created."
-msgstr "Bon de livraison créé."
-
-msgid "Scan or type a barcode / SKU, then press Enter"
-msgstr "Scannez ou saisissez un code-barres / SKU, puis Entrée"
-
-msgid "Create from barcode"
-msgstr "Créer depuis un code-barres"
-
-msgid "Stock"
-msgstr "Stock"
-
-msgid "Sale price"
-msgstr "Prix de vente"
-
-msgid "Cost"
-msgstr "Coût"
-
-msgid "This barcode already exists. Save again to create the product anyway."
-msgstr "Ce code-barres existe déjà. Enregistrez à nouveau pour créer le produit quand même."
-
-msgid "Create anyway"
-msgstr "Créer quand même"
-
-msgid "The barcode is required."
-msgstr "Le code-barres est obligatoire."
