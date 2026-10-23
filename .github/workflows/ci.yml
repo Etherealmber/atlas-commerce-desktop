@@ -86,7 +86,7 @@ jobs:
             exit 1
           fi
           echo "::notice title=quality::rustfmt, clippy (défaut + toutes features) et rustdoc : OK, aucune alerte."
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v8
         if: always()
         with:
           name: quality-logs
@@ -191,7 +191,7 @@ jobs:
             exit 1
           fi
           echo "::notice title=tests-${{ matrix.os }}::$total tests OK (unitaires + documentation) et build release réussi sur ${{ matrix.os }}."
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v8
         if: always()
         with:
           name: test-logs-${{ matrix.os }}
@@ -247,7 +247,7 @@ jobs:
             echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v8
         if: always()
         with:
           name: vulnerability-logs

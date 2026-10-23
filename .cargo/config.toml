@@ -1,0 +1,9 @@
+# Windows downloads are standalone. Keep the MSVC runtime in the executable
+# so both the portable zip and the installer work on a clean machine
+# (no VCRUNTIME140.dll / UCRT redistributable required). Same pin as
+# Spotifast: the release workflow's dumpbin check rejects any MSVC import.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
