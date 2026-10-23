@@ -297,7 +297,7 @@ impl AtlasApp {
         // With no viewport (hidden to tray) headless_frame returns
         // Headless::Show from the same flag instead.
         if self.show_requested
-            && ctx.input(|input| input.viewport().visible).unwrap_or(false)
+            && ctx.input(|input| input.viewport().visible()).unwrap_or(false)
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         }
