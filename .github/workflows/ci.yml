@@ -81,7 +81,10 @@ jobs:
       - name: Announce result
         if: always()
         run: |
-          if grep -hqE '^(error|warning)(\[[[:alnum:]]+\])?:' "$LOG_DIR"/*.log; then
+          # CARGO_TERM_COLOR=always prefixes diagnostics with ANSI escapes,
+          # so strip them before the anchored grep (like the test job does),
+          # otherwise clippy/rustc errors slip through with a green job.
+          if sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR"/*.log | grep -qE '^(error|warning)(\[[[:alnum:]]+\])?:'; then
             echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
             exit 1
           fi

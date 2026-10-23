@@ -323,7 +323,8 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             })
             .collect();
         let refs: Vec<(&str, u64)> = options.iter().map(|(n, v)| (n.as_str(), *v)).collect();
-        if let Some(seconds) = segmented(ui, palette, &refs, Some(app.settings.poll_interval_secs)) {
+        let current_interval = app.settings.poll_interval_secs;
+        if let Some(seconds) = segmented(ui, palette, &refs, Some(current_interval)) {
             app.settings.poll_interval_secs = seconds;
             app.save_settings();
         }
