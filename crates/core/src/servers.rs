@@ -125,8 +125,7 @@ impl ServerUrl {
                         && scheme
                             .chars()
                             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-                let looks_like_port =
-                    !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit());
+                let looks_like_port = !rest.is_empty() && rest.bytes().all(u8::is_ascii_digit);
                 valid_scheme && !looks_like_port
             })
             .map(|(scheme, _)| scheme);
