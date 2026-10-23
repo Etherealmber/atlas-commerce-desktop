@@ -100,6 +100,14 @@ def wxs(payload: Path, version: str) -> str:
     # WiX v5 layout: the Directory tree only nests Directory elements,
     # while ComponentGroup entries are Package-level siblings bound to a
     # directory through their Directory attribute (WIX0005 otherwise).
+    #
+    # The directory Id is the PUBLIC property INSTALLFOLDER on purpose:
+    # fastframe-update's helper runs `msiexec ... INSTALLFOLDER="<running
+    # exe folder>"` to upgrade the app exactly where it was installed. A
+    # mixed-case (private) Id such as AppFolder cannot be overridden by a
+    # command-line property, so the MSI used to land in its own default
+    # folder while the helper relaunched the untouched old executable —
+    # the app closed and reopened on the same version ("flicker").
     return f"""<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Atlas Commerce Desktop"
            Manufacturer="Etherealmber"
@@ -111,35 +119,35 @@ def wxs(payload: Path, version: str) -> str:
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="LocalAppDataFolder">
-      <Directory Id="AppFolder" Name="Atlas Commerce Desktop" />
+      <Directory Id="INSTALLFOLDER" Name="Atlas Commerce Desktop" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ProgramMenuDir" Name="Atlas Commerce Desktop" />
     </StandardDirectory>
 
-    <ComponentGroup Id="AppFiles" Directory="AppFolder">{''.join(files)}
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">{''.join(files)}
     </ComponentGroup>
 
     <ComponentGroup Id="Shortcuts" Directory="ProgramMenuDir">
       <Component Id="StartMenuShortcut" Guid="{stable_guid('start-menu')}">
         <Shortcut Id="StartMenuShortcut" Name="Atlas Commerce Desktop"
-                  Target="[AppFolder]atlas-commerce-desktop.exe"
-                  WorkingDirectory="AppFolder" Advertise="no" />
+                  Target="[INSTALLFOLDER]atlas-commerce-desktop.exe"
+                  WorkingDirectory="INSTALLFOLDER" Advertise="no" />
         <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop"
                        Name="StartMenu" Type="string" Value="1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
 
-    <ComponentGroup Id="Protocol" Directory="AppFolder">
+    <ComponentGroup Id="Protocol" Directory="INSTALLFOLDER">
       <Component Id="UrlProtocol" Guid="{stable_guid('protocol')}">
         <RegistryValue Root="HKMU" Key="Software\\Classes\\atlascommerce"
                        Type="string" Value="URL:Atlas Commerce link" KeyPath="yes" />
         <RegistryValue Root="HKMU" Key="Software\\Classes\\atlascommerce"
                        Name="URL Protocol" Type="string" Value="" />
         <RegistryValue Root="HKMU" Key="Software\\Classes\\atlascommerce\\DefaultIcon"
-                       Type="string" Value='"[AppFolder]atlas-commerce-desktop.exe",0' />
+                       Type="string" Value='"[INSTALLFOLDER]atlas-commerce-desktop.exe",0' />
         <RegistryValue Root="HKMU" Key="Software\\Classes\\atlascommerce\\shell\\open\\command"
-                       Type="string" Value='"[AppFolder]atlas-commerce-desktop.exe" "%1"' />
+                       Type="string" Value='"[INSTALLFOLDER]atlas-commerce-desktop.exe" "%1"' />
       </Component>
       <Component Id="RegisteredApplication" Guid="{stable_guid('registered-app')}">
         <RegistryValue Root="HKMU" Key="Software\\RegisteredApplications"
