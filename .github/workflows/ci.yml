@@ -76,15 +76,30 @@ jobs:
             echo
             echo "Toolchain : \`$(rustc --version)\` — \`$(cargo --version)\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      # One-line API-readable mirror of the job summary: annotations survive
-      # where artifact downloads and job logs are not reachable.
+      # API-readable mirror of the job summary: one annotation per tool with
+      # the actual diagnostic lines embedded. Annotations survive where
+      # artifact downloads and job logs are not reachable.
       - name: Announce result
         if: always()
         run: |
           # CARGO_TERM_COLOR=always prefixes diagnostics with ANSI escapes,
           # so strip them before the anchored grep (like the test job does),
           # otherwise clippy/rustc errors slip through with a green job.
-          if sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR"/*.log | grep -qE '^(error|warning)(\[[[:alnum:]]+\])?:'; then
+          strip() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
+          failed=0
+          for pair in "fmt $LOG_DIR/fmt.log" "clippy-defaut $LOG_DIR/clippy-default.log" "clippy-toutes-features $LOG_DIR/clippy-all-features.log" "rustdoc $LOG_DIR/doc.log"; do
+            set -- $pair
+            name="$1"; file="$2"
+            [ -f "$file" ] || continue
+            # rustfmt failures start with "Diff in"; cargo tools with error/warning.
+            hits=$(strip "$file" | grep -E '^(error|warning)(\[[[:alnum:]]+\])?:|^Diff in ' -A 4 | head -60)
+            if [ -n "$hits" ]; then
+              failed=1
+              msg=$(printf '%s' "$hits" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' | tr '\n' '|' | sed 's/|/%0A/g' | head -c 1500)
+              echo "::error title=quality/${name}::${msg}"
+            fi
+          done
+          if [ "$failed" -eq 1 ]; then
             echo "::error title=quality::Anomalies fmt/clippy/rustdoc détectées — voir l'artefact quality-logs et le résumé du job."
             exit 1
           fi
