@@ -378,7 +378,13 @@ jobs:
             "/DBinaryX64=$x64" "/DBinaryArm64=$arm64" `
             "/DOutputDir=$PWD\dist" packaging\windows\atlas-commerce-desktop.iss 2>&1 |
             Tee-Object inno.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path inno.log -Pattern 'Error|Unknown|Invalid|exception' |
+              Select-Object -First 15 | ForEach-Object {
+                echo "::error title=inno-compile::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
       - name: Job summary
         if: always()
         shell: pwsh

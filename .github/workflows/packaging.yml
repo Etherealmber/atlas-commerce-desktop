@@ -127,6 +127,8 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
             Select-Object -First 1).Matches.Groups[1].Value
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\inno-check" | Out-Null
+          "ISCC: $iscc" | Tee-Object -Append packaging-windows.log
+          (& $iscc /? 2>&1 | Select-Object -First 2) | Tee-Object -Append packaging-windows.log
           # The shipped setup embeds two real binaries; this check compiles the
           # same universal script with the x64 binary in both slots so every
           # architecture directive, Check function and path is exercised.
@@ -134,7 +136,15 @@ jobs:
             "/DBinaryX64=$binary" "/DBinaryArm64=$binary" `
             "/DOutputDir=$env:RUNNER_TEMP\inno-check" packaging\windows\atlas-commerce-desktop.iss `
             2>&1 | Tee-Object -Append packaging-windows.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            # Surface the compiler's own lines through annotations so the
+            # failure is readable even when the log archive is unreachable.
+            Select-String -Path packaging-windows.log -Pattern 'Error|exception|exception|Unknown|Invalid' |
+              Select-Object -First 15 | ForEach-Object {
+                echo "::error title=inno-compile::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
           Get-ChildItem "$env:RUNNER_TEMP\inno-check" | Tee-Object -Append packaging-windows.log
       - name: Job summary
         if: always()

@@ -47,8 +47,11 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ; One installer for every supported 64-bit Windows PC: x64 machines get the
 ; Intel/AMD binary, ARM machines the native ARM64 binary (no emulation).
-ArchitecturesAllowed=x64compatible arm64
-ArchitecturesInstallIn64BitMode=x64compatible arm64
+; Identifiers are OR-joined with "or", matching Inno's 64BitThreeArch
+; example (space-separated lists are accepted for some directives but the
+; explicit form is the documented one for architecture lists).
+ArchitecturesAllowed=x64compatible or arm64
+ArchitecturesInstallIn64BitMode=x64compatible or arm64
 MinVersion=10.0
 LicenseFile=..\..\LICENSE
 OutputDir={#OutputDir}
@@ -78,9 +81,10 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le bureau"; GroupDesc
 
 [Files]
 ; Same destination name for both architectures; the Check functions decide
-; which single source is installed on this machine.
+; which single source is installed on this machine. solidbreak separates
+; the two same-named files inside the solid LZMA archive.
 Source: "{#BinaryX64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: IsX64; Flags: ignoreversion
-Source: "{#BinaryArm64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: IsARM64; Flags: ignoreversion
+Source: "{#BinaryArm64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: IsARM64; Flags: ignoreversion solidbreak
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "atlas-commerce-desktop-installer.txt"; DestDir: "{app}"; Flags: ignoreversion
