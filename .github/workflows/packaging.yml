@@ -1,10 +1,10 @@
 name: Packaging
 
 # Validates every packaging input without building a full release: the native
-# packages manifest, the shell scripts, the Windows MSI generator, the desktop
-# entry and the icon set. Runs on packaging changes and on demand. Each job
-# writes a GitHub Actions job summary and publishes its output as an artifact;
-# nothing is pushed back to the repository.
+# packages manifest, the shell scripts, the universal Windows Inno installer,
+# the desktop entry and the icon set. Runs on packaging changes and on demand.
+# Each job writes a GitHub Actions job summary and publishes its output as an
+# artifact; nothing is pushed back to the repository.
 
 on:
   push:
@@ -86,24 +86,22 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows MSI generator
+    name: Windows universal installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
+      # Same cache family as the CI test jobs: warm dependency builds make
+      # this packaging check cheap on every push. Release builds themselves
+      # stay uncached in the Release workflow (shipped-binary hygiene).
+      - uses: Swatinem/rust-cache@v2
         with:
-          python-version: '3.13'
-      - name: WiX toolset
-        run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
-      - name: The generator parses and its help runs
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
-          python packaging/windows/build-msi.py --help *>&1 | Tee-Object packaging-windows.log
+          key: packaging-windows
       - name: Build release binary
+        id: build
         shell: pwsh
         run: |
-          cargo build --release 2>&1 | Tee-Object -Append packaging-windows.log
+          cargo build --release 2>&1 | Tee-Object packaging-windows.log
           if ($LASTEXITCODE -ne 0) {
             Select-String -Path packaging-windows.log -Pattern 'error(\[|:)|panicked' |
               Select-Object -First 20 | ForEach-Object {
@@ -111,13 +109,14 @@ jobs:
               }
             exit $LASTEXITCODE
           }
-      - name: Inno Setup script compiles
+      - name: Universal Inno Setup script compiles
+        id: inno
         shell: pwsh
         run: |
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           if (-not (Test-Path $iscc)) {
-            "Inno Setup absent de l'image runner : compilation ignorée." | Tee-Object -Append packaging-windows.log
+            "Inno Setup absent de l'image runner : compilation ignoree." | Tee-Object -Append packaging-windows.log
             exit 0
           }
           $binary = "$PWD\target\release\atlas-commerce-desktop.exe"
@@ -128,8 +127,11 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
             Select-Object -First 1).Matches.Groups[1].Value
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\inno-check" | Out-Null
-          & $iscc "/DVersion=$version" "/DArch=x86_64" `
-            "/DBinary=$binary" `
+          # The shipped setup embeds two real binaries; this check compiles the
+          # same universal script with the x64 binary in both slots so every
+          # architecture directive, Check function and path is exercised.
+          & $iscc "/DVersion=$version" `
+            "/DBinaryX64=$binary" "/DBinaryArm64=$binary" `
             "/DOutputDir=$env:RUNNER_TEMP\inno-check" packaging\windows\atlas-commerce-desktop.iss `
             2>&1 | Tee-Object -Append packaging-windows.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -148,11 +150,11 @@ jobs:
       - name: Announce failure
         if: failure()
         shell: pwsh
-        run: echo "::error title=packaging Windows::Anomalie de génération WiX/Inno — voir l'artefact packaging-windows et le résumé du job."
+        run: echo "::error title=packaging Windows::Anomalie de l'installeur Inno universel — voir l'artefact packaging-windows et le résumé du job."
       - name: Announce success
         if: success()
         shell: pwsh
-        run: echo "::notice title=packaging Windows::générateur MSI WiX fonctionnel, build release et compilation Inno Setup OK."
+        run: echo "::notice title=packaging Windows::build release et compilation de l'installeur Inno universel x64 + ARM64 OK."
       - uses: actions/upload-artifact@v7
         if: always()
         with:

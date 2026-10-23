@@ -8,9 +8,10 @@ name: Release
 #     * release_notes:  optional; empty means French notes generated from the
 #                       commits since the previous tag (scripts/release-notes.py),
 #     * mandatory:      marks the update as blocking in update.json,
-#     * publish:        false builds every installer (incl. the Windows .msi
-#                       and Inno setup .exe) and uploads them as run artifacts
-#                       without touching GitHub Releases.
+#     * publish:        false builds every installer (the universal Windows
+#                       setup .exe for x64 + ARM64, portable archives and the
+#                       macOS DMG) and uploads them as run artifacts without
+#                       touching GitHub Releases.
 #
 # A push of a v* tag runs the same pipeline with publishing on. The workflow
 # never runs `git push`: a dispatched release creates its tag through the
@@ -157,21 +158,17 @@ jobs:
           # Match the native packages' declared glibc 2.39 baseline.
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            package-target: linux-amd64
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            package-target: linux-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             msvc-arch: x64
             # Plain substrings from dumpbin /headers, no regex escaping.
             pe-machine: "8664 machine"
-            package-target: windows-amd64
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
             msvc-arch: arm64
             pe-machine: "AA64 machine"
-            package-target: windows-arm64
     steps:
       - uses: actions/checkout@v7
         with:
@@ -193,10 +190,13 @@ jobs:
         with:
           arch: ${{ matrix.msvc-arch }}
       # No compiler cache: published binaries never build from restored
-      # Actions caches.
-      - run: cargo build --release --target ${{ matrix.target }}
+      # Actions caches. The every-push CI and Packaging workflows do cache.
+      - name: Build release binary
+        id: build
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Verify the Windows binary
+        id: verify
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -214,6 +214,7 @@ jobs:
           }
 
       - name: Portable archive
+        id: archive
         shell: bash
         run: |
           set -euo pipefail
@@ -247,6 +248,7 @@ jobs:
         with:
           ruby-version: '3.4'
       - name: AppImage
+        id: appimage
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
@@ -263,54 +265,26 @@ jobs:
           cp "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage \
              "$RUNNER_TEMP/appimage/packages/$id/appimage/"*.AppImage.zsync dist/
 
-      # Inno Setup per-user installer (French + English wizard pages): the
-      # downloadable atlas-commerce-desktop-...-setup.exe.
-      - name: Inno Setup installer
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = $env:RELEASE_VERSION
-          $arch = "${{ matrix.target }}".Split("-")[0]
-          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
-          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DVersion=$version" "/DArch=$arch" `
-            "/DBinary=$PWD\target\${{ matrix.target }}\release\atlas-commerce-desktop.exe" `
-            "/DOutputDir=$PWD\dist" packaging\windows\atlas-commerce-desktop.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      # The Windows Installer package (.msi), from the same binary and no C tools.
-      - uses: ruby/setup-ruby@v1
-        if: runner.os == 'Windows'
-        with:
-          ruby-version: '3.4'
-      - name: Windows Installer package
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
-          gem install native-packages --version 0.10.0 --no-document
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $version = $env:RELEASE_VERSION
-          $payload = "dist\msi-input-${{ matrix.target }}"
-          New-Item -ItemType Directory -Force $payload | Out-Null
-          $files = "target\${{ matrix.target }}\release\atlas-commerce-desktop.exe", "README.md", "LICENSE", "packaging\windows\atlas-commerce-desktop-installer.txt"
-          Copy-Item $files $payload
-          $packages = "$env:RUNNER_TEMP\windows-packages"
-          native-packages build --version $version --target ${{ matrix.package-target }} `
-            --defer-recipes --output $packages
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Copy-Item "$packages\packages\${{ matrix.package-target }}\msi\*.msi" dist\
+      # The universal setup.exe (x64 + ARM64 in one installer) is assembled
+      # by the separate windows-installer job once both Windows binaries exist.
 
       - name: Job summary
         if: always()
         shell: bash
         run: |
+          outcome() { case "$1" in success) echo "✅ $2";; failure) echo "❌ $2 — échec";; skipped) echo "⊘ $2 — ignoré";; *) echo "❓ $2 — ${1:-inconnu}";; esac; }
           {
             echo "## Build ${{ matrix.target }} (${{ matrix.os }})"
             echo
             echo "Tag \`$RELEASE_TAG\` — version \`$RELEASE_VERSION\`"
+            echo
+            echo "### Étapes"
+            echo "| Étape | Résultat |"
+            echo "| --- | --- |"
+            echo "| Compilation | $(outcome "${{ steps.build.outcome }}" "cargo build") |"
+            echo "| Vérification binaire Windows | $(outcome "${{ steps.verify.outcome }}" "dumpbin/PE/--version") |"
+            echo "| Archive portable | $(outcome "${{ steps.archive.outcome }}" "zip/tar.gz") |"
+            echo "| AppImage | $(outcome "${{ steps.appimage.outcome }}" "AppImage + zsync") |"
             echo
             echo "### Artefacts produits (\`dist/\`)"
             echo '```'
@@ -320,6 +294,12 @@ jobs:
             echo '```'
             (cd dist && sha256sum * 2>/dev/null) || echo "(non disponible)"
             echo '```'
+            if [ "${{ job.status }}" = "failure" ]; then
+              echo "### ❌ Le job a échoué"
+              echo "Les lignes d'erreur complètes sont dans le log du job ; les échecs de"
+              echo "compilation Rust commencent par \`error[...\` et ceux de packaging par"
+              echo "\`Error\` / \`exit code\`. Le bot d'échec CI ouvre une issue avec le diagnostic."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Announce result
@@ -338,10 +318,100 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/*.zip
-            dist/*-setup.exe
-            dist/*.msi
             dist/*.AppImage
             dist/*.AppImage.zsync
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-installer:
+    name: Windows universal installer
+    needs: [prepare, build]
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_REPO: ${{ needs.prepare.outputs.repo }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
+      # One portable zip per architecture, produced by the build matrix.
+      - uses: actions/download-artifact@v8
+        with:
+          name: x86_64-pc-windows-msvc
+          path: artifacts/x64
+      - uses: actions/download-artifact@v8
+        with:
+          name: aarch64-pc-windows-msvc
+          path: artifacts/arm64
+      # dumpbin ships with the MSVC tools; load them before reading PE headers.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Extract both binaries
+        id: extract
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force binaries/x64, binaries/arm64 | Out-Null
+          Expand-Archive (Get-ChildItem artifacts/x64/*.zip | Select-Object -First 1).FullName -DestinationPath binaries/x64
+          Expand-Archive (Get-ChildItem artifacts/arm64/*.zip | Select-Object -First 1).FullName -DestinationPath binaries/arm64
+          $x64 = (Get-ChildItem -Recurse binaries/x64 -Filter atlas-commerce-desktop.exe | Select-Object -First 1).FullName
+          $arm64 = (Get-ChildItem -Recurse binaries/arm64 -Filter atlas-commerce-desktop.exe | Select-Object -First 1).FullName
+          if (-not $x64 -or -not $arm64) { throw "Missing one of the release binaries: x64=$x64 arm64=$arm64" }
+          # Architecture sanity check before the two binaries enter one setup.
+          $x64Headers = (& dumpbin /headers $x64 | Out-String)
+          $armHeaders = (& dumpbin /headers $arm64 | Out-String)
+          if ($x64Headers -notmatch '8664 machine') { throw "x64 binary has the wrong PE machine type`n$x64Headers" }
+          if ($armHeaders -notmatch 'AA64 machine') { throw "ARM64 binary has the wrong PE machine type`n$armHeaders" }
+          "x64: $x64"
+          "arm64: $arm64"
+      - name: Build the universal Inno setup
+        id: inno
+        shell: pwsh
+        run: |
+          $x64 = (Get-ChildItem -Recurse binaries/x64 -Filter atlas-commerce-desktop.exe | Select-Object -First 1).FullName
+          $arm64 = (Get-ChildItem -Recurse binaries/arm64 -Filter atlas-commerce-desktop.exe | Select-Object -First 1).FullName
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & $iscc "/DVersion=$env:RELEASE_VERSION" `
+            "/DBinaryX64=$x64" "/DBinaryArm64=$arm64" `
+            "/DOutputDir=$PWD\dist" packaging\windows\atlas-commerce-desktop.iss 2>&1 |
+            Tee-Object inno.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Job summary
+        if: always()
+        shell: pwsh
+        run: |
+          $summary = @(
+            "## Windows universal installer (x64 + ARM64)",
+            "",
+            "Tag ``$env:RELEASE_TAG`` — version ``$env:RELEASE_VERSION``",
+            "",
+            "### Artefacts produits (``dist/``)",
+            "```",
+            (Get-ChildItem dist -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table -AutoSize | Out-String),
+            "```",
+            "### Fin du log Inno Setup",
+            "```text",
+            ((Get-Content inno.log -Tail 25 -ErrorAction SilentlyContinue) -join "`n"),
+            "```"
+          )
+          $summary | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+      - name: Announce result
+        if: always()
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/*-setup.exe -ErrorAction SilentlyContinue
+          if (-not $setup) {
+            echo "::error title=windows-installer::Aucun installeur universel produit — voir le résumé du job et inno.log."
+            exit 1
+          }
+          echo "::notice title=windows-installer::Installeur universel x64 + ARM64 construit : $($setup.Name)."
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-universal
+          path: dist/*-setup.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -440,11 +510,12 @@ jobs:
 
   publish:
     name: GitHub release
-    needs: [prepare, build, macos]
+    needs: [prepare, build, macos, windows-installer]
     if: >-
       !cancelled()
       && needs.build.result == 'success'
       && needs.macos.result == 'success'
+      && needs.windows-installer.result == 'success'
       && needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     env:

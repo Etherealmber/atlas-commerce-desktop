@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-# crates/ui/src/screens/auth.rs:287, packaging/windows/build-msi.py:40,
+# crates/ui/src/screens/auth.rs:287, packaging/windows/atlas-commerce-desktop.iss:40,
 # .github/workflows/release.yml:222, plus cargo's " --> path:line:col".
 CODE_RE = re.compile(
     r"((?:crates|scripts|packaging|\.github)/[A-Za-z0-9_./-]+\."
@@ -36,12 +36,17 @@ ERROR_PATTERNS = [
     re.compile(r"test result: FAILED"),
     re.compile(r"^failures:", re.MULTILINE),
     re.compile(r"bad substitution"),
-    re.compile(r"Exception:"),
+    re.compile(r"Exception"),
     re.compile(r"::error::"),
-    re.compile(r"Error: Process completed with exit code"),
+    re.compile(r"Process completed with exit code"),
+    re.compile(r"exited with code"),
     re.compile(r"cannot find|mismatched types|borrow of moved value"),
+    re.compile(r"ISCC|Inno Setup", re.IGNORECASE),
+    re.compile(r"^\s*throw\b", re.MULTILINE),
+    re.compile(r"command failed|failed with", re.IGNORECASE),
 ]
-NOISE_RE = re.compile(r"^\s*$")
+# Runner workflow-command bookkeeping never carries the actual error.
+NOISE_RE = re.compile(r"^\s*(##\[(?:group|endgroup)\])?\s*$")
 
 # Ordered signatures: the first matching guidance is shown first.
 REMEDIATION: list[tuple[re.Pattern[str], str]] = [
@@ -79,8 +84,10 @@ REMEDIATION: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(r"iscc|Inno Setup|\.iss", re.IGNORECASE),
-        "The Inno Setup compile failed. Check the `/DVersion=… /DArch=…` "
-        "arguments and that the release exe exists before the step runs.",
+        "The universal Inno Setup compile failed. Check the "
+        "`/DVersion=… /DBinaryX64=… /DBinaryArm64=…` arguments, that both "
+        "release exes were downloaded and that `IsX64`/`IsARM64` resolve on "
+        "the runner (Inno Setup 6.3+).",
     ),
     (
         re.compile(r"lipo|notar|codesign|Apple", re.IGNORECASE),
@@ -88,9 +95,15 @@ REMEDIATION: list[tuple[re.Pattern[str], str]] = [
         "ad-hoc signed; verify `bundle.sh` and the universal `lipo` inputs.",
     ),
     (
-        re.compile(r"native-packages|wix|\.msi", re.IGNORECASE),
-        "The WiX/native-packages step failed. Re-run with the captured "
-        "`packaging-windows` artifact log and check `native-packages.yaml`.",
+        re.compile(r"native-packages|AppImage", re.IGNORECASE),
+        "The native-packages/AppImage step failed. Re-run with the captured "
+        "job log and check `native-packages.yaml` and the Ruby gem version.",
+    ),
+    (
+        re.compile(r"dumpbin|PE machine|--version", re.IGNORECASE),
+        "The standalone-Windows gate failed. The release exe must import no "
+        "MSVC runtime (`.cargo/config.toml` crt-static), match its target PE "
+        "machine and answer `--version` with the workspace version.",
     ),
 ]
 
@@ -121,15 +134,29 @@ def strip_ansi(text: str) -> str:
 
 def extract_excerpt(log: str, limit: int = MAX_LINES_PER_JOB) -> tuple[str, str]:
     """Return (headline, context window) around the first error signatures."""
-    lines = strip_ansi(log).splitlines()
+    lines = [
+        line
+        for line in strip_ansi(log).splitlines()
+        if not NOISE_RE.match(line)
+    ]
     hit_indexes = [
         i
         for i, line in enumerate(lines)
         if any(pattern.search(line) for pattern in ERROR_PATTERNS)
     ]
     if not hit_indexes:
-        tail = "\n".join(lines[-limit:])
-        return "no structured error line found", tail
+        # Last resort: the final non-empty lines usually hold the failing
+        # command's own message just before "Process completed with exit code".
+        tail = "\n".join(lines[-limit:]) if lines else ""
+        headline = next(
+            (
+                line.strip()[:180]
+                for line in reversed(lines)
+                if "Process completed" not in line
+            ),
+            "no structured error line found",
+        )
+        return headline, tail
 
     first = hit_indexes[0]
     start = max(0, first - 4)
@@ -182,8 +209,13 @@ def read_snippets(refs: list[tuple[str, int]], root: Path) -> list[tuple[str, in
     return snippets
 
 
-def parse_failed_jobs(run_json: dict, logs: str) -> list[JobFailure]:
+def parse_failed_jobs(
+    run_json: dict,
+    logs: str,
+    annotations: dict[str, list[str]] | None = None,
+) -> list[JobFailure]:
     failures: list[JobFailure] = []
+    annotations = annotations or {}
     failed_jobs = [job for job in run_json.get("jobs", []) if job.get("conclusion") == "failure"]
     for job in failed_jobs:
         name = job["name"]
@@ -193,7 +225,11 @@ def parse_failed_jobs(run_json: dict, logs: str) -> list[JobFailure]:
             for line in logs.splitlines()
             if line.split("\t", 1)[0] == name
         ]
-        job_log = "\n".join(job_lines) if job_lines else logs
+        job_log = "\n".join(job_lines)
+        # When the log endpoint yields nothing (token scopes, archived logs),
+        # the check-run annotations still carry the ::error:: command output.
+        if not job_log.strip():
+            job_log = "\n".join(annotations.get(name, []))
         headline, excerpt = extract_excerpt(job_log)
         failures.append(
             JobFailure(
@@ -226,6 +262,39 @@ def collect(run_id: str, repo: str) -> tuple[dict, str]:
         check=False,
     ).stdout
     return run_json, logs
+
+
+def fetch_annotations(repo: str, sha: str) -> dict[str, list[str]]:
+    """Check-run annotations keyed by job name — the fallback error channel.
+
+    Workflow-command annotations survive even when `gh run view --log`
+    cannot stream the log archive, so they are the reliable minimum.
+    """
+    try:
+        check_runs = gh_json("api", f"repos/{repo}/commits/{sha}/check-runs")
+    except Exception:  # noqa: BLE001 - annotations are best-effort
+        return {}
+    result: dict[str, list[str]] = {}
+    for check in check_runs.get("check_runs", []):
+        if check.get("conclusion") != "failure":
+            continue
+        try:
+            payload = subprocess.check_output(
+                ["gh", "api", f"repos/{repo}/check-runs/{check['id']}/annotations"],
+                text=True,
+            )
+            import json
+
+            messages = [
+                item.get("message", "").strip()
+                for item in json.loads(payload)
+                if item.get("message")
+            ]
+            if messages:
+                result[check["name"]] = messages
+        except Exception:  # noqa: BLE001 - one bad check-run must not stop the rest
+            continue
+    return result
 
 
 def issue_body(run_json: dict, failures: list[JobFailure], snippets: list[tuple[str, int, str]]) -> str:
@@ -337,7 +406,8 @@ def main() -> int:
             return 0
 
         run_json, logs = collect(run_id, repo)
-        failures = parse_failed_jobs(run_json, logs)
+        annotations = fetch_annotations(repo, run_json["headSha"])
+        failures = parse_failed_jobs(run_json, logs, annotations)
         if not failures:
             print("ci-bot: no failed jobs reported, nothing to file")
             return 0

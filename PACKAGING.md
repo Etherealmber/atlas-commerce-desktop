@@ -13,8 +13,7 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 | `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon, the monochrome brand mark. |
 | `packaging/icons` + `packaging/macos/icon-1024.png` | Sources for the Windows `.ico` and the macOS `.icns`. |
 | `scripts/generate-icons.py` | Regenerates the SVG, 1024 px PNG and multi-size `.ico` from the shared monochrome design (Pillow). |
-| `packaging/windows/atlas-commerce-desktop.iss` | Inno Setup per-user installer, registers the URL protocol under `HKCU`. |
-| `packaging/windows/build-msi.py` | WiX 5 per-user MSI generator (no C custom actions). |
+| `packaging/windows/atlas-commerce-desktop.iss` | Universal Inno Setup per-user installer: one `setup.exe` carrying the x64 and ARM64 binaries, installs the matching one via `IsX64`/`IsARM64`, registers the URL protocol under `HKCU`. |
 | `packaging/macos/Info.plist` | Bundle template with `__IDENTIFIER__`/`__EXECUTABLE__`/`__VERSION__`/`__BUILD__` placeholders and the `atlascommerce` URL scheme. |
 | `packaging/macos/autostart.plist` | Login-item agent passing `--start-hidden`. |
 | `packaging/macos/bundle.sh`, `packaging/macos/dmg.sh` | `.app` bundling (ad-hoc or Developer ID) and DMG creation. |
@@ -27,8 +26,10 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
   macOS and Windows, a release build, and an OSV vulnerability scan of
   `Cargo.lock`.
 - **`packaging.yml`** — validates `native-packages.yaml`, the shell
-  packagers, the desktop entry and the Inno Setup script without cutting a
-  release.
+  packagers, the desktop entry and the universal Inno Setup script without
+  cutting a release. Its Windows build reuses the `Swatinem/rust-cache`
+  family; release binaries themselves are never built from a restored
+  cache.
 - **`dependabot.yml`** — weekly Cargo and GitHub Actions updates. The
   fastframe/egui git pins move deliberately, one tag at a time, and are not
   touched by Dependabot.
@@ -51,7 +52,7 @@ and every release is promoted to *latest*.
   - `mandatory`: marks the release as a blocking update in `update.json`;
   - `publish`: uncheck to build every installer and keep them as run
     artifacts without creating a GitHub Release — the way to produce and
-    download a `.msi`/setup `.exe` on demand.
+    download a universal setup `.exe` on demand.
 - **Tag push** — pushing `vX.Y.Z` triggers the identical pipeline with
   publishing on.
 
@@ -59,9 +60,12 @@ and every release is promoted to *latest*.
    `Cargo.toml`, normalises the tag, and records every choice in its job
    summary.
 2. The matrix builds `x86_64`/`aarch64` Linux archives plus AppImages with
-   `.zsync`, and Windows `x86_64`/`arm64` portable zips **with the Inno
-   Setup installer (`*-setup.exe`) and the WiX `.msi`**; a separate job
-   builds the universal macOS DMG from a `lipo` binary.
+   `.zsync`, and Windows `x86_64`/`arm64` portable zips. A dedicated
+   `windows-installer` job downloads both Windows zips and compiles **one
+   universal Inno Setup installer (`*-setup.exe`)** that places the correct
+   binary on Intel/AMD or ARM machines — users never pick an architecture.
+   Another separate job builds the universal macOS DMG from a `lipo` binary.
+   There is no MSI: the Inno installer covers per-user installs and updates.
 3. The `publish` job (environment `release-signing`, skipped when
    `publish` is unchecked) generates the notes, creates the release via
    the API, adds the source archive, writes `update.json` (including the
@@ -80,12 +84,14 @@ results, produced files, SHA-256 fingerprints), emits a one-line
 `::notice::`/`::error::` annotation mirroring that result (readable
 through the check-run API), and uploads its captured logs and packages
 as run artifacts: `quality-logs`, `test-logs-<os>`,
-`vulnerability-logs` under CI, per-target archives and
-`macos-universal` under releases, and the packaging validation logs.
+`vulnerability-logs` under CI, per-target archives, `windows-universal`
+and `macos-universal` under releases, and the packaging validation logs.
+Release summaries also list every step outcome and, on failure, point at
+the first error block; the CI failure bot files an issue with the
+diagnosis and the fix guidance.
 
 ## Application identity
 
 - Bundle / App ID: `com.etherealmber.AtlasCommerceDesktop`
 - Inno `AppId`: `{E74305A7-4960-45B6-93C9-CEA8D83B1517}` (never change)
-- WiX `UpgradeCode`: `{07D6D2FA-2A3F-42BE-8938-B2AFC2A17C7B}` (never change)
 - URL scheme: `atlascommerce://` (verify links and QR handoff)
