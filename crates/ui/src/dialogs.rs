@@ -19,4 +19,5 @@ pub enum ConfirmAction {
     ForgetServer(String),
     SignOut,
     DiscardEditor,
+    RevokeApiKey(i64),
 }

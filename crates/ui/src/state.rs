@@ -187,6 +187,9 @@ pub struct UpdateState {
     pub progress: Option<(u64, u64)>,
     pub stage: String,
     pub error: Option<String>,
+    /// Set when a check answered that the current build is the newest, so
+    /// the settings card can show an explicit "up to date" status.
+    pub up_to_date_at: Option<Instant>,
 }
 
 /// Agent conversation.
@@ -215,6 +218,53 @@ pub struct AgentState {
 #[derive(Default)]
 pub struct NotificationState {
     pub last_high_severity_count: usize,
+}
+
+/// Editable profile form (`PATCH /api/auth/me`).
+#[derive(Default, Clone)]
+pub struct ProfileForm {
+    pub display_name: String,
+    pub email: String,
+    pub phone: String,
+    pub notes: String,
+    /// An https URL to an image; file upload would need a native picker.
+    pub avatar_url: String,
+    /// Filled from `GET /api/auth/me` at least once this session.
+    pub loaded: bool,
+}
+
+/// The explicit scope choice for a new public API key. The worker accepts
+/// `read` or `read,write`; nothing is preselected so the owner chooses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApiKeyScope {
+    Read,
+    ReadWrite,
+}
+
+impl ApiKeyScope {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::ReadWrite => "read,write",
+        }
+    }
+}
+
+/// Open create-key dialog state.
+#[derive(Default, Clone)]
+pub struct ApiKeyEditor {
+    pub name: String,
+    pub scopes: Option<ApiKeyScope>,
+}
+
+/// Which settings section an external entry point (avatar menu) asks for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SettingsFocus {
+    #[default]
+    General,
+    Profile,
+    Integrations,
 }
 
 /// The whole application.
@@ -256,12 +306,36 @@ pub struct AtlasApp {
     pub started_at: Instant,
     pub pending_deep_links: Vec<String>,
     pub force_server_setup: bool,
+    /// Back/forward stacks of shell routes, browser-style.
+    pub nav_back: Vec<Route>,
+    pub nav_forward: Vec<Route>,
+    /// Bumped on every navigation so entrance animations retrigger.
+    pub anim_token: u64,
+    /// When the current route first appeared, for the entrance animation.
+    pub route_entered_at: Instant,
+    /// The top-bar search pill's text (submitted into the products search).
+    pub top_search: String,
+    /// Account popover under the title-bar avatar.
+    pub profile_menu_open: bool,
+    /// Section an external entry point (avatar menu) wants to highlight.
+    pub settings_focus: SettingsFocus,
 
     // ── auth ──
     pub server_form: ServerSetupForm,
     pub login: LoginState,
     pub qr: QrPairing,
     pub devices: Cache<Vec<TrustedDevice>>,
+
+    // ── profile / integrations ──
+    pub profile: Cache<Me>,
+    pub profile_form: ProfileForm,
+    pub profile_save_job: Option<Job<Result<Me, ApiError>>>,
+    pub api_keys: Cache<Vec<ApiKey>>,
+    pub key_editor: Option<ApiKeyEditor>,
+    /// The full secret, kept only between creation and the modal's dismissal.
+    pub created_key: Option<CreatedApiKey>,
+    pub key_create_job: Option<Job<Result<CreatedApiKey, ApiError>>>,
+    pub assist: Cache<AssistProvider>,
 
     // ── commerce caches ──
     pub dashboard: Cache<Dashboard>,
@@ -376,6 +450,21 @@ impl AtlasApp {
             login: LoginState::default(),
             qr: QrPairing::default(),
             devices: Cache::default(),
+            profile: Cache::default(),
+            profile_form: ProfileForm::default(),
+            profile_save_job: None,
+            api_keys: Cache::default(),
+            key_editor: None,
+            created_key: None,
+            key_create_job: None,
+            assist: Cache::default(),
+            nav_back: Vec::new(),
+            nav_forward: Vec::new(),
+            anim_token: 0,
+            route_entered_at: Instant::now(),
+            top_search: String::new(),
+            profile_menu_open: false,
+            settings_focus: SettingsFocus::General,
             dashboard: Cache::default(),
             products: Cache::default(),
             product_search: String::new(),
@@ -496,8 +585,48 @@ impl AtlasApp {
 
     // ── navigation ───────────────────────────────────────────────────────
 
+    /// Opens a shell route, recording the current one for the back button.
     pub fn go(&mut self, route: Route) {
+        if let Screen::Shell(current) = self.screen
+            && current != route
+        {
+            self.nav_back.push(current);
+            // A new branch of history invalidates the forward stack.
+            self.nav_forward.clear();
+            self.begin_route_transition();
+        }
         self.screen = Screen::Shell(route);
+    }
+
+    /// Browser-style back. Returns false when no history is available.
+    pub fn go_back(&mut self) -> bool {
+        let Some(previous) = self.nav_back.pop() else {
+            return false;
+        };
+        if let Screen::Shell(current) = self.screen {
+            self.nav_forward.push(current);
+        }
+        self.begin_route_transition();
+        self.screen = Screen::Shell(previous);
+        true
+    }
+
+    /// Browser-style forward.
+    pub fn go_forward(&mut self) -> bool {
+        let Some(next) = self.nav_forward.pop() else {
+            return false;
+        };
+        if let Screen::Shell(current) = self.screen {
+            self.nav_back.push(current);
+        }
+        self.begin_route_transition();
+        self.screen = Screen::Shell(next);
+        true
+    }
+
+    fn begin_route_transition(&mut self) {
+        self.anim_token = self.anim_token.wrapping_add(1);
+        self.route_entered_at = Instant::now();
     }
 
     pub fn sign_out(&mut self) {
@@ -536,6 +665,18 @@ impl AtlasApp {
         // A stale 401 on the devices cache would otherwise sign out the next
         // session on its first frame: every session-scoped cache resets here.
         self.devices = Cache::default();
+        self.profile = Cache::default();
+        self.profile_form = ProfileForm::default();
+        self.profile_save_job = None;
+        self.api_keys = Cache::default();
+        self.key_editor = None;
+        self.created_key = None;
+        self.key_create_job = None;
+        self.assist = Cache::default();
+        self.nav_back.clear();
+        self.nav_forward.clear();
+        self.profile_menu_open = false;
+        self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
     }

@@ -72,7 +72,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 
 // ── Custom title bar ───────────────────────────────────────────────────────
 
-fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
+const PROFILE_MENU_WIDTH: f32 = 248.0;
+
+fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
     // The top panel already owns a TITLEBAR_HEIGHT strip; paint into it.
     let rect = ui.available_rect_before_wrap();
     ui.allocate_exact_size(rect.size(), Sense::hover());
@@ -80,27 +82,99 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
         fastframe_titlebar::drag(ui, rect);
     }
     let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
+    let left_inset = footprint.left.max(12.0);
+    let right_inset = footprint.right.max(120.0);
 
-    widgets::overlay_at(
-        ui,
-        egui::Rect::from_min_size(
-            rect.min + vec2(footprint.left.max(12.0), 0.0),
-            vec2(
-                rect.width() - footprint.left - footprint.right - 24.0,
-                TITLEBAR_HEIGHT,
-            ),
-        ),
-        |ui| {
-            ui.horizontal_centered(|ui| {
-                crate::brand(ui, palette, 20.0);
-                ui.label(
-                    RichText::new(t!(app.locale, "Atlas Commerce Desktop"))
-                        .color(palette.secondary)
-                        .size(13.0),
-                );
-            });
-        },
+    let strip = egui::Rect::from_min_max(
+        egui::pos2(rect.left() + left_inset, rect.top()),
+        egui::pos2(rect.right() - right_inset - 8.0, rect.bottom()),
     );
+
+    let mut avatar_rect = egui::Rect::NOTHING;
+    widgets::overlay_at(ui, strip, |ui| {
+        // Right-to-left layout: the action cluster is placed against the
+        // caption buttons first, the search pill fills whatever remains.
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+
+            let initial = app
+                .session
+                .as_ref()
+                .and_then(|session| {
+                    if session.display_name.is_empty() {
+                        session.username.chars().next()
+                    } else {
+                        session.display_name.chars().next()
+                    }
+                })
+                .unwrap_or('A')
+                .to_uppercase()
+                .collect::<String>();
+            let avatar =
+                widgets::avatar_circle(ui, palette, &initial, 30.0, palette.surface_active);
+            avatar_rect = avatar.rect;
+            if avatar.clicked() {
+                app.profile_menu_open = !app.profile_menu_open;
+            }
+
+            if widgets::icon_circle_button(ui, palette, Icon::Settings, true).clicked() {
+                app.profile_menu_open = false;
+                app.go(Route::Settings);
+            }
+
+            let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+            let alert_count = app
+                .nav_badges
+                .data
+                .as_ref()
+                .map_or(0, |badges| {
+                    badges.products_low + badges.invoices_unpaid + badges.vr_open
+                });
+            if alert_count > 0 {
+                paint_titlebar_badge(ui, &bell, palette, alert_count);
+            }
+            if bell.clicked() {
+                app.go(Route::Notifications);
+                if app.alerts.data.is_none() {
+                    app.load_alerts();
+                }
+            }
+
+            ui.add_space(8.0);
+
+            // The pill takes the room left by the action cluster and the
+            // navigation arrows, clamped to a readable range.
+            let search_width = (ui.available_width() - 2.0 * 30.0 - 18.0)
+                .clamp(120.0, 420.0);
+            draw_search_pill(app, ui, palette, search_width);
+
+            ui.add_space(8.0);
+            // The bundled Lucide set ships chevrons but no arrow-right, so the
+            // navigation pair uses the matching chevron set.
+            let forward = widgets::icon_circle_button(
+                ui,
+                palette,
+                Icon::ChevronRight,
+                !app.nav_forward.is_empty(),
+            );
+            if forward.clicked() {
+                app.go_forward();
+            }
+            let back = widgets::icon_circle_button(
+                ui,
+                palette,
+                Icon::ChevronLeft,
+                !app.nav_back.is_empty(),
+            );
+            if back.clicked() {
+                app.go_back();
+            }
+        });
+    });
+
+    if app.profile_menu_open {
+        draw_profile_menu(app, ctx, palette, &avatar_rect);
+    }
 
     if fastframe_titlebar::enabled() {
         let style = fastframe_titlebar::Style {
@@ -126,7 +200,7 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
             ui,
             egui::Rect::from_min_size(
                 egui::pos2(rect.right() - footprint.right - 4.0, rect.top()),
-                vec2(footprint.right.max(120.0), TITLEBAR_HEIGHT),
+                vec2(right_inset, TITLEBAR_HEIGHT),
             ),
             |ui| {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -135,6 +209,209 @@ fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette
             },
         );
     }
+}
+
+/// The global search pill: Enter jumps to the products page with the query
+/// applied, reusing its server-side search.
+fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, width: f32) {
+    egui::Frame::NONE
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.outline))
+        .corner_radius(999.0)
+        .inner_margin(egui::Margin::symmetric(12, 0))
+        .show(ui, |ui| {
+            ui.set_height(30.0);
+            ui.allocate_ui_with_layout(
+                vec2(width, 30.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    widgets::icon(ui, Icon::Search, palette.secondary, 15.0);
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut app.top_search)
+                            .id(egui::Id::new("titlebar-search"))
+                            .frame(false)
+                            .hint_text(t!(app.locale, "Search a product…"))
+                            .desired_width(width - 42.0)
+                            .clip_text(true),
+                    );
+                    let enter = response.lost_focus()
+                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                    if enter && !app.top_search.trim().is_empty() {
+                        let query = app.top_search.trim().to_owned();
+                        app.product_search = query;
+                        app.go(Route::Products);
+                        app.load_products();
+                    }
+                },
+            );
+        });
+}
+
+/// Small accent counter at a title-bar button's top-right corner.
+fn paint_titlebar_badge(
+    ui: &mut egui::Ui,
+    button: &egui::Response,
+    palette: &Palette,
+    count: i64,
+) {
+    let text = if count > 9 {
+        "9+".to_owned()
+    } else {
+        count.to_string()
+    };
+    let galley = ui.painter().layout_no_wrap(
+        text,
+        egui::FontId::proportional(10.5),
+        palette.on_accent,
+    );
+    let width = (galley.size().x + 8.0).max(15.0);
+    let rect = egui::Rect::from_min_size(
+        egui::pos2(button.rect.right() - width + 2.0, button.rect.top() - 2.0),
+        vec2(width, 15.0),
+    );
+    ui.painter().rect_filled(rect, 999.0, palette.accent);
+    ui.painter().galley(
+        egui::pos2(
+            rect.center().x - galley.size().x / 2.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        palette.on_accent,
+    );
+}
+
+/// Account popover anchored under the title-bar avatar.
+fn draw_profile_menu(
+    app: &mut AtlasApp,
+    ctx: &egui::Context,
+    palette: &Palette,
+    avatar_rect: &egui::Rect,
+) {
+    let position = egui::pos2(
+        avatar_rect.right() - PROFILE_MENU_WIDTH,
+        avatar_rect.bottom() + 8.0,
+    );
+    let response = egui::Area::new(egui::Id::new("titlebar-profile-menu"))
+        .fixed_pos(position)
+        .order(egui::Order::Foreground)
+        .constrain(true)
+        .show(ctx, |ui| {
+            widgets::card(palette)
+                .inner_margin(egui::Margin::same(10))
+                .show(ui, |ui| {
+                    ui.set_width(PROFILE_MENU_WIDTH - 20.0);
+                    if let Some(session) = app.session.clone() {
+                        ui.horizontal(|ui| {
+                            ui.add_space(2.0);
+                            let initial = if session.display_name.is_empty() {
+                                session.username.chars().next().unwrap_or('A')
+                            } else {
+                                session.display_name.chars().next().unwrap_or('A')
+                            }
+                            .to_string();
+                            widgets::avatar_circle(
+                                ui,
+                                palette,
+                                &initial,
+                                34.0,
+                                palette.surface_active,
+                            );
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(if session.display_name.is_empty() {
+                                        session.username.clone()
+                                    } else {
+                                        session.display_name.clone()
+                                    })
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(13.5),
+                                );
+                                ui.label(
+                                    RichText::new(session.username.clone())
+                                        .color(palette.dim)
+                                        .size(11.5),
+                                );
+                            });
+                        });
+                        ui.separator();
+                    }
+
+                    if menu_row(ui, palette, Icon::User, t!(app.locale, "My profile")).clicked() {
+                        app.profile_menu_open = false;
+                        app.settings_focus = crate::state::SettingsFocus::Profile;
+                        app.go(Route::Settings);
+                    }
+                    let settings_click =
+                        menu_row(ui, palette, Icon::Settings, t!(app.locale, "Settings")).clicked();
+                    if settings_click {
+                        app.profile_menu_open = false;
+                        app.settings_focus = crate::state::SettingsFocus::General;
+                        app.go(Route::Settings);
+                    }
+                    ui.separator();
+                    if menu_row(ui, palette, Icon::LogOut, t!(app.locale, "Sign out")).clicked() {
+                        app.profile_menu_open = false;
+                        app.confirm_dialog = Some(Confirm {
+                            title: t!(app.locale, "Sign out").into_owned(),
+                            body: t!(
+                                app.locale,
+                                "You will need to sign in again to reach this server."
+                            )
+                            .into_owned(),
+                            confirm_label: t!(app.locale, "Sign out").into_owned(),
+                            danger: true,
+                            action: ConfirmAction::SignOut,
+                        });
+                    }
+                });
+        })
+        .response;
+
+    // Click-outside dismissal (the opening click is on the avatar, not here).
+    if ctx.input(|input| input.pointer.any_pressed()) && !response.contains_pointer() {
+        app.profile_menu_open = false;
+    }
+}
+
+fn menu_row(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    which: Icon,
+    label: impl AsRef<str>,
+) -> egui::Response {
+    let response = ui
+        .allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(response.rect, 8.0, palette.surface_hover);
+    }
+    widgets::overlay_at(
+        ui,
+        egui::Rect::from_center_size(
+            egui::pos2(response.rect.left() + 18.0, response.rect.center().y),
+            Vec2::splat(18.0),
+        ),
+        |ui| widgets::icon(ui, which, palette.secondary, 16.0),
+    );
+    widgets::overlay_at(
+        ui,
+        egui::Rect::from_min_size(
+            egui::pos2(response.rect.left() + 38.0, response.rect.top()),
+            vec2(response.rect.width() - 44.0, response.rect.height()),
+        ),
+        |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.label(
+                    RichText::new(label.as_ref())
+                        .color(palette.text)
+                        .size(13.5),
+                );
+            });
+        },
+    );
+    response
 }
 
 // ── Left rail ──────────────────────────────────────────────────────────────
@@ -327,10 +604,20 @@ fn draw_user_card(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── Routed content ─────────────────────────────────────────────────────────
 
 fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
+    // Android-style entrance: each navigation replays a quick cubic-out
+    // fade while the content rises ~18 px into place. The id carries the
+    // animation token, so a fresh navigation starts from zero.
+    let entrance = ctx.animate_bool_with_time_and_easing(
+        egui::Id::new(("shell-route-enter", app.anim_token)),
+        true,
+        0.24,
+        egui::emath::easing::cubic_out,
+    );
     egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.add_space(4.0);
+            ui.set_opacity(entrance);
+            ui.add_space(4.0 + (1.0 - entrance) * 18.0);
             match app.screen {
                 Screen::Shell(Route::Dashboard) => {
                     super::dashboard::draw(app, ui, palette);
@@ -448,5 +735,6 @@ fn run_confirm_action(app: &mut AtlasApp, action: ConfirmAction) {
             app.devices.start(job);
             app.notice(t!(app.locale, "Device revoked.").into_owned());
         }
+        ConfirmAction::RevokeApiKey(id) => app.revoke_api_key(id),
     }
 }

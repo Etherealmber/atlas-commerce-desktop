@@ -20,6 +20,7 @@ pub mod commerce;
 pub mod delivery_notes;
 pub mod error;
 pub mod expenses;
+pub mod integrations;
 pub mod models;
 pub mod probe;
 pub mod scan;
@@ -142,6 +143,50 @@ impl ApiClient {
             .await
             .map_err(transport_error)?;
         self.unwrap_envelope(response).await
+    }
+
+    /// PATCH a JSON body, returning the envelope's `data` (self profile edit).
+    pub(crate) async fn patch_data<T: serde::de::DeserializeOwned, B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, ApiError> {
+        let response = self
+            .request(reqwest::Method::PATCH, path)
+            .json(body)
+            .send()
+            .await
+            .map_err(transport_error)?;
+        self.unwrap_envelope(response).await
+    }
+
+    /// DELETE whose envelope carries no `data` (key revocation): the success
+    /// flag alone decides the result.
+    pub(crate) async fn delete_success(&self, path: &str) -> Result<(), ApiError> {
+        let response = self
+            .request(reqwest::Method::DELETE, path)
+            .send()
+            .await
+            .map_err(transport_error)?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(error::response_into_error(response).await);
+        }
+        let envelope: Envelope<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|error| ApiError::transport(format!("Réponse illisible : {error}")))?;
+        if envelope.success {
+            Ok(())
+        } else {
+            Err(ApiError {
+                status: status.as_u16(),
+                code: envelope.code,
+                message: envelope
+                    .error
+                    .unwrap_or_else(|| "Le serveur a refusé l'opération.".to_owned()),
+            })
+        }
     }
 
     /// POST whose JSON answer is read whole (login endpoints keep the token

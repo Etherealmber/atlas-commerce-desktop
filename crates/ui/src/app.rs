@@ -11,6 +11,7 @@ use fastframe_shell::{Headless, Held, Lease, Resident};
 
 use crate::screens;
 use crate::state::{AtlasApp, Route, Screen};
+use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
@@ -62,6 +63,8 @@ impl AtlasApp {
         self.load_products();
         self.load_alerts();
         self.load_nav_badges();
+        self.load_profile();
+        self.load_assist();
         if self.settings.update_check_on_start {
             self.check_for_updates(false);
         }
@@ -172,6 +175,137 @@ impl AtlasApp {
         self.devices.start(job);
     }
 
+    // ── Profile / integrations ───────────────────────────────────────────
+
+    pub fn load_profile(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self.runner.spawn(async move { client.me().await });
+        self.profile.start(job);
+    }
+
+    /// Pushes the form through `PATCH /api/auth/me`.
+    pub fn save_profile(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let patch = atlas_api::models::MeUpdate {
+            display_name: Some(self.profile_form.display_name.trim().to_owned()),
+            email: Some(self.profile_form.email.trim().to_owned()),
+            phone: Some(self.profile_form.phone.trim().to_owned()),
+            notes: Some(self.profile_form.notes.trim().to_owned()),
+            avatar_url: Some(self.profile_form.avatar_url.trim().to_owned()),
+        };
+        let job = self
+            .runner
+            .spawn(async move { client.update_me(&patch).await });
+        self.profile_save_job = Some(job);
+    }
+
+    pub fn load_api_keys(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self.runner.spawn(async move { client.list_api_keys().await });
+        self.api_keys.start(job);
+    }
+
+    /// Creates a key from the open editor; the raw secret comes back once and
+    /// is kept for the reveal modal.
+    pub fn create_api_key(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let Some(editor) = self.key_editor.clone() else {
+            return;
+        };
+        let Some(scopes) = editor.scopes else {
+            return;
+        };
+        let name = editor.name.trim().to_owned();
+        if name.is_empty() {
+            return;
+        }
+        let job = self.runner.spawn(async move {
+            client.create_api_key(&name, scopes.as_str()).await
+        });
+        self.key_create_job = Some(job);
+    }
+
+    pub fn revoke_api_key(&mut self, id: i64) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self.runner.spawn(async move {
+            client.delete_api_key(id).await?;
+            client.list_api_keys().await
+        });
+        self.api_keys.start(job);
+        self.notice(t!(self.locale, "API key revoked.").into_owned());
+    }
+
+    pub fn load_assist(&mut self) {
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let job = self
+            .runner
+            .spawn(async move { client.assist_provider().await });
+        self.assist.start(job);
+    }
+
+    /// Copies a freshly loaded profile into the editable form once.
+    fn fill_profile_form(&mut self, me: &atlas_api::models::Me) {
+        if self.profile_form.loaded {
+            return;
+        }
+        self.profile_form = crate::state::ProfileForm {
+            display_name: me.display_name.clone().unwrap_or_default(),
+            email: me.email.clone().unwrap_or_default(),
+            phone: me.phone.clone().unwrap_or_default(),
+            notes: me.notes.clone().unwrap_or_default(),
+            avatar_url: me.avatar_url.clone().unwrap_or_default(),
+            loaded: true,
+        };
+    }
+
+    fn poll_profile_jobs(&mut self) {
+        if let Some(job) = &self.profile_save_job
+            && let Some(result) = job.poll()
+        {
+            self.profile_save_job = None;
+            match result {
+                Ok(me) => {
+                    self.profile_form.loaded = true;
+                    self.profile.data = Some(me.clone());
+                    self.fill_profile_form(&me);
+                    if let Some(session) = self.session.as_mut() {
+                        session.display_name = me.display_name.clone().unwrap_or_default();
+                        session.avatar_url = me.avatar_url.clone().unwrap_or_default();
+                        session.email = me.email.clone().unwrap_or_default();
+                    }
+                    self.save_session();
+                    self.notice(t!(self.locale, "Profile updated.").into_owned());
+                }
+                Err(error) => self.notice(error.message),
+            }
+        }
+        if let Some(job) = &self.key_create_job
+            && let Some(result) = job.poll()
+        {
+            self.key_create_job = None;
+            match result {
+                Ok(created) => {
+                    self.created_key = Some(created);
+                    self.key_editor = None;
+                    self.load_api_keys();
+                }
+                Err(error) => self.notice(error.message),
+            }
+        }
+    }
+
     // ── Updates ──────────────────────────────────────────────────────────
 
     pub fn check_for_updates(&mut self, prerelease_override: bool) {
@@ -263,7 +397,12 @@ impl AtlasApp {
     fn apply_manifest(&mut self, manifest: UpdateManifest) {
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
-            UpdateDecision::UpToDate => {}
+            UpdateDecision::UpToDate => {
+                // Surface an explicit status in the About card instead of
+                // silently swallowing the answer.
+                self.update.up_to_date_at = Some(Instant::now());
+                self.update.error = None;
+            }
             UpdateDecision::Mandatory { .. } => {
                 self.update.mandatory = Some(manifest.clone());
                 self.update.last_manifest = Some(manifest);
@@ -391,6 +530,19 @@ impl AtlasApp {
         if self.nav_badges.poll() {
             ctx.request_repaint();
         }
+        if self.profile.poll() {
+            if let Some(me) = self.profile.data.clone() {
+                self.fill_profile_form(&me);
+            }
+            ctx.request_repaint();
+        }
+        if self.assist.poll() {
+            ctx.request_repaint();
+        }
+        if self.api_keys.poll() {
+            ctx.request_repaint();
+        }
+        self.poll_profile_jobs();
         self.poll_agent_jobs();
         self.poll_update_jobs(ctx);
         self.enforce_session_binding();
@@ -427,6 +579,8 @@ impl AtlasApp {
             &self.alerts.last_error,
             &self.devices.last_error,
             &self.nav_badges.last_error,
+            &self.profile.last_error,
+            &self.api_keys.last_error,
         ]
         .iter()
         .any(|error| {
@@ -562,6 +716,11 @@ impl AtlasApp {
             || self.invoices.loading
             || self.alerts.loading
             || self.devices.loading
+            || self.profile.loading
+            || self.api_keys.loading
+            || self.assist.loading
+            || self.profile_save_job.is_some()
+            || self.key_create_job.is_some()
             || self.agent.busy
             || self.update.checking
             || self.update.progress.is_some()

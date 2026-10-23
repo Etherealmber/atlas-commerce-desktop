@@ -214,3 +214,238 @@ pub fn row_button(ui: &mut egui::Ui, palette: &Palette, height: f32) -> egui::Re
     }
     response
 }
+
+/// A circular, dark icon button in the Spotifast/Android style: 32 px disk,
+/// dimmed when disabled. Used by the shell's top bar (back/forward, bell…).
+pub fn icon_circle_button(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    which: Icon,
+    enabled: bool,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::Vec2::splat(30.0),
+        if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
+    );
+    let fill = if palette.dark {
+        egui::Color32::from_black_alpha(90)
+    } else {
+        egui::Color32::from_black_alpha(18)
+    };
+    if enabled && response.hovered() {
+        ui.painter().circle_filled(rect.center(), 15.0, palette.surface_hover);
+    } else {
+        ui.painter().circle_filled(rect.center(), 15.0, fill);
+    }
+    let tint = if !enabled {
+        palette.dim
+    } else if response.hovered() {
+        palette.text
+    } else {
+        palette.secondary
+    };
+    overlay_at(
+        ui,
+        egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(18.0)),
+        |ui| icon(ui, which, tint, 17.0),
+    );
+    response
+}
+
+/// A filled circle showing the user's initial, the monochrome stand-in for
+/// profile pictures (avatars are a URL the user provides in their profile).
+pub fn avatar_circle(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    initial: &str,
+    size: f32,
+    fill: egui::Color32,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(size), Sense::click());
+    ui.painter().circle_filled(rect.center(), size / 2.0, fill);
+    let galley = ui.painter().layout_no_wrap(
+        initial.to_owned(),
+        egui::FontId::proportional(size * 0.42),
+        palette.on_accent,
+    );
+    ui.painter().galley(
+        egui::pos2(
+            rect.center().x - galley.size().x / 2.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        palette.on_accent,
+    );
+    response
+}
+
+/// An Android-style switch with an animated knob. Returns the click response;
+/// the caller owns the bool.
+pub fn switch(ui: &mut egui::Ui, value: &mut bool, palette: &Palette) -> egui::Response {
+    const WIDTH: f32 = 42.0;
+    const HEIGHT: f32 = 24.0;
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(WIDTH, HEIGHT), Sense::click());
+    if response.clicked() {
+        *value = !*value;
+    }
+    let t = ui.ctx().animate_bool_with_easing(
+        response.id,
+        *value,
+        egui::emath::easing::cubic_out,
+    );
+    let track_off = palette.surface_active;
+    let track = track_off.lerp_to_gamma(palette.accent, t);
+    ui.painter().rect_filled(rect, HEIGHT / 2.0, track);
+    let knob_radius = HEIGHT / 2.0 - 3.0;
+    let x = rect.left() + knob_radius + 3.0 + t * (WIDTH - 2.0 * (knob_radius + 3.0));
+    let knob_center = egui::pos2(x, rect.center().y);
+    ui.painter()
+        .circle_filled(knob_center, knob_radius, egui::Color32::WHITE);
+    response
+}
+
+/// A bold section header above a settings card, Spotifast-style.
+pub fn section_header(ui: &mut egui::Ui, palette: &Palette, title: impl AsRef<str>) {
+    ui.add_space(6.0);
+    ui.label(
+        RichText::new(title.as_ref())
+            .color(palette.text)
+            .strong()
+            .size(19.0),
+    );
+    ui.add_space(8.0);
+}
+
+/// A settings row: bold title (+ optional dim description) on the left, a
+/// custom control on the right.
+pub fn setting_row<R>(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    title: impl AsRef<str>,
+    description: Option<&str>,
+    control: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let inner = ui
+        .horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.add_space(2.0);
+                ui.label(RichText::new(title.as_ref()).color(palette.text).size(13.5).strong());
+                if let Some(description) = description {
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(description)
+                            .color(palette.dim)
+                            .size(11.5),
+                    );
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), control)
+        })
+        .inner;
+    inner.inner
+}
+
+/// A title/description row with an animated switch on the right. Returns
+/// whether the value changed this frame.
+pub fn switch_row(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    title: impl AsRef<str>,
+    description: Option<&str>,
+    value: &mut bool,
+) -> bool {
+    let before = *value;
+    setting_row(ui, palette, title, description, |ui| switch(ui, value, palette));
+    *value != before
+}
+
+/// Segmented pill selector (language, theme, channel, scopes…). The selected
+/// option is returned when clicked.
+pub fn segmented<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    options: &[(&str, T)],
+    selected: T,
+) -> Option<T> {
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        for (label, value) in options {
+            let is_selected = selected == *value;
+            let button = egui::Button::new(
+                RichText::new(*label)
+                    .color(if is_selected {
+                        palette.on_accent
+                    } else {
+                        palette.text
+                    })
+                    .size(12.5),
+            )
+            .fill(if is_selected {
+                palette.accent
+            } else {
+                palette.surface
+            })
+            .stroke(Stroke::new(1.0, palette.outline))
+            .corner_radius(999.0);
+            if ui.add(button).clicked() {
+                picked = Some(*value);
+            }
+        }
+    });
+    picked
+}
+
+/// A floating action button (Android FAB) anchored to the window's bottom
+/// right: 56 px accent disk, scale-in entrance and hover lift.
+pub fn fab(
+    ctx: &egui::Context,
+    palette: &Palette,
+    which: Icon,
+    id_salt: impl std::hash::Hash + Copy,
+    tooltip: &str,
+) -> egui::Response {
+    let id = egui::Id::new(("atlas-fab", id_salt));
+    // Android-style 220 ms scale-in, slower than egui's 83 ms default.
+    let entrance = ctx.animate_bool_with_time_and_easing(
+        egui::Id::new(("atlas-fab-in", id_salt)),
+        true,
+        0.22,
+        egui::emath::easing::cubic_out,
+    );
+    egui::Area::new(id)
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -24.0))
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .show(ctx, |ui| {
+            let full = 56.0;
+            let (rect, response) =
+                ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
+            let hover = ctx.animate_bool(
+                egui::Id::new(("atlas-fab-hover", id_salt)),
+                response.hovered(),
+            );
+            let scale = entrance * (1.0 + 0.06 * hover);
+            let size = full * scale;
+            let center = rect.center();
+            let draw_rect = egui::Rect::from_center_size(center, egui::Vec2::splat(size));
+            // Soft shadow, then the accent disk.
+            ui.painter().circle_filled(
+                draw_rect.center() + egui::vec2(0.0, 2.0 * scale),
+                size / 2.0,
+                palette.shadow,
+            );
+            ui.painter()
+                .circle_filled(draw_rect.center(), size / 2.0, palette.accent);
+            overlay_at(
+                ui,
+                egui::Rect::from_center_size(center, egui::Vec2::splat(26.0)),
+                |ui| icon(ui, which, palette.on_accent, 24.0),
+            );
+            response.on_hover_text(tooltip)
+        })
+        .response
+}
