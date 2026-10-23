@@ -698,6 +698,20 @@ jobs:
             tar --exclude='.git' --exclude='target' --exclude='dist' \
               -czf "$out" .
           fi
+      - name: Per-architecture setup aliases
+        run: |
+          set -euo pipefail
+          # fastframe-update selects <slug>-v<ver>-<target>-setup.exe for an
+          # Inno-based copy (target x86_64/aarch64-pc-windows-msvc). The
+          # release ships one universal setup that handles both arches, so
+          # publish it under both names the updater may request. Must run
+          # before Checksums so every alias gets a checksum entry.
+          universal="dist/atlas-commerce-desktop-${RELEASE_TAG}-setup.exe"
+          test -f "$universal"
+          for target in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+            cp "$universal" "dist/atlas-commerce-desktop-${RELEASE_TAG}-${target}-setup.exe"
+          done
+          ls -1 dist/*-setup.exe
       - name: Update manifest (update.json)
         run: |
           set -euo pipefail

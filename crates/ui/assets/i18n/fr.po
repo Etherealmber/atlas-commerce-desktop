@@ -304,6 +304,9 @@ msgstr "Télécharger et installer"
 msgid "Downloading update"
 msgstr "Téléchargement de la mise à jour"
 
+msgid "Downloading…"
+msgstr "Téléchargement…"
+
 msgid "Draft"
 msgstr "Brouillon"
 
@@ -384,6 +387,9 @@ msgstr "Stock initial"
 
 msgid "Invalid report link."
 msgstr "Lien de rapport invalide."
+
+msgid "Installing…"
+msgstr "Installation…"
 
 msgid "Invoice history"
 msgstr "Historique des factures"
@@ -552,6 +558,9 @@ msgstr "Aucune écriture correspondante"
 
 msgid "No product available"
 msgstr "Aucun produit disponible"
+
+msgid "No published release found."
+msgstr "Aucune version publiée trouvée."
 
 msgid "No product found"
 msgstr "Aucun produit trouvé"
@@ -888,6 +897,9 @@ msgstr "Cet appareil devra se reconnecter."
 
 msgid "The AI agent is not available for this account."
 msgstr "L'agent IA n'est pas disponible pour ce compte."
+
+msgid "This build cannot update itself. Download the latest installer from the releases page."
+msgstr "Cette version ne peut pas se mettre à jour elle-même. Téléchargez le dernier installeur depuis la page des versions."
 
 msgid "The amount must be a positive number."
 msgstr "Le montant doit être un nombre positif."

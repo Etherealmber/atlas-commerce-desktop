@@ -1,11 +1,19 @@
 name: CI failure bot
 
-# Watches the three delivery workflows. When a run finishes with a failure,
-# checks out the exact failing revision, downloads its logs, extracts the
-# error windows, reads the implicated source lines and opens a GitHub issue
-# with concrete remediation guidance (or comments if the same revision
-# already has one). Triggered after every push once its checks complete —
-# the bot itself never fails a check.
+# Watches the three delivery workflows. When a run finishes, it downloads
+# the logs, extracts the error windows, reads the implicated source lines
+# and either opens a GitHub issue with concrete remediation guidance and an
+# optional Groq AI diagnosis, or comments on the issue already tracking that
+# branch / pull request — one issue per line of work, never one per failing
+# commit. A green run closes the matching open issues. The bot itself never
+# fails a check.
+#
+# Trust boundary: CI runs on fork pull requests, and a fork author controls
+# the failing revision's contents. The executed bot script therefore always
+# comes from this repository's default branch (first checkout). The head
+# revision is checked out separately under ./revision as read-only data for
+# source snippets, with credentials never persisted; it is never executed
+# and never sees GH_TOKEN or GROQ_API_KEY.
 
 on:
   workflow_run:
@@ -23,21 +31,41 @@ concurrency:
 
 jobs:
   report:
-    if: github.event.workflow_run.conclusion == 'failure'
+    # Cancelled runs carry nothing to report; failure and success both do.
+    if: github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Checkout the failing revision
+      # Trusted code path: the bot script that runs with the issue-writing
+      # token and the Groq key always comes from the default branch.
+      - name: Check out bot workflow (default branch, trusted)
         uses: actions/checkout@v7
         with:
-          # Same-repo runs (push/PR/dispatch) always resolve; fork checkouts
-          # are allowed to fail, in which case code snippets are skipped.
+          persist-credentials: false
+      # Untrusted data path: the exact failing revision, including fork PRs,
+      # is only used to read source snippets. Allowed to fail (deleted fork
+      # or revision): snippets are then skipped, issue filing continues.
+      - name: Check out failing revision as read-only data
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
           repository: ${{ github.event.workflow_run.head_repository.full_name }}
           ref: ${{ github.event.workflow_run.head_sha }}
+          path: revision
+          persist-credentials: false
+      - name: Bot self-test (pure functions, no network)
+        run: python3 scripts/ci-bot-report.py --selftest
         continue-on-error: true
-      - name: Analyse logs and open or update the issue
+      - name: Analyse logs and open, update or close the issue
         env:
           GH_TOKEN: ${{ github.token }}
           CI_BOT_RUN_ID: ${{ github.event.workflow_run.id }}
           CI_BOT_REPO: ${{ github.repository }}
+          CI_BOT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          # Source snippets are read from the untrusted data checkout only.
+          CI_BOT_REVISION_DIR: ${{ github.workspace }}/revision
+          # Optional: add this repository Actions secret to enable French AI
+          # summaries in bot issues. Without it the step is simply skipped.
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python3 scripts/ci-bot-report.py

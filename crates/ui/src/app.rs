@@ -427,14 +427,25 @@ impl AtlasApp {
         let progress = Arc::new(Mutex::new((0_u64, 0_u64)));
         self.update_progress = progress.clone();
         self.update.progress = Some((0, 0));
-        self.update.stage = "Téléchargement…".to_owned();
+        self.update.stage = t!(self.locale, "Downloading…").into_owned();
+        let locale = self.locale;
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             tokio::task::spawn_blocking(move || {
                 let updater = crate::update::build_updater().map_err(|error| error.to_string())?;
+                // Refuse early with a clear message when this copy has no
+                // portable/installer marker (e.g. a dev build): the helper
+                // cannot replace an executable it cannot identify.
+                updater.installation().map_err(|_| {
+                    t!(
+                        locale,
+                        "This build cannot update itself. Download the latest installer from the releases page."
+                    )
+                    .into_owned()
+                })?;
                 let release = updater
                     .check()
                     .map_err(|error| error.to_string())?
-                    .ok_or_else(|| "Aucune version publiée trouvée.".to_owned())?;
+                    .ok_or_else(|| t!(locale, "No published release found.").into_owned())?;
                 let prepared = updater
                     .download(&release, |received, total| {
                         if let Ok(mut guard) = progress.lock() {
@@ -475,7 +486,7 @@ impl AtlasApp {
                 self.update_download_job = None;
                 match result {
                     Ok(()) => {
-                        self.update.stage = "Installation…".to_owned();
+                        self.update.stage = t!(self.locale, "Installing…").into_owned();
                         self.wants_quit = true;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
