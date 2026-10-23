@@ -354,15 +354,44 @@ def replace_marker(body: str, fresh_marker: str) -> str:
     return f"{fresh_marker}\n\n{body}"
 
 
+def incoming_failure_is_newer(
+    incoming_committed: str | None, recorded_committed: str | None
+) -> bool:
+    """Whether an incoming failure may replace the marker already recorded.
+
+    Runs complete out of order: an older failed run can finish triage after a
+    newer one and must not regress the marker to its older sha. Uncertain
+    timestamps fail safe (False): the recorded marker is kept.
+    """
+    incoming = parse_timestamp(incoming_committed)
+    recorded = parse_timestamp(recorded_committed)
+    if incoming is None or recorded is None:
+        return False
+    return incoming >= recorded
+
+
 def refresh_issue_marker(repo: str, number: int, existing_body: str, run_json: dict) -> None:
     """Persist the current run's marker onto a reused issue (best-effort).
 
     Without this, a green run would compare its timestamp against the first
-    failure recorded in the body even after newer revisions kept failing.
+    failure recorded in the body even after newer revisions kept failing. The
+    recorded marker only moves forward in commit time, never backward.
     """
-    updated = replace_marker(existing_body or "", issue_marker(run_json))
+    fresh_marker = issue_marker(run_json)
+    updated = replace_marker(existing_body or "", fresh_marker)
     if updated == (existing_body or ""):
         return
+    recorded_sha = parse_marker(existing_body or "").get("sha")
+    incoming_sha = run_json["headSha"][:7]
+    if recorded_sha and recorded_sha != incoming_sha:
+        if not incoming_failure_is_newer(
+            commit_date(repo, incoming_sha), commit_date(repo, recorded_sha)
+        ):
+            print(
+                f"ci-bot: keep marker on #{number}: incoming {incoming_sha} "
+                f"is not newer than recorded {recorded_sha}"
+            )
+            return
     subprocess.run(
         ["gh", "issue", "edit", str(number), "--repo", repo, "--body-file", "-"],
         input=updated,
@@ -884,6 +913,12 @@ def selftest() -> int:
     # A legacy body without a marker gets one prepended, nothing is dropped.
     legacy = replace_marker("# Old issue\nNo marker here.", new_marker)
     assert legacy.startswith(new_marker) and "No marker here." in legacy
+
+    # Out-of-order failures never regress a marker to an older revision.
+    assert incoming_failure_is_newer("2026-10-24T12:00:00Z", "2026-10-24T10:00:00Z")
+    assert not incoming_failure_is_newer("2026-10-24T09:00:00Z", "2026-10-24T10:00:00Z")
+    assert not incoming_failure_is_newer(None, "2026-10-24T10:00:00Z")
+    assert not incoming_failure_is_newer("2026-10-24T10:00:00Z", None)
 
     print("ci-bot selftest: all checks passed")
     return 0
