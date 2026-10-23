@@ -427,7 +427,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .unwrap_or_else(|| "—".to_owned());
                 ui.horizontal(|ui| {
                     icon(ui, Icon::Server, palette.secondary, 15.0);
-                    widgets::pill(ui, &host, palette.surface, palette.secondary);
+                    pill(ui, &host, palette.surface, palette.secondary);
                     if ui
                         .add(
                             egui::Button::new(

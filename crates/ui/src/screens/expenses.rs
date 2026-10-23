@@ -275,13 +275,13 @@ fn draw_totals(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let net = earned - spent;
     let width = ((ui.available_width() - 24.0) / 3.0).max(160.0);
     ui.horizontal(|ui| {
-        stat_card(ui, palette, width, t!(app.locale, "Expenses"), &money(spent, currency));
-        stat_card(ui, palette, width, t!(app.locale, "Income"), &money(earned, currency));
+        stat_card(ui, palette, width, &t!(app.locale, "Expenses"), &money(spent, currency));
+        stat_card(ui, palette, width, &t!(app.locale, "Income"), &money(earned, currency));
         stat_card(
             ui,
             palette,
             width,
-            t!(app.locale, "Net balance"),
+            &t!(app.locale, "Net balance"),
             &money(net, currency),
         );
     });
