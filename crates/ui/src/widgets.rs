@@ -406,7 +406,7 @@ pub fn fab(
     ctx: &egui::Context,
     palette: &Palette,
     which: Icon,
-    id_salt: impl std::hash::Hash + Copy,
+    id_salt: impl std::hash::Hash + Copy + std::fmt::Debug,
     tooltip: &str,
 ) -> egui::Response {
     let id = egui::Id::new(("atlas-fab", id_salt));
