@@ -111,14 +111,31 @@ impl ServerUrl {
         if trimmed.is_empty() {
             return None;
         }
-        let with_scheme = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-            trimmed.to_owned()
-        } else if trimmed.contains("://") {
-            // An explicit scheme other than http(s) (ftp:, mailto:, custom
-            // app schemes…): never silently turn it into an https host.
-            return None;
-        } else {
-            format!("https://{trimmed}")
+        // Distinguish an explicit URI scheme from a bare `host:port`. The
+        // grammar is RFC 3986's scheme rule; an all-digit part after the colon
+        // identifies a port (localhost:8080), while mailto:, ftp: and custom
+        // app schemes are rejected instead of becoming fake https hosts.
+        let first_slash = trimmed.find('/').unwrap_or(trimmed.len());
+        let explicit_scheme = trimmed[..first_slash]
+            .split_once(':')
+            .filter(|(scheme, rest)| {
+                let valid_scheme =
+                    !scheme.is_empty()
+                        && scheme.chars().next().is_some_and(char::is_ascii_alphabetic)
+                        && scheme
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+                let looks_like_port =
+                    !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit());
+                valid_scheme && !looks_like_port
+            })
+            .map(|(scheme, _)| scheme);
+        let with_scheme = match explicit_scheme {
+            Some(scheme) if matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") => {
+                trimmed.to_owned()
+            }
+            Some(_) => return None,
+            None => format!("https://{trimmed}"),
         };
         let parsed = url::Url::parse(&with_scheme).ok()?;
         if !matches!(parsed.scheme(), "http" | "https") {
@@ -185,6 +202,14 @@ mod tests {
         assert_eq!(ServerUrl::normalize("not a url"), None);
         assert_eq!(ServerUrl::normalize(""), None);
         assert_eq!(ServerUrl::normalize("ftp://example.com"), None);
+        // Schemes without "://" must not be turned into https hosts.
+        assert_eq!(ServerUrl::normalize("mailto:user@example.com"), None);
+        assert_eq!(ServerUrl::normalize("atlascommerce://verify?x=1"), None);
+        // A bare host:port is still a host, not a scheme.
+        assert_eq!(
+            ServerUrl::normalize("localhost:8080").as_deref(),
+            Some("https://localhost:8080")
+        );
     }
 
     #[test]

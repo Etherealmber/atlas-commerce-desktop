@@ -55,9 +55,13 @@ fn main() -> eframe::Result<()> {
     } = launch;
 
     // 2. Single instance. The running copy serves this slot on its own
-    //    thread; a second launch only hands a request over and leaves.
+    //    thread; a second launch only hands a request over and leaves. The
+    //    waker must exist before the claim: the slot handler runs on another
+    //    thread and has to wake a hidden instance out of its headless wait.
     let incoming = Arc::new(Mutex::new(Vec::<String>::new()));
     let queue = Arc::clone(&incoming);
+    let waker = Waker::default();
+    let handler_waker = waker.clone();
     let slot = Slot::new(APP_ID);
     let request = match cli.link.as_deref() {
         Some(link) => format!("open-link:{link}"),
@@ -68,8 +72,14 @@ fn main() -> eframe::Result<()> {
             && let Ok(mut queue) = queue.lock()
         {
             queue.push(link.to_owned());
+        } else if request == "show"
+            && let Ok(mut queue) = queue.lock()
+        {
+            // Plain second launch: ask the running instance to unhide.
+            queue.push(atlas_ui::SHOW_REQUEST.to_owned());
         }
-        // Always wake the running instance; it decides what the link means.
+        // Always wake the running instance; it decides what the request means.
+        handler_waker.wake();
         Some("ok".to_owned())
     }) {
         Claim::First(guard) => guard,
@@ -118,9 +128,9 @@ fn main() -> eframe::Result<()> {
         .selected_url()
         .and_then(|base| load_session(&paths.session_file(), base));
 
-    // 5. Process-wide services.
+    // 5. Process-wide services. The waker was created before the single-
+    //    instance claim so the slot handler shares this exact instance.
     let runner = JobRunner::new();
-    let waker = Waker::default();
     // Kept for the shell: the app receives one clone (moved in below), and
     // every clone shares the same context slot and headless alarm.
     let shell_waker = waker.clone();

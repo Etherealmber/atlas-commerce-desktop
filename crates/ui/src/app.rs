@@ -2,7 +2,7 @@
 //! implementation, session bootstrap, background polling and self-update.
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use atlas_core::update_feed::UpdateDecision;
 use atlas_core::{SessionRecord, UpdateManifest};
@@ -262,6 +262,13 @@ impl AtlasApp {
         }
         let links = std::mem::take(&mut self.pending_deep_links);
         for raw in links {
+            if raw == crate::SHOW_REQUEST {
+                // A second launch asked this instance to come forward. The
+                // headless loop turns this flag into Headless::Show; when a
+                // window already exists, poll_background makes it visible.
+                self.show_requested = true;
+                continue;
+            }
             if let Some(link) = atlas_core::VerifyLink::parse(&raw)
                 && self.session.is_none()
             {
@@ -286,6 +293,14 @@ impl AtlasApp {
         self.drain_power_events();
         self.drain_tray(ctx);
         self.consume_deep_links();
+        // A queued show request while a window already exists: bring it back.
+        // With no viewport (hidden to tray) headless_frame returns
+        // Headless::Show from the same flag instead.
+        if self.show_requested
+            && ctx.input(|input| input.viewport().visible).unwrap_or(false)
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        }
         screens::auth::poll_login_jobs(self);
 
         // Caches.
@@ -394,6 +409,12 @@ impl AtlasApp {
             self.agent.job_policy = None;
             if let Ok(policy) = result {
                 self.agent.policy = Some(policy);
+                self.agent.policy_retry_at = None;
+            } else {
+                // Back off: without this gate the next frame would spawn a
+                // new request while the previous error is still on screen.
+                self.agent.policy_retry_at =
+                    Some(Instant::now() + crate::state::POLICY_RETRY_BACKOFF);
             }
         }
         if let Some(job) = &self.agent.job

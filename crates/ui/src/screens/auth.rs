@@ -255,6 +255,33 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 {
                                     start_probe(app);
                                 }
+                                // The probe only reports health: this action is
+                                // what actually validates, persists and selects
+                                // the custom server so "Save and continue" works.
+                                if !app.server_form.custom_url.trim().is_empty()
+                                    && secondary_button(
+                                        ui,
+                                        t!(app.locale, "Add this server"),
+                                        palette,
+                                    )
+                                {
+                                    let url = app.server_form.custom_url.clone();
+                                    let label = app.server_form.custom_label.clone();
+                                    match app.server_store.select(&url, &label) {
+                                        Ok(_) => {
+                                            app.server_form.saved_error = None;
+                                            app.server_form.custom_url = String::new();
+                                            app.server_form.custom_label = String::new();
+                                            app.server_form.probe_report = None;
+                                            app.server_form.probe_job = None;
+                                            app.save_servers();
+                                            app.rebuild_client();
+                                        }
+                                        Err(error) => {
+                                            app.server_form.saved_error = Some(error.to_string());
+                                        }
+                                    }
+                                }
                                 if let Some(report) = &app.server_form.probe_report {
                                     let (icon, color) = if report.ok {
                                         (Icon::CircleCheck, Color32::from_rgb(0x4a, 0xe0, 0x8a))
@@ -541,8 +568,10 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 }
 
 fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    // Status polling, at most every 1.5 s.
-    if app.qr.active && app.qr.job_status.is_none() {
+    // Status polling, at most every 1.5 s. It stops as soon as the one-time
+    // completion exchange is in flight so a repeated "approved" poll cannot
+    // spawn it twice.
+    if app.qr.active && app.qr.job_status.is_none() && app.qr.job_complete.is_none() {
         let due = app
             .qr
             .next_poll
@@ -787,9 +816,12 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                     app.qr.expired = true;
                 }
                 if status.status == "approved"
+                    && app.qr.job_complete.is_none()
                     && let Some(client) = app.client.clone()
                 {
-                    // PC fingerprint completes the one-time exchange.
+                    // PC fingerprint completes the one-time exchange. The
+                    // guard makes a second "approved" poll a no-op while the
+                    // first exchange is still running.
                     let token = app.qr.token.clone();
                     app.qr.job_complete = Some(
                         app.runner

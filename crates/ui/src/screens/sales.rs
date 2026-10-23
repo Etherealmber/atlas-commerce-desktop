@@ -1,6 +1,7 @@
 //! Ventes: the invoice history and the quick-sale (vente rapide) writer.
 //! Quick sales follow the worker contract: `quick_sale: true`,
-//! `doc_kind: "quick_sale"`, no VAT, and an idempotency key per attempt.
+//! `doc_kind: "quick_sale"`, no VAT, and one idempotency key per draft,
+//! reused across retries so a timed-out request cannot create a duplicate.
 
 use atlas_api::ApiError;
 use atlas_api::models::{CreatedInvoice, QuickSale, QuickSaleItem};
@@ -34,6 +35,10 @@ pub struct QuickSaleDraft {
     pub saving: bool,
     pub error: Option<String>,
     pub job: Option<Job<Result<CreatedInvoice, ApiError>>>,
+    /// Stable for the life of the draft: retries reuse it so the worker's
+    /// idempotency dedup catches a request that timed out after committing.
+    /// Cleared on success, when the whole draft is replaced.
+    pub idempotency_key: String,
 }
 
 impl QuickSaleDraft {
@@ -382,13 +387,18 @@ fn submit_quick_sale(app: &mut AtlasApp) {
         notes: None,
         items,
     };
-    let idempotency_key = format!(
-        "atlas-desktop-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default()
-    );
+    // First submit mints the key; retries after a timeout keep reusing it so
+    // the worker cannot record the same sale twice.
+    if draft.idempotency_key.is_empty() {
+        draft.idempotency_key = format!(
+            "atlas-desktop-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        );
+    }
+    let idempotency_key = draft.idempotency_key.clone();
     let job = app
         .runner
         .spawn(async move { client.create_quick_sale(&sale, &idempotency_key).await });

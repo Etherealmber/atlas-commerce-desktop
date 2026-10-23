@@ -1,6 +1,8 @@
 //! Agent IA: one persistent conversation per account, with the server-side
 //! policy (quota, block state) shown above the transcript.
 
+use std::time::Instant;
+
 use egui::RichText;
 
 use crate::icons::Icon;
@@ -10,9 +12,15 @@ use crate::theme::Palette;
 use crate::widgets::{card, empty_state, icon, info_banner, page_title, pill, primary_button};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    // Load the policy once per shell session.
+    // Load the policy once per shell session; a failed attempt waits out the
+    // backoff before another request is spawned (see POLICY_RETRY_BACKOFF).
+    let retry_gate_open = app
+        .agent
+        .policy_retry_at
+        .is_none_or(|retry_at| retry_at <= Instant::now());
     if app.agent.policy.is_none()
         && app.agent.job_policy.is_none()
+        && retry_gate_open
         && app.client.is_some()
         && let Some(client) = app.client.clone()
     {

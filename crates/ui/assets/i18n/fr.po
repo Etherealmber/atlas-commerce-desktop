@@ -46,6 +46,9 @@ msgstr "Ajoutez au moins un produit à la vente."
 msgid "Add or configure a server"
 msgstr "Ajouter ou configurer un serveur"
 
+msgid "Add this server"
+msgstr "Ajouter ce serveur"
+
 msgid "Adjust stock"
 msgstr "Ajuster le stock"
 

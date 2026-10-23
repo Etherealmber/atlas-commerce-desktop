@@ -20,6 +20,11 @@ pub mod widgets;
 pub use app::EframeShell;
 pub use state::AtlasApp;
 
+/// Queue marker handed over by a second launch with no deep link: the running
+/// instance must leave the tray and show its window. Travels through the same
+/// queue as `open-link:` handoffs, so it needs no extra shared state.
+pub const SHOW_REQUEST: &str = "atlas-desktop:show";
+
 use theme::Palette;
 
 /// The brand mark: a rounded amber square carrying a dark "A". Drawn with

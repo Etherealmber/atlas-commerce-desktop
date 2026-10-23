@@ -190,6 +190,9 @@ pub struct AgentState {
     pub policy: Option<AgentPolicy>,
     pub job: Option<Job<Result<AgentReply, ApiError>>>,
     pub job_policy: Option<Job<Result<AgentPolicy, ApiError>>>,
+    /// Backoff gate opened once [`Self::job_policy`] has failed, so a failing
+    /// endpoint is not queried again on every frame.
+    pub policy_retry_at: Option<Instant>,
 }
 
 /// Notifications seen during the last alerts poll, for native toasts.
@@ -277,6 +280,9 @@ pub struct AtlasApp {
 
 /// How long a toast stays on screen before the stack is cleared.
 pub const NOTICE_TTL: Duration = Duration::from_secs(4);
+
+/// Wait between two agent-policy fetches after a failed attempt.
+pub const POLICY_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 impl AtlasApp {
     /// Builds the app from already-loaded on-disk state.
@@ -455,6 +461,9 @@ impl AtlasApp {
         self.invoices = Cache::default();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
+        // A stale 401 on the devices cache would otherwise sign out the next
+        // session on its first frame: every session-scoped cache resets here.
+        self.devices = Cache::default();
         self.agent = AgentState::default();
         self.screen = Screen::Login;
     }
