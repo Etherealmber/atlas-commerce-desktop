@@ -830,8 +830,12 @@ impl EframeShell {
     #[must_use]
     pub fn new(lease: Lease<AtlasApp>, ctx: &Context) -> Self {
         // `take` attaches the shell waker to this context itself.
-        let held = lease.take(ctx);
+        let mut held = lease.take(ctx);
         crate::theme::install_fonts_and_icons(ctx);
+        // eframe asks for the clear colour before the first `logic` run, so
+        // seed it at construction (the CreationContext already knows the
+        // system theme) to avoid the dark fallback on even the first frame.
+        held.last_clear_color = Some(held.palette(ctx).window.to_normalized_gamma_f32());
         Self {
             held,
             first_frame: true,
