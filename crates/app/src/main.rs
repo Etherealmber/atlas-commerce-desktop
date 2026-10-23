@@ -227,6 +227,11 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
         .with_inner_size([1180.0, 760.0])
         .with_min_inner_size([960.0, 620.0])
         .with_decorations(!custom_titlebar);
+    // Runtime window/taskbar icon (Linux window managers and any Windows
+    // shell path that ignores the embedded resource). macOS takes its Dock
+    // icon from the bundle, so setting one there would only flatten it.
+    #[cfg(not(target_os = "macos"))]
+    let viewport = viewport.with_icon(atlas_ui::tray::window_icon());
     // With a drawn title bar the content runs to the top edge; the shell
     // leaves room for the platform's caption buttons itself. Keep the native
     // frame untouched when the user disabled the custom title bar.

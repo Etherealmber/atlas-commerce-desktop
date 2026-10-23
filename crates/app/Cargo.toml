@@ -33,3 +33,8 @@ fastframe-update.workspace = true
 fastframe-notifications.workspace = true
 fastframe-autostart.workspace = true
 fastframe-desktop.workspace = true
+
+# Embeds the .ico and product metadata into the Windows executable
+# (Explorer, taskbar, Alt+Tab, Task Manager). Not pulled on other OSes.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

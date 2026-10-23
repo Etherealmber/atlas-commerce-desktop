@@ -105,6 +105,20 @@ fn config_for(locale: Locale) -> Config {
     }
 }
 
+/// The window and taskbar icon: the same monochrome brand mark the tray
+/// uses, as a 256 px RGBA bitmap. Windows scales it for the title bar,
+/// taskbar and Alt+Tab; the embedded `.ico` resource (build.rs) is what
+/// Explorer shows for the file itself.
+#[must_use]
+pub fn window_icon() -> egui::IconData {
+    const SIZE: usize = 256;
+    egui::IconData {
+        rgba: draw_icon(SIZE),
+        width: SIZE as u32,
+        height: SIZE as u32,
+    }
+}
+
 /// Draws the monochrome brand mark: a rounded tile with the "A" carved out
 /// of its alpha channel. The tray framework repaints the shape white or
 /// black to match the panel (see fastframe-tray's `IconColour`), so only the

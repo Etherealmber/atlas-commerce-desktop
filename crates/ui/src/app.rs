@@ -699,15 +699,22 @@ impl eframe::App for EframeShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let palette = self.held.palette(&ctx);
-        egui::CentralPanel::default()
-            .frame(
-                egui::Frame::NONE
-                    .fill(palette.window)
-                    .inner_margin(egui::Margin::same(0)),
-            )
-            .show(ui, |ui| {
-                self.held.draw(ui, &ctx, &palette);
-            });
+        if matches!(self.held.screen, Screen::Shell(_)) {
+            // The shell creates its own top/left/central panels; wrapping it
+            // in another CentralPanel would nest panels and fight for the
+            // available rect.
+            self.held.draw(ui, &ctx, &palette);
+        } else {
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::NONE
+                        .fill(palette.window)
+                        .inner_margin(egui::Margin::same(0)),
+                )
+                .show(ui, |ui| {
+                    self.held.draw(ui, &ctx, &palette);
+                });
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
