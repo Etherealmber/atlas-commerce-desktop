@@ -27,8 +27,9 @@ pub const SHOW_REQUEST: &str = "atlas-desktop:show";
 
 use theme::Palette;
 
-/// The brand mark: a rounded amber square carrying a dark "A". Drawn with
-/// the painter so no image asset is needed before fonts are ready.
+/// The brand mark: a rounded primary tile carrying an "A" in the on-primary
+/// colour (white tile with black "A" in dark mode, inverted in light mode).
+/// Drawn with the painter so no image asset is needed before fonts are ready.
 pub fn brand(ui: &mut egui::Ui, palette: &Palette, size: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
     ui.painter().rect_filled(rect, size * 0.24, palette.accent);

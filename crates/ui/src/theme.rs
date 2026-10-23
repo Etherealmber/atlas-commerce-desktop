@@ -1,6 +1,9 @@
-//! The visual identity: one zinc-dark palette (the web app's design
-//! directive — no white flashes, compact pills, a single neutral palette),
-//! a light counterpart, and editable JSON palette files through fastframe.
+//! The visual identity: the Atlas Commerce design system shared with the
+//! web ERP (`src/styles/theme.css`) and the Android app (`ui/theme/Theme.kt`).
+//! The directive is monochrome: a black/white primary, zinc neutrals, no
+//! teal and no saffron/orange brand accent — only the semantic warning and
+//! danger tokens keep colour. A dark-first palette, its light counterpart,
+//! and editable JSON palette files through fastframe.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -31,47 +34,52 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// The product default: zinc-950 dark with an amber accent.
+    /// The product default. Tokens mirror the web app's dark scheme:
+    /// `#111113` background, `#1c1c1f` paper, `#27272a` hover, `#2a2a2e`
+    /// lines, `#f4f4f5` ink, `#a1a1aa` muted and a white primary carrying
+    /// near-black (`#0a0a0a`) text.
     #[must_use]
     pub fn dark() -> Self {
         Self {
             dark: true,
-            window: hex(0x09, 0x09, 0x0b),
-            panel: hex(0x13, 0x13, 0x16),
-            surface: hex(0x18, 0x18, 0x1b),
+            window: hex(0x11, 0x11, 0x13),
+            panel: hex(0x11, 0x11, 0x13),
+            surface: hex(0x1c, 0x1c, 0x1f),
             surface_hover: hex(0x27, 0x27, 0x2a),
-            surface_active: hex(0x3f, 0x3f, 0x46),
+            surface_active: hex(0x27, 0x27, 0x2a),
             outline: hex(0x2a, 0x2a, 0x2e),
-            text: hex(0xfa, 0xfa, 0xfa),
+            text: hex(0xf4, 0xf4, 0xf5),
             secondary: hex(0xa1, 0xa1, 0xaa),
             dim: hex(0x71, 0x71, 0x7a),
-            accent: hex(0xf5, 0x9e, 0x0b),
-            accent_hover: hex(0xfb, 0xbf, 0x24),
-            on_accent: hex(0x1c, 0x12, 0x05),
+            accent: hex(0xfa, 0xfa, 0xfa),
+            accent_hover: hex(0xe4, 0xe4, 0xe7),
+            on_accent: hex(0x0a, 0x0a, 0x0a),
             danger: hex(0xf8, 0x71, 0x71),
             warning: hex(0xfb, 0xbf, 0x24),
-            overlay: hex(0x18, 0x18, 0x1b),
+            overlay: hex(0x1c, 0x1c, 0x1f),
             shadow: Color32::from_black_alpha(160),
         }
     }
 
-    /// The light counterpart, zinc-50 based.
+    /// The light counterpart, mirroring the web app's paper scheme:
+    /// `#f4f5f7` background, white paper, slate ink `#0f172a`, and the
+    /// near-black `#0a0a0a` primary with `#fafafa` text.
     #[must_use]
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xfa, 0xfa, 0xfa),
+            window: hex(0xf4, 0xf5, 0xf7),
             panel: hex(0xff, 0xff, 0xff),
-            surface: hex(0xf4, 0xf4, 0xf5),
-            surface_hover: hex(0xe4, 0xe4, 0xe7),
-            surface_active: hex(0xd4, 0xd4, 0xd8),
-            outline: hex(0xe4, 0xe4, 0xe7),
-            text: hex(0x18, 0x18, 0x1b),
-            secondary: hex(0x52, 0x52, 0x5b),
-            dim: hex(0x71, 0x71, 0x7a),
-            accent: hex(0xd9, 0x77, 0x06),
-            accent_hover: hex(0xb4, 0x53, 0x09),
-            on_accent: hex(0xff, 0xff, 0xff),
+            surface: hex(0xff, 0xff, 0xff),
+            surface_hover: hex(0xf1, 0xf5, 0xf9),
+            surface_active: hex(0xf1, 0xf5, 0xf9),
+            outline: hex(0xe8, 0xea, 0xef),
+            text: hex(0x0f, 0x17, 0x2a),
+            secondary: hex(0x47, 0x55, 0x69),
+            dim: hex(0x64, 0x74, 0x8b),
+            accent: hex(0x0a, 0x0a, 0x0a),
+            accent_hover: hex(0x17, 0x17, 0x17),
+            on_accent: hex(0xfa, 0xfa, 0xfa),
             danger: hex(0xdc, 0x26, 0x26),
             warning: hex(0xd9, 0x77, 0x06),
             overlay: hex(0xff, 0xff, 0xff),
@@ -263,11 +271,11 @@ mod tests {
     fn json_palettes_round_trip_through_the_fastframe_parser() {
         let json = r##"{
             "base": "dark",
-            "colors": { "accent": "#14b8a6", "panel": "#101014" }
+            "colors": { "accent": "#fafafa", "panel": "#101014" }
         }"##;
         let palette = load_custom(json).expect("the palette parses");
         assert!(palette.dark);
-        assert_eq!(palette.accent, hex(0x14, 0xb8, 0xa6));
+        assert_eq!(palette.accent, hex(0xfa, 0xfa, 0xfa));
         assert_eq!(palette.panel, hex(0x10, 0x10, 0x14));
         // Unset colours keep the dark base.
         assert_eq!(palette.window, Palette::dark().window);
