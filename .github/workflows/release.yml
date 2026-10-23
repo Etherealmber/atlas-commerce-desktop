@@ -462,7 +462,7 @@ jobs:
           # Full history so release-notes.py can diff against the previous tag.
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
