@@ -32,19 +32,38 @@ fn route_meta(route: Route) -> (Icon, &'static str) {
 }
 
 pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
-    ui.vertical(|ui| {
-        draw_titlebar(app, ui, ctx, palette);
-        ui.horizontal(|ui| {
-            draw_rail(app, ui, palette);
-            ui.vertical(|ui| {
-                ui.set_min_size(vec2(
-                    (ui.available_width()).max(320.0),
-                    ui.available_height(),
-                ));
-                draw_content(app, ui, ctx, palette);
-            });
+    // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
+    // with an exact size reserves its width up front, so the rail can never
+    // expand to the full window and starve the central column (the blank
+    // shell bug came from Frame + set_min_size, whose minimum width did not
+    // stop rows calling available_width() from growing the frame).
+    egui::Panel::top(egui::Id::new("shell-titlebar"))
+        .exact_size(TITLEBAR_HEIGHT)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(egui::Frame::NONE.fill(palette.window).inner_margin(egui::Margin::same(0)))
+        .show(ui, |ui| {
+            draw_titlebar(app, ui, ctx, palette);
         });
-    });
+
+    let rail_frame = egui::Frame::NONE
+        .fill(palette.panel)
+        .stroke(egui::Stroke::new(1.0, palette.outline))
+        .inner_margin(egui::Margin::symmetric(10, 14));
+    egui::Panel::left(egui::Id::new("shell-rail"))
+        .exact_size(RAIL_WIDTH)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(rail_frame)
+        .show(ui, |ui| {
+            draw_rail(app, ui, palette);
+        });
+
+    egui::CentralPanel::no_frame()
+        .frame(egui::Frame::NONE.fill(palette.window).inner_margin(egui::Margin::same(0)))
+        .show(ui, |ui| {
+            draw_content(app, ui, ctx, palette);
+        });
 
     if app.confirm_dialog.is_some() {
         draw_confirm_dialog(app, ui, palette);
@@ -54,8 +73,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 // ── Custom title bar ───────────────────────────────────────────────────────
 
 fn draw_titlebar(app: &AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
-    let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, TITLEBAR_HEIGHT), Sense::hover());
+    // The top panel already owns a TITLEBAR_HEIGHT strip; paint into it.
+    let rect = ui.available_rect_before_wrap();
+    ui.allocate_exact_size(rect.size(), Sense::hover());
     if fastframe_titlebar::enabled() {
         fastframe_titlebar::drag(ui, rect);
     }
@@ -130,55 +150,49 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         badges.products_low + badges.invoices_unpaid + badges.vr_open
     });
 
-    egui::Frame::NONE
-        .fill(palette.panel)
-        .stroke(egui::Stroke::new(1.0, palette.outline))
-        .inner_margin(egui::Margin::symmetric(10, 14))
-        .show(ui, |ui| {
-            ui.set_min_size(vec2(RAIL_WIDTH, ui.available_height()));
-            ui.add_space(6.0);
-            for route in Route::ALL {
-                let (which, label) = route_meta(route);
-                let is_active = active == Some(route);
-                let response = rail_row(ui, palette, which, label, is_active);
-                if route == Route::Notifications && alert_count > 0 {
-                    badge(ui, &response, palette, alert_count);
+    // The Panel owns the fixed width and frame; contents just fill it.
+    ui.add_space(6.0);
+    for route in Route::ALL {
+        let (which, label) = route_meta(route);
+        let is_active = active == Some(route);
+        let response = rail_row(ui, palette, which, label, is_active);
+        if route == Route::Notifications && alert_count > 0 {
+            badge(ui, &response, palette, alert_count);
+        }
+        if response.clicked() {
+            app.go(route);
+            if route == Route::Notifications && app.alerts.data.is_none() {
+                app.load_alerts();
+            }
+            if route == Route::Clients && app.clients.data.is_none() {
+                app.load_clients();
+            }
+            if route == Route::Vendors && app.vendors.data.is_none() {
+                app.load_vendors();
+            }
+            if route == Route::Expenses && app.expenses.data.is_none() {
+                app.load_expenses();
+            }
+            if route == Route::DeliveryNotes && app.delivery_notes.data.is_none() {
+                app.load_delivery_notes();
+            }
+            if route == Route::Catalog {
+                if app.categories.data.is_none() {
+                    app.load_categories();
                 }
-                if response.clicked() {
-                    app.go(route);
-                    if route == Route::Notifications && app.alerts.data.is_none() {
-                        app.load_alerts();
-                    }
-                    if route == Route::Clients && app.clients.data.is_none() {
-                        app.load_clients();
-                    }
-                    if route == Route::Vendors && app.vendors.data.is_none() {
-                        app.load_vendors();
-                    }
-                    if route == Route::Expenses && app.expenses.data.is_none() {
-                        app.load_expenses();
-                    }
-                    if route == Route::DeliveryNotes && app.delivery_notes.data.is_none() {
-                        app.load_delivery_notes();
-                    }
-                    if route == Route::Catalog {
-                        if app.categories.data.is_none() {
-                            app.load_categories();
-                        }
-                        if app.units.data.is_none() {
-                            app.load_units();
-                        }
-                    }
-                    if route == Route::Sales && app.invoices.data.is_none() {
-                        app.load_invoices();
-                    }
+                if app.units.data.is_none() {
+                    app.load_units();
                 }
             }
+            if route == Route::Sales && app.invoices.data.is_none() {
+                app.load_invoices();
+            }
+        }
+    }
 
-            ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-                draw_user_card(app, ui, palette);
-            });
-        });
+    ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+        draw_user_card(app, ui, palette);
+    });
 }
 
 fn rail_row(
