@@ -702,3 +702,6 @@ msgstr "Unité mise à jour."
 
 msgid "Units"
 msgstr "Unités"
+
+msgid "Native desktop client"
+msgstr "Client de bureau natif"

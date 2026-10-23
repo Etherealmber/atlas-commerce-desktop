@@ -146,6 +146,30 @@ jobs:
             exit $LASTEXITCODE
           }
           Get-ChildItem "$env:RUNNER_TEMP\inno-check" | Tee-Object -Append packaging-windows.log
+      - name: WiX MSI generator builds a real package
+        id: msi
+        shell: pwsh
+        run: |
+          dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP\wix"
+          $env:PATH = "$env:RUNNER_TEMP\wix;$env:PATH"
+          $payload = "$env:RUNNER_TEMP\msi-input"
+          New-Item -ItemType Directory -Force $payload | Out-Null
+          Copy-Item "target\release\atlas-commerce-desktop.exe", "README.md", "LICENSE", `
+            "packaging\windows\atlas-commerce-desktop-installer.txt" $payload
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          python packaging\windows\build-msi.py $payload `
+            "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" $version amd64 `
+            2>&1 | Tee-Object -Append packaging-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path packaging-windows.log -Pattern 'error|exception|failed|CNDL|LGHT' |
+              Select-Object -First 15 | ForEach-Object {
+                echo "::error title=msi-build::$($_.Line.Substring(0, [Math]::Min(400, $_.Line.Length)))"
+              }
+            exit $LASTEXITCODE
+          }
+          Get-Item "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" |
+            Tee-Object -Append packaging-windows.log
       - name: Job summary
         if: always()
         shell: pwsh
@@ -164,7 +188,7 @@ jobs:
       - name: Announce success
         if: success()
         shell: pwsh
-        run: echo "::notice title=packaging Windows::build release et compilation de l'installeur Inno universel x64 + ARM64 OK."
+        run: echo "::notice title=packaging Windows::build release, installeur Inno universel x64 + ARM64 et paquet MSI WiX valides."
       - uses: actions/upload-artifact@v7
         if: always()
         with:

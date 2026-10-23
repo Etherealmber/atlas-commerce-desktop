@@ -14,6 +14,7 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 | `packaging/icons` + `packaging/macos/icon-1024.png` | Sources for the Windows `.ico` and the macOS `.icns`. |
 | `scripts/generate-icons.py` | Regenerates the SVG, 1024 px PNG and multi-size `.ico` from the shared monochrome design (Pillow). |
 | `packaging/windows/atlas-commerce-desktop.iss` | Universal Inno Setup per-user installer: one `setup.exe` carrying the x64 and ARM64 binaries, installs the matching one via `IsX64`/`IsARM64`, registers the URL protocol under `HKCU`. |
+| `packaging/windows/build-msi.py` | Pure WiX 5 per-architecture per-user MSI generator (no C custom actions); one `.msi` per architecture for managed deployments. |
 | `packaging/macos/Info.plist` | Bundle template with `__IDENTIFIER__`/`__EXECUTABLE__`/`__VERSION__`/`__BUILD__` placeholders and the `atlascommerce` URL scheme. |
 | `packaging/macos/autostart.plist` | Login-item agent passing `--start-hidden`. |
 | `packaging/macos/bundle.sh`, `packaging/macos/dmg.sh` | `.app` bundling (ad-hoc or Developer ID) and DMG creation. |
@@ -60,12 +61,13 @@ and every release is promoted to *latest*.
    `Cargo.toml`, normalises the tag, and records every choice in its job
    summary.
 2. The matrix builds `x86_64`/`aarch64` Linux archives plus AppImages with
-   `.zsync`, and Windows `x86_64`/`arm64` portable zips. A dedicated
+   `.zsync`, Windows `x86_64`/`arm64` portable zips and a **per-architecture
+   WiX `.msi`** each (the `Windows Installer package` step). A dedicated
    `windows-installer` job downloads both Windows zips and compiles **one
    universal Inno Setup installer (`*-setup.exe`)** that places the correct
-   binary on Intel/AMD or ARM machines — users never pick an architecture.
-   Another separate job builds the universal macOS DMG from a `lipo` binary.
-   There is no MSI: the Inno installer covers per-user installs and updates.
+   binary on Intel/AMD or ARM machines — users never pick an architecture;
+   the MSIs cover managed deployments. Another separate job builds the
+   universal macOS DMG from a `lipo` binary.
 3. The `publish` job (environment `release-signing`, skipped when
    `publish` is unchecked) generates the notes, creates the release via
    the API, adds the source archive, writes `update.json` (including the

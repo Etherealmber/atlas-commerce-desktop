@@ -400,67 +400,57 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
-                ui.add_space(ui.available_height() * 0.08);
-                crate::brand(ui, palette, 40.0);
-                ui.add_space(12.0);
-                page_title(ui, t!(app.locale, "Sign in"), palette);
+                ui.add_space(ui.available_height() * 0.06);
+
+                // Brand lockup: monochrome tile, wordmark, subtitle.
+                crate::brand(ui, palette, 56.0);
+                ui.add_space(14.0);
+                ui.label(
+                    RichText::new("Atlas Commerce")
+                        .color(palette.text)
+                        .strong()
+                        .size(22.0),
+                );
+                ui.add_space(2.0);
+                ui.label(
+                    RichText::new(t!(app.locale, "Native desktop client"))
+                        .color(palette.dim)
+                        .size(12.5),
+                );
+                ui.add_space(16.0);
+
+                // The server this session talks to, with a one-tap change.
                 let host = app
                     .server_store
                     .selected_url()
                     .map(ServerUrl::host)
                     .unwrap_or_else(|| "—".to_owned());
-                ui.label(RichText::new(host).color(palette.dim).size(12.5));
+                ui.horizontal(|ui| {
+                    icon(ui, Icon::Server, palette.secondary, 15.0);
+                    widgets::pill(ui, &host, palette.surface, palette.secondary);
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(t!(app.locale, "Change server"))
+                                    .color(palette.secondary)
+                                    .size(12.5),
+                            )
+                            .fill(Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::NONE),
+                        )
+                        .clicked()
+                    {
+                        app.screen = Screen::ServerSetup;
+                    }
+                });
                 ui.add_space(18.0);
 
-                let width = 400.0_f32;
+                let width = 420.0_f32;
                 ui.allocate_ui_with_layout(
                     egui::vec2(width, ui.available_height() - 60.0),
                     egui::Layout::top_down(egui::Align::Center),
                     |ui| {
-                        // Tabs.
-                        ui.horizontal(|ui| {
-                            let tab = if app.qr.active {
-                                LoginTab::Qr
-                            } else {
-                                LoginTab::Password
-                            };
-                            for (candidate, label, icon_kind) in [
-                                (LoginTab::Password, t!(app.locale, "Password"), Icon::Lock),
-                                (LoginTab::Qr, t!(app.locale, "Phone QR"), Icon::QrCode),
-                            ] {
-                                let selected = tab == candidate;
-                                let tint = if selected {
-                                    palette.accent
-                                } else {
-                                    palette.secondary
-                                };
-                                let button = egui::Button::new(
-                                    RichText::new(label.as_ref())
-                                        .color(if selected {
-                                            palette.text
-                                        } else {
-                                            palette.secondary
-                                        })
-                                        .size(13.5),
-                                )
-                                .fill(if selected {
-                                    palette.surface_hover
-                                } else {
-                                    palette.surface
-                                })
-                                .corner_radius(9.0);
-                                let response = ui.add(button);
-                                icon(ui, icon_kind, tint, 15.0);
-                                if response.clicked() {
-                                    if candidate == LoginTab::Qr && !app.qr.active {
-                                        start_qr_session(app);
-                                    }
-                                    if candidate == LoginTab::Password {
-                                        app.qr.active = false;
-                                    }
-                                }
-                            }
-                        });
+                        segmented_tabs(app, ui, palette);
                         ui.add_space(14.0);
 
                         if app.qr.active {
@@ -470,6 +460,61 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         }
                     },
                 );
+            });
+        });
+}
+
+/// The password / phone-QR switch, drawn as one segmented control.
+fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let tab = if app.qr.active {
+        LoginTab::Qr
+    } else {
+        LoginTab::Password
+    };
+    egui::Frame::NONE
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.outline))
+        .corner_radius(10.0)
+        .inner_margin(egui::Margin::symmetric(4, 4))
+        .show(ui, |ui| {
+            ui.set_width(420.0);
+            ui.horizontal(|ui| {
+                for (candidate, label, icon_kind) in [
+                    (LoginTab::Password, t!(app.locale, "Password"), Icon::Lock),
+                    (LoginTab::Qr, t!(app.locale, "Phone QR"), Icon::QrCode),
+                ] {
+                    let selected = tab == candidate;
+                    let response = ui
+                        .add_sized(
+                            [204.0, 36.0],
+                            egui::Button::new(
+                                RichText::new(label.as_ref())
+                                    .color(if selected {
+                                        palette.text
+                                    } else {
+                                        palette.secondary
+                                    })
+                                    .strong()
+                                    .size(13.5),
+                            )
+                            .fill(if selected {
+                                palette.surface_active
+                            } else {
+                                Color32::TRANSPARENT
+                            })
+                            .corner_radius(8.0),
+                        )
+                        .on_hover_text(label.as_ref());
+                    icon(ui, icon_kind, if selected { palette.accent } else { palette.secondary }, 15.0);
+                    if response.clicked() {
+                        if candidate == LoginTab::Qr && !app.qr.active {
+                            start_qr_session(app);
+                        }
+                        if candidate == LoginTab::Password {
+                            app.qr.active = false;
+                        }
+                    }
+                }
             });
         });
 }
@@ -544,34 +589,38 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
 
-        ui.add_space(14.0);
-        dialog_actions(ui, |ui| {
-            let busy = app.login.busy;
+        ui.add_space(16.0);
+        let busy = app.login.busy;
+        let label = if app.login.needs_otp {
+            t!(app.locale, "Verify")
+        } else {
+            t!(app.locale, "Sign in")
+        };
+        let clicked = ui
+            .add_sized(
+                [ui.available_width(), 40.0],
+                egui::Button::new(
+                    RichText::new(label.as_ref())
+                        .color(palette.on_accent)
+                        .strong()
+                        .size(14.0),
+                )
+                .fill(if !busy {
+                    palette.accent
+                } else {
+                    palette.surface_active
+                })
+                .corner_radius(8.0),
+            )
+            .clicked();
+        if clicked && !busy {
             if app.login.needs_otp {
-                if primary_button(ui, t!(app.locale, "Verify"), palette, !busy) {
-                    start_otp(app);
-                }
-            } else if primary_button(ui, t!(app.locale, "Sign in"), palette, !busy) {
+                start_otp(app);
+            } else {
                 start_login(app);
             }
-        });
+        }
     });
-
-    ui.add_space(10.0);
-    if ui
-        .add(
-            egui::Button::new(
-                RichText::new(t!(app.locale, "Change server"))
-                    .color(palette.secondary)
-                    .size(12.5),
-            )
-            .fill(Color32::TRANSPARENT)
-            .stroke(egui::Stroke::NONE),
-        )
-        .clicked()
-    {
-        app.screen = Screen::ServerSetup;
-    }
 }
 
 fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
