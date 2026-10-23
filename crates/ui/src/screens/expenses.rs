@@ -224,10 +224,11 @@ fn expense_row(
                             .strong()
                             .size(13.5),
                     );
-                    // Named bindings: gettext's Cow may borrow the label,
-                    // so the temporary source string must outlive the call.
-                    let method_key = payment_label(expense.payment_method.as_str());
-                    let method = crate::i18n::gettext(locale, method_key.as_str()).to_string();
+                    let method = crate::i18n::gettext(
+                        locale,
+                        payment_source(expense.payment_method.as_str()),
+                    )
+                    .to_string();
                     let subline = [
                         expense.expense_date.clone(),
                         expense.category.clone(),
@@ -301,13 +302,15 @@ fn stat_card(ui: &mut egui::Ui, palette: &Palette, width: f32, label: &str, valu
     });
 }
 
-fn payment_label(key: &str) -> String {
-    // Labels are translated at the call site; this helper only maps the
-    // worker's stored key to an English source string.
+/// Maps a worker payment key to the static English source the i18n
+/// catalog translates. `gettext` only accepts `&'static str`, so unknown
+/// keys collapse to the generic label (the worker itself defaults
+/// unrecognised methods to `cash`).
+fn payment_source(key: &str) -> &'static str {
     PAYMENT_METHODS
         .iter()
         .find(|(candidate, _)| *candidate == key)
-        .map_or_else(|| key.to_owned(), |(_, label)| (*label).to_owned())
+        .map_or("Other", |(_, label)| label)
 }
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -355,11 +358,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 .color(palette.secondary)
                                 .size(12.5),
                         );
-                        let method_key = payment_label(editor.payment_method.as_str());
-                        let method_text =
-                            crate::i18n::gettext(locale, method_key.as_str()).to_string();
                         egui::ComboBox::from_id_salt("expense-payment-method")
-                            .selected_text(method_text)
+                            .selected_text(crate::i18n::gettext(
+                                locale,
+                                payment_source(editor.payment_method.as_str()),
+                            ))
                             .show_ui(ui, |ui| {
                                 for (key, label) in PAYMENT_METHODS {
                                     ui.selectable_value(
