@@ -89,13 +89,17 @@ def wxs(payload: Path, version: str) -> str:
     atlascommerce:// URL protocol, all under HKCU."""
     files = []
     for name in PAYLOAD:
-        is_exe = name.endswith(".exe")
+        # One component per file, each with its own key path: the classic
+        # per-user layout WiX can upgrade and repair without a registry
+        # marker in every component.
         files.append(f"""
         <Component Id="File{len(files)}" Guid="{stable_guid(name)}">
-          <File Id="File{len(files)}" Name="{name}" Source="{payload / name}"
-                KeyPath="{'yes' if is_exe else 'no'}" />
+          <File Id="File{len(files)}" Name="{name}" Source="{payload / name}" KeyPath="yes" />
         </Component>""")
 
+    # WiX v5 layout: the Directory tree only nests Directory elements,
+    # while ComponentGroup entries are Package-level siblings bound to a
+    # directory through their Directory attribute (WIX0005 otherwise).
     return f"""<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Atlas Commerce Desktop"
            Manufacturer="Etherealmber"
@@ -107,27 +111,26 @@ def wxs(payload: Path, version: str) -> str:
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="LocalAppDataFolder">
-      <Directory Id="AppFolder" Name="Atlas Commerce Desktop">
-        <ComponentGroup Id="AppFiles">{''.join(files)}
-        </ComponentGroup>
-      </Directory>
+      <Directory Id="AppFolder" Name="Atlas Commerce Desktop" />
     </StandardDirectory>
-
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ProgramMenuDir" Name="Atlas Commerce Desktop">
-        <ComponentGroup Id="Shortcuts">
-          <Component Id="StartMenuShortcut" Guid="{stable_guid('start-menu')}">
-            <Shortcut Id="StartMenuShortcut" Name="Atlas Commerce Desktop"
-                      Target="[AppFolder]atlas-commerce-desktop.exe"
-                      WorkingDirectory="AppFolder" Advertise="no" />
-            <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop"
-                           Name="StartMenu" Type="string" Value="1" KeyPath="yes" />
-          </Component>
-        </ComponentGroup>
-      </Directory>
+      <Directory Id="ProgramMenuDir" Name="Atlas Commerce Desktop" />
     </StandardDirectory>
 
-    <ComponentGroup Id="Protocol">
+    <ComponentGroup Id="AppFiles" Directory="AppFolder">{''.join(files)}
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts" Directory="ProgramMenuDir">
+      <Component Id="StartMenuShortcut" Guid="{stable_guid('start-menu')}">
+        <Shortcut Id="StartMenuShortcut" Name="Atlas Commerce Desktop"
+                  Target="[AppFolder]atlas-commerce-desktop.exe"
+                  WorkingDirectory="AppFolder" Advertise="no" />
+        <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop"
+                       Name="StartMenu" Type="string" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Protocol" Directory="AppFolder">
       <Component Id="UrlProtocol" Guid="{stable_guid('protocol')}">
         <RegistryValue Root="HKMU" Key="Software\\Classes\\atlascommerce"
                        Type="string" Value="URL:Atlas Commerce link" KeyPath="yes" />
