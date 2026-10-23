@@ -89,6 +89,15 @@ jobs:
             exit 1
           fi
 
+          # The shipped binary reports the workspace version; the manifest and
+          # every package name use the tag. A mismatch would make the updater
+          # offer the "new" version forever (or gate clients on a bad manifest).
+          cargo_version=$(grep -m1 -oE '^version = "[^"]+"' Cargo.toml | cut -d'"' -f2)
+          if [ "$cargo_version" != "$version" ]; then
+            echo "::error::La version $version ne correspond pas à Cargo.toml ($cargo_version). Alignez les deux avant de publier."
+            exit 1
+          fi
+
           # A suffix (v0.2.0-rc.1) always means pre-release; the manual toggle
           # can additionally mark an ordinary version as pre-release.
           case "$tag" in *-*) suffix_pre=true ;; *) suffix_pre=false ;; esac
@@ -342,14 +351,6 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_REPO: ${{ needs.prepare.outputs.repo }}
-      # Complete Apple credentials enable signing and notarization. Without
-      # them the bundle is ad-hoc signed, which arm64 still requires to run.
-      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -382,6 +383,15 @@ jobs:
             "dist/macos-input/Atlas Commerce Desktop.app" "$RELEASE_VERSION"
           cp README.md LICENSE dist/macos-input/
       - name: Package, sign and notarize macOS app
+        # Credentials exist only in this step's environment: without them the
+        # bundle is ad-hoc signed, which arm64 still requires to run.
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
           native-packages build \

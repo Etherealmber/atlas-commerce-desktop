@@ -15,6 +15,21 @@ for tool in xgettext msgmerge msgattrib; do
     fi
 done
 
+# --language=Rust is only understood by GNU gettext 0.24 and newer; Ubuntu
+# 24.04 still ships 0.21, so fail with an actionable message instead of a
+# cryptic xgettext error.
+xgettext_version=$(xgettext --version | awk 'NR==1 {for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+\.[0-9]+/) {print $i; exit}}')
+if ! awk -v v="$xgettext_version" 'BEGIN { split(v,a,"."); if ((a[1]+0) > 0 || (a[2]+0) >= 24) exit 0; exit 1 }'; then
+    cat >&2 <<EOF
+error: xgettext $xgettext_version is too old: Rust extraction (--language=Rust)
+       requires GNU gettext >= 0.24. Supported installs:
+         - macOS:  brew install gettext
+         - Linux:  a distro packaging gettext >= 0.24, or the GNU tarball
+                   (https://www.gnu.org/software/gettext/)
+EOF
+    exit 1
+fi
+
 catalog="crates/ui/assets/i18n/fr.po"
 template="$(mktemp --suffix=.pot)"
 trap 'rm -f "$template"' EXIT

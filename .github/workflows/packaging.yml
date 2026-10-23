@@ -32,6 +32,10 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+      - name: Desktop validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
       - name: Validate the native-packages manifest
         id: manifest
         run: |
@@ -46,6 +50,7 @@ jobs:
           echo "bundle.sh et dmg.sh : syntaxe OK" | tee -a packaging-linux.log
       - name: Validate the desktop entry and icons
         run: |
+          # Missing assets now fail the job: validation must not be advisory.
           test -s packaging/applications/atlas-commerce-desktop.desktop
           test -s packaging/icons/atlas-commerce-desktop.svg
           test -s packaging/macos/icon-1024.png
@@ -53,13 +58,9 @@ jobs:
             echo "desktop entry : présent"
             echo "icône SVG : présente"
             echo "icône macOS 1024 : présente"
-            if desktop-file-validate packaging/applications/atlas-commerce-desktop.desktop; then
-              echo "desktop-file-validate : OK"
-            else
-              echo "desktop-file-validate : non disponible ou avertissements (non bloquant)"
-            fi
+            desktop-file-validate packaging/applications/atlas-commerce-desktop.desktop
+            echo "desktop-file-validate : OK"
           } | tee -a packaging-linux.log
-        continue-on-error: true
       - name: Job summary
         if: always()
         run: |
