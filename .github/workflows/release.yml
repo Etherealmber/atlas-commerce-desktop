@@ -227,6 +227,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -418,6 +422,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       # One portable zip per architecture, produced by the build matrix.
       - uses: actions/download-artifact@v8
         with:
@@ -523,6 +531,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -628,6 +640,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ${{ needs.prepare.outputs.repo }}
+          # Empty without a bump (tag push / equal versions): checkout
+          # then falls back to its default ref. With a bump, pin the
+          # exact bump commit so reruns and concurrent releases stay correct.
+          ref: ${{ needs.prepare.outputs.bump_sha }}
           # Full history so release-notes.py can diff against the previous tag.
           fetch-depth: 0
           persist-credentials: false
