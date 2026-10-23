@@ -17,6 +17,7 @@ use egui::Context;
 use crate::i18n::Locale;
 use crate::screens::clients::ClientEditor;
 use crate::screens::products::ProductEditor;
+use crate::screens::vendors::VendorEditor;
 use crate::screens::products::StockDialog;
 use crate::screens::sales::QuickSaleDraft;
 use crate::theme::Palette;
@@ -91,6 +92,7 @@ pub enum Route {
     Dashboard,
     Products,
     Clients,
+    Vendors,
     Sales,
     Agent,
     Notifications,
@@ -98,10 +100,11 @@ pub enum Route {
 }
 
 impl Route {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Dashboard,
         Self::Products,
         Self::Clients,
+        Self::Vendors,
         Self::Sales,
         Self::Agent,
         Self::Notifications,
@@ -257,6 +260,9 @@ pub struct AtlasApp {
     pub clients: Cache<Vec<Client>>,
     pub client_search: String,
     pub selected_client: Option<i64>,
+    pub vendors: Cache<Vec<Vendor>>,
+    pub vendor_search: String,
+    pub selected_vendor: Option<i64>,
     pub invoices: Cache<Vec<Invoice>>,
     pub alerts: Cache<Vec<Alert>>,
     pub nav_badges: Cache<NavBadges>,
@@ -354,11 +360,15 @@ impl AtlasApp {
             clients: Cache::default(),
             client_search: String::new(),
             selected_client: None,
+            vendors: Cache::default(),
+            vendor_search: String::new(),
+            selected_vendor: None,
             invoices: Cache::default(),
             alerts: Cache::default(),
             nav_badges: Cache::default(),
             product_editor: None,
             client_editor: None,
+            vendor_editor: None,
             stock_dialog: None,
             quick_sale: None,
             confirm_dialog: None,
@@ -473,6 +483,10 @@ impl AtlasApp {
         self.client_search = String::new();
         self.selected_client = None;
         self.client_editor = None;
+        self.vendors = Cache::default();
+        self.vendor_search = String::new();
+        self.selected_vendor = None;
+        self.vendor_editor = None;
         self.invoices = Cache::default();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();

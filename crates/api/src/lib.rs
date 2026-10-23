@@ -19,6 +19,7 @@ pub mod commerce;
 pub mod error;
 pub mod models;
 pub mod probe;
+pub mod vendors;
 
 use std::sync::Mutex;
 

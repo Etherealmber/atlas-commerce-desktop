@@ -613,3 +613,31 @@ msgstr "Exonéré de TVA"
 
 msgid "Yes"
 msgstr "Oui"
+
+# ── Vendors / purchasing ──
+msgid "Choose a vendor on the left to see its details."
+msgstr "Choisissez un fournisseur à gauche pour voir ses détails."
+
+msgid "Created vendors appear here."
+msgstr "Les fournisseurs créés apparaissent ici."
+
+msgid "Edit vendor"
+msgstr "Modifier le fournisseur"
+
+msgid "New vendor"
+msgstr "Nouveau fournisseur"
+
+msgid "No vendor selected"
+msgstr "Aucun fournisseur sélectionné"
+
+msgid "No vendor yet"
+msgstr "Aucun fournisseur"
+
+msgid "Vendor created."
+msgstr "Fournisseur créé."
+
+msgid "Vendor updated."
+msgstr "Fournisseur mis à jour."
+
+msgid "Vendors"
+msgstr "Fournisseurs"

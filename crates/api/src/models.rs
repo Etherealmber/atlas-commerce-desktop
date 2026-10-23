@@ -603,6 +603,62 @@ pub struct ClientWrite {
     pub credit_limit: f64,
 }
 
+// ── Vendors (purchasing) ─────────────────────────────────────────────────
+
+/// One row of `GET /api/vendors`, with the worker-computed `balance_due`
+/// across unpaid bills. Same identity fields as a client, without the tax
+/// or credit-limit columns.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Vendor {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub ice: String,
+    #[serde(default)]
+    pub if_number: String,
+    #[serde(default)]
+    pub address: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub phone: String,
+    #[serde(default)]
+    pub email: String,
+    /// Computed server-side: sum of unpaid bill remainders.
+    #[serde(default)]
+    pub balance_due: f64,
+}
+
+/// Create/update payload for `POST` and `PUT /api/vendors[/:id]`.
+/// `validateVendorWrite` only requires a 1..=200 character name and an
+/// optional valid email; the worker stores the other strings verbatim.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct VendorWrite {
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub ice: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub if_number: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub address: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub city: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub phone: String,
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub email: String,
+}
+
+/// The vendor PUT answer only carries the identifier, so the list is
+/// reloaded after an edit rather than patched locally.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct VendorId {
+    #[serde(default)]
+    pub id: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -663,6 +719,28 @@ mod tests {
         // Empty optional strings are omitted so a PUT stays a partial update.
         assert!(json.get("ice").is_none());
         assert!(json.get("email").is_none());
+    }
+
+    #[test]
+    fn vendor_accepts_partial_payload_and_writes_worker_fields() {
+        let vendor: Vendor =
+            serde_json::from_str(r#"{"id":3,"name":"Grossiste SARL","balance_due":420.5}"#)
+                .unwrap();
+        assert_eq!(vendor.id, 3);
+        assert_eq!(vendor.name, "Grossiste SARL");
+        assert_eq!(vendor.balance_due, 420.5);
+        assert_eq!(vendor.phone, "");
+        let write = VendorWrite {
+            name: "Nouveau fournisseur".to_owned(),
+            city: "Casablanca".to_owned(),
+            ..VendorWrite::default()
+        };
+        let json = serde_json::to_value(&write).unwrap();
+        assert_eq!(json["name"], "Nouveau fournisseur");
+        assert_eq!(json["city"], "Casablanca");
+        assert!(json.get("email").is_none());
+        let id: VendorId = serde_json::from_str(r#"{"id":9}"#).unwrap();
+        assert_eq!(id.id, 9);
     }
 
     #[test]

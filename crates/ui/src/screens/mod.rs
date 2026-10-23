@@ -9,6 +9,7 @@ pub mod products;
 pub mod sales;
 pub mod settings;
 pub mod shell;
+pub mod vendors;
 
 use std::time::Instant;
 

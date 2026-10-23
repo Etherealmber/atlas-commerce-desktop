@@ -9,13 +9,13 @@ que ces endpoints — aucun contrat n'est deviné.
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
   normalisés en `:id`).
-- Le desktop en couvre **23**, soit environ 7 %. Tous les endpoints appelés
+- Le desktop en couvre **26**, soit environ 8 %. Tous les endpoints appelés
   par le client existent à l'identique dans le worker : aucun appel hors
   contrat.
 - Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
   connexion (avec OTP, lien magique et session QR), tableau de bord, produits,
-  clients (CRM), ventes/factures (liste), notifications, agent, paramètres,
-  coquille.
+  clients (CRM), fournisseurs, ventes/factures (liste), notifications, agent,
+  paramètres, coquille.
 
 ## Matrice par domaine
 
@@ -41,7 +41,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `export` | 0 | 6 |
 | `integrations` | 0 | 6 |
 | `mobile-actions` | 0 | 6 |
-| `vendors` | 0 | 6 |
+| `vendors` | 3 | 6 |
 | `expenses` | 0 | 5 |
 | `categories` | 0 | 4 |
 | `units` | 0 | 4 |
@@ -81,7 +81,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Non (reçus) |
 | `Clients` | Partiel — liste, recherche, solde dû, création et modification ; manque prix par client, imports et suppressions OTP |
-| `Vendors`, `Bills` | Non (achats fournisseurs) |
+| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; les factures fournisseurs (`Bills`) restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Non (RH et pointage) |
 | `Reports`, `Balance` | Non (17 rapports + balance) |
@@ -120,7 +120,9 @@ entrée de navigation, et ne modifie jamais le contrat du worker.
    lots, inventaires cycliques, réappro, valorisation), `scan`,
    historique des mouvements.
 3. **Achats** — `vendors`, `bills` (réception, paiements, rapprochement),
-   `expenses`, demandes de stock.
+   `expenses`, demandes de stock. *Le CRUD fournisseurs
+   (`GET/POST/PUT /api/vendors`) est déjà livré ; restent les suppressions
+   à confirmation de mot de passe, les factures et les dépenses.*
 4. **RH** — `employees` (embauche, documents, avances, paie), `attendance`
    (pointage, absences, exports), formulaires imprimables.
 5. **Finance et pilotage** — les 17 `reports`, `balance`, `bank`
