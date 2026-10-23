@@ -298,8 +298,7 @@ impl AtlasApp {
                     self.profile_form.loaded = true;
                     self.fill_profile_form(&merged);
                     if let Some(session) = self.session.as_mut() {
-                        session.display_name =
-                            merged.display_name.clone().unwrap_or_default();
+                        session.display_name = merged.display_name.clone().unwrap_or_default();
                         session.avatar_url = merged.avatar_url.clone().unwrap_or_default();
                         session.email = merged.email.clone().unwrap_or_default();
                     }

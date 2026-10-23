@@ -372,9 +372,7 @@ fn draw_profile_menu(
             && input
                 .pointer
                 .interact_pos()
-                .is_some_and(|pos| {
-                    !response.rect.contains(pos) && !avatar_rect.contains(pos)
-                })
+                .is_some_and(|pos| !response.rect.contains(pos) && !avatar_rect.contains(pos))
     });
     if pressed_outside {
         app.profile_menu_open = false;
