@@ -381,16 +381,16 @@ fn menu_row(
     which: Icon,
     label: impl AsRef<str>,
 ) -> egui::Response {
-    let response = ui
-        .allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
     if response.hovered() {
         ui.painter()
-            .rect_filled(response.rect, 8.0, palette.surface_hover);
+            .rect_filled(rect, 8.0, palette.surface_hover);
     }
     widgets::overlay_at(
         ui,
         egui::Rect::from_center_size(
-            egui::pos2(response.rect.left() + 18.0, response.rect.center().y),
+            egui::pos2(rect.left() + 18.0, rect.center().y),
             Vec2::splat(18.0),
         ),
         |ui| widgets::icon(ui, which, palette.secondary, 16.0),
@@ -398,8 +398,8 @@ fn menu_row(
     widgets::overlay_at(
         ui,
         egui::Rect::from_min_size(
-            egui::pos2(response.rect.left() + 38.0, response.rect.top()),
-            vec2(response.rect.width() - 44.0, response.rect.height()),
+            egui::pos2(rect.left() + 38.0, rect.top()),
+            vec2(rect.width() - 44.0, rect.height()),
         ),
         |ui| {
             ui.horizontal_centered(|ui| {
