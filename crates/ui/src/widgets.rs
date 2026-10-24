@@ -518,53 +518,57 @@ mod tests {
 
     #[test]
     fn buttons_extend_instead_of_collapsing_in_narrow_rows() {
-        // Both modes are set explicitly: this fork defaults to Extend, so the
-        // regression only shows against an explicitly wrapping control.
-        let (extended_width, wrapped_height, extended_height) = run_headless(|ui| {
-            let extended = ui
-                .add(
-                    egui::Button::new(RichText::new("Ajuster le stock"))
-                        .wrap_mode(TextWrapMode::Extend),
-                )
-                .rect;
-            let wrapped = ui
-                .add_sized(
-                    [72.0, 0.0],
-                    egui::Button::new(RichText::new("Ajuster le stock"))
-                        .wrap_mode(TextWrapMode::Wrap),
-                )
-                .rect;
-            (extended.width(), wrapped.height(), extended.height())
+        // Each measurement gets its own headless frame: an overflowing
+        // control must never widen the shared Ui seen by the other probe.
+        // Both modes are set explicitly because this fork defaults to Extend.
+        let extended = run_headless(|ui| {
+            ui.add(
+                egui::Button::new(RichText::new("Ajuster le stock"))
+                    .wrap_mode(TextWrapMode::Extend),
+            )
+            .rect
+        });
+        let wrapped_height = run_headless(|ui| {
+            ui.add_sized(
+                [72.0, 0.0],
+                egui::Button::new(RichText::new("Ajuster le stock"))
+                    .wrap_mode(TextWrapMode::Wrap),
+            )
+            .rect
+            .height()
         });
         // The extending button keeps its natural one-line width and overflows
         // the starved column instead of stacking one word per line.
         assert!(
-            extended_width > 72.0,
-            "Extend buttons must keep their natural width, got {extended_width}"
+            extended.width() > 72.0,
+            "Extend buttons must keep their natural width, got {}",
+            extended.width()
         );
         assert!(
-            wrapped_height > extended_height + 4.0,
+            wrapped_height > extended.height() + 4.0,
             "the Wrap control must collapse to several lines, the Extend one stay single-line"
         );
     }
 
     #[test]
     fn no_wrap_scope_keeps_chrome_labels_on_one_line() {
-        let (scoped, wrapped) = run_headless(|ui| {
-            let scoped = no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
+        // Two independent headless frames, each starting at the same 72 pt
+        // constraint, so neither label's layout can influence the other.
+        let scoped_height = run_headless(|ui| {
+            no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
                 .rect
-                .height();
-            let wrapped = ui
-                .scope(|ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
-                    ui.set_width(72.0);
-                    ui.label("Bons de livraison").rect.height()
-                })
-                .inner;
-            (scoped, wrapped)
+                .height()
+        });
+        let wrapped_height = run_headless(|ui| {
+            ui.scope(|ui| {
+                ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
+                ui.set_width(72.0);
+                ui.label("Bons de livraison").rect.height()
+            })
+            .inner
         });
         assert!(
-            scoped < wrapped,
+            scoped_height < wrapped_height,
             "no-wrap label must be shorter than an explicitly wrapped one"
         );
     }
