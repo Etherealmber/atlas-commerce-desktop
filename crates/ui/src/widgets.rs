@@ -39,12 +39,16 @@ pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color:
         .inner_margin(egui::Margin::symmetric(10, 3))
         .stroke(Stroke::new(1.0, text_color.gamma_multiply(0.25)))
         .show(ui, |ui| {
-            ui.label(
-                RichText::new(text.as_ref())
-                    .color(text_color)
-                    .size(12.0)
-                    .strong(),
-            );
+            // A badge sizes to one line: a starved pill used to break its
+            // label across several lines instead of staying compact.
+            no_wrap_scope(ui, |ui| {
+                ui.label(
+                    RichText::new(text.as_ref())
+                        .color(text_color)
+                        .size(12.0)
+                        .strong(),
+                );
+            });
         });
 }
 
@@ -188,7 +192,8 @@ pub fn labelled_field(
 pub fn dialog_actions(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui)) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(4.0);
-        content(ui);
+        // Buttons keep their natural one-line width even in a narrow dialog.
+        no_wrap_scope(ui, content);
     });
 }
 
@@ -213,13 +218,21 @@ pub fn empty_state(
         ui.add_space(28.0);
         icon(ui, which, palette.dim, 40.0);
         ui.add_space(10.0);
-        ui.label(
-            RichText::new(title.as_ref())
-                .color(palette.secondary)
-                .strong(),
-        );
+        // The headline is chrome text and stays on one line; the hint below
+        // is descriptive prose and keeps normal wrapping for narrow windows.
+        no_wrap_scope(ui, |ui| {
+            ui.label(
+                RichText::new(title.as_ref())
+                    .color(palette.secondary)
+                    .strong(),
+            );
+        });
         ui.add_space(4.0);
-        ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
+        // Empty states are chrome too: the hint never wraps mid-word in a
+        // narrow pane; centered content keeps the overflow readable.
+        no_wrap_scope(ui, |ui| {
+            ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
+        });
     });
 }
 
@@ -405,6 +418,7 @@ pub fn segmented<T: PartialEq + Copy>(
                     })
                     .size(12.5),
             )
+            .wrap_mode(TextWrapMode::Extend)
             .fill(if is_selected {
                 palette.accent
             } else {
@@ -468,4 +482,112 @@ pub fn fab(
             response.on_hover_text(tooltip)
         })
         .response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::CentralPanel;
+
+    /// Headless frame: egui's `Context` runs without a backend, which is all
+    /// these layout regressions need (no window, no renderer, no network).
+    /// The fork names the entry point `run_ui` and does not return the
+    /// closure's value, so the probe writes into a captured variable.
+    fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        let ctx = egui::Context::default();
+        let mut result = R::default();
+        // run_ui takes an FnMut, so the FnOnce probe rides in an Option and
+        // runs on the single headless frame.
+        let mut probe = Some(probe);
+        // This egui fork names the headless entry point `run_ui`.
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
+            CentralPanel::default().show(ctx, |ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(72.0, 220.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        if let Some(probe) = probe.take() {
+                            result = probe(ui);
+                        }
+                    },
+                );
+            });
+        });
+        // The fork panics when a FullOutput with unapplied font/texture
+        // deltas is dropped; headless layout tests never render them.
+        output.textures_delta.set.clear();
+        output.textures_delta.free.clear();
+        result
+    }
+
+    #[test]
+    fn buttons_extend_instead_of_collapsing_in_narrow_rows() {
+        // Each measurement gets its own headless frame: an overflowing
+        // control must never widen the shared Ui seen by the other probe.
+        // Both modes are set explicitly because this fork defaults to Extend.
+        let (extended_width, extended_height) = run_headless(|ui| {
+            let rect = ui
+                .add(
+                    egui::Button::new(RichText::new("Ajuster le stock"))
+                        .wrap_mode(TextWrapMode::Extend),
+                )
+                .rect;
+            (rect.width(), rect.height())
+        });
+        let wrapped_height: f32 = run_headless(|ui| {
+            ui.add_sized(
+                [72.0, 0.0],
+                egui::Button::new(RichText::new("Ajuster le stock")).wrap_mode(TextWrapMode::Wrap),
+            )
+            .rect
+            .height()
+        });
+        // The extending button keeps its natural one-line width and overflows
+        // the starved column instead of stacking one word per line.
+        assert!(
+            extended_width > 72.0,
+            "Extend buttons must keep their natural width, got {extended_width}"
+        );
+        assert!(
+            wrapped_height > extended_height + 4.0,
+            "the Wrap control must collapse to several lines, the Extend one stay single-line"
+        );
+    }
+
+    #[test]
+    fn no_wrap_scope_keeps_chrome_labels_on_one_line() {
+        // Two independent headless frames, each starting at the same 72 pt
+        // constraint, so neither label's layout can influence the other.
+        let scoped_height = run_headless(|ui| {
+            no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
+                .rect
+                .height()
+        });
+        let wrapped_height = run_headless(|ui| {
+            ui.scope(|ui| {
+                ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
+                ui.set_width(72.0);
+                ui.label("Bons de livraison").rect.height()
+            })
+            .inner
+        });
+        assert!(
+            scoped_height < wrapped_height,
+            "no-wrap label must be shorter than an explicitly wrapped one"
+        );
+    }
+
+    #[test]
+    fn primary_button_sizes_to_its_text() {
+        let width = run_headless(|ui| {
+            // Drive the exact widget the dialogs and wizards use.
+            let before = ui.min_rect().width();
+            let _ = primary_button(ui, "Supprimer le produit", &Palette::dark(), true);
+            ui.min_rect().width() - before
+        });
+        assert!(
+            width > 120.0,
+            "the full label must be measured, got {width}"
+        );
+    }
 }

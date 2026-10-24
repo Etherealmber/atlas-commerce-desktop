@@ -412,13 +412,17 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 }
 
 impl ProductEditor {
-    fn is_dirty(&self) -> bool {
+    pub(crate) fn is_dirty(&self) -> bool {
         !self.name.is_empty()
             || !self.sku.is_empty()
             || !self.barcode.is_empty()
             || !self.category.is_empty()
+            // The form seeds Unit with its default "unité"; only a deviation
+            // (not any non-empty value) counts as an unsaved edit.
+            || self.unit.trim() != "unité"
             || !self.price.is_empty()
             || !self.stock.is_empty()
+            || !self.threshold.trim().is_empty()
     }
 
     fn parse(&self) -> Result<atlas_api::models::CreateProduct, String> {
@@ -545,6 +549,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             })
                             .size(13.0),
                     )
+                    .wrap_mode(egui::TextWrapMode::Extend)
                     .fill(if selected {
                         palette.accent
                     } else {

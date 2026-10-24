@@ -216,6 +216,13 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
     style.spacing.item_spacing = egui::vec2(10.0, 10.0);
     style.spacing.button_padding = egui::vec2(14.0, 7.0);
     style.spacing.window_margin = egui::Margin::same(18);
+
+    // Native-app behaviour: chrome text (buttons, labels, pills, menu rows,
+    // table cells, headings) must never behave like selectable web page text
+    // — no highlight drag, no Ctrl+A/Ctrl+C selection rectangle, no I-beam
+    // cursor over non-input surfaces. TextEdit fields keep their own text
+    // selection independently of this flag, so inputs stay fully selectable.
+    style.interaction.selectable_labels = false;
 }
 
 /// The names a JSON palette may set, for the settings documentation.
@@ -292,5 +299,16 @@ mod tests {
         let names = editable_color_names();
         assert!(names.contains("accent") && names.contains("window"));
         assert_eq!(names.len(), 16);
+    }
+
+    #[test]
+    fn chrome_text_is_never_selectable() {
+        // Native-app guarantee: labels, buttons and pills must not offer web
+        // style text selection. TextEdit fields keep their own selection.
+        let mut style = Style::default();
+        apply_to_style(&mut style, &Palette::dark());
+        assert!(!style.interaction.selectable_labels);
+        apply_to_style(&mut style, &Palette::light());
+        assert!(!style.interaction.selectable_labels);
     }
 }

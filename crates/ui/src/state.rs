@@ -325,6 +325,12 @@ pub struct AtlasApp {
     pub top_search: String,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
+    /// Ctrl+K command palette overlay.
+    pub palette_open: bool,
+    /// Palette filter text, reset every time the palette opens.
+    pub palette_query: String,
+    /// Cursor inside the filtered command list (clamped at draw time).
+    pub palette_selected: usize,
     /// Section an external entry point (avatar menu) wants to highlight.
     pub settings_focus: SettingsFocus,
 
@@ -480,6 +486,9 @@ impl AtlasApp {
             route_entered_at: Instant::now(),
             top_search: String::new(),
             profile_menu_open: false,
+            palette_open: false,
+            palette_query: String::new(),
+            palette_selected: 0,
             settings_focus: SettingsFocus::General,
             dashboard: Cache::default(),
             products: Cache::default(),
@@ -645,6 +654,214 @@ impl AtlasApp {
     fn begin_route_transition(&mut self) {
         self.anim_token = self.anim_token.wrapping_add(1);
         self.route_entered_at = Instant::now();
+    }
+
+    // ── Keyboard-first navigation (Ctrl+K palette, Ctrl+R, Escape) ───────
+
+    /// Opens the command palette with a fresh filter and selection.
+    pub fn open_palette(&mut self) {
+        self.palette_open = true;
+        self.palette_query.clear();
+        self.palette_selected = 0;
+        self.profile_menu_open = false;
+    }
+
+    /// Closes the palette and forgets its transient text.
+    pub fn close_palette(&mut self) {
+        self.palette_open = false;
+        self.palette_query.clear();
+        self.palette_selected = 0;
+    }
+
+    /// Lazy-loads the data a route needs the first time it is opened. Shared
+    /// by the rail click and the command palette so the two entry points can
+    /// never drift apart.
+    pub fn ensure_route_data(&mut self, route: Route) {
+        match route {
+            Route::Clients if self.clients.data.is_none() => self.load_clients(),
+            Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
+            Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
+            Route::DeliveryNotes if self.delivery_notes.data.is_none() => {
+                self.load_delivery_notes();
+            }
+            Route::Catalog => {
+                if self.categories.data.is_none() {
+                    self.load_categories();
+                }
+                if self.units.data.is_none() {
+                    self.load_units();
+                }
+            }
+            Route::Sales if self.invoices.data.is_none() => self.load_invoices(),
+            Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
+            _ => {}
+        }
+    }
+
+    /// Reloads the current screen's data (Ctrl+R / F5), never blocking the
+    /// UI thread: every loader only spawns a tokio job.
+    pub fn refresh_current_route(&mut self) {
+        let Screen::Shell(route) = self.screen else {
+            return;
+        };
+        match route {
+            Route::Dashboard => self.load_dashboard(),
+            Route::Products => self.load_products(),
+            Route::Catalog => {
+                self.load_categories();
+                self.load_units();
+            }
+            Route::Clients => self.load_clients(),
+            Route::Vendors => self.load_vendors(),
+            Route::Expenses => self.load_expenses(),
+            Route::DeliveryNotes => self.load_delivery_notes(),
+            Route::Sales => self.load_invoices(),
+            Route::Agent => self.load_assist(),
+            Route::Notifications => {
+                self.load_alerts();
+                self.load_nav_badges();
+            }
+            Route::Settings => {
+                self.load_profile();
+                self.load_devices();
+                self.load_api_keys();
+            }
+        }
+    }
+
+    /// Whether a modal surface (dialog or editor overlay) is on screen.
+    /// Global shortcuts except Escape stay inactive while this is true so a
+    /// navigation, refresh or palette action cannot lose in-progress input.
+    #[must_use]
+    pub fn modal_open(&self) -> bool {
+        self.confirm_dialog.is_some()
+            || self.product_editor.is_some()
+            || self.client_editor.is_some()
+            || self.vendor_editor.is_some()
+            || self.expense_editor.is_some()
+            || self.delivery_note_editor.is_some()
+            || self.category_editor.is_some()
+            || self.unit_editor.is_some()
+            || self.stock_dialog.is_some()
+            || self.quick_sale.is_some()
+            || self.key_editor.is_some()
+    }
+
+    /// Escape handling, topmost surface first. Returns true when something
+    /// was dismissed. Dialogs cancel without persisting; the dirty product
+    /// wizard routes through its existing discard confirmation, every other
+    /// editor closes directly like its own Cancel button.
+    pub fn dismiss_top_overlay(&mut self) -> bool {
+        if self.confirm_dialog.take().is_some() {
+            return true;
+        }
+        if self.palette_open {
+            self.close_palette();
+            return true;
+        }
+        if self.profile_menu_open {
+            self.profile_menu_open = false;
+            return true;
+        }
+        // The stock dialog paints above the product editor, so Escape must
+        // dismiss it first when both are open and leave the editor alone.
+        if self.stock_dialog.take().is_some() {
+            return true;
+        }
+        if let Some(editor) = self.product_editor.take() {
+            if editor.is_dirty() {
+                self.product_editor = Some(editor);
+                self.confirm_dialog = Some(crate::dialogs::Confirm {
+                    title: crate::t!(self.locale, "Discard changes?").into_owned(),
+                    body: crate::t!(self.locale, "The product information has not been saved.")
+                        .into_owned(),
+                    confirm_label: crate::t!(self.locale, "Discard").into_owned(),
+                    danger: true,
+                    action: crate::dialogs::ConfirmAction::DiscardEditor,
+                });
+            }
+            return true;
+        }
+        if self.client_editor.take().is_some()
+            || self.vendor_editor.take().is_some()
+            || self.expense_editor.take().is_some()
+            || self.delivery_note_editor.take().is_some()
+            || self.category_editor.take().is_some()
+            || self.unit_editor.take().is_some()
+            || self.quick_sale.take().is_some()
+            || self.key_editor.take().is_some()
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Executes a command-palette entry. Returns true when the title-bar
+    /// search field should be focused (the only entry needing the context).
+    pub fn run_palette_target(&mut self, target: crate::shortcuts::PaletteTarget) -> bool {
+        use crate::shortcuts::PaletteTarget;
+        self.close_palette();
+        match target {
+            PaletteTarget::Route(route) => {
+                self.go(route);
+                self.ensure_route_data(route);
+                false
+            }
+            PaletteTarget::Refresh => {
+                self.refresh_current_route();
+                false
+            }
+            PaletteTarget::NewProduct => {
+                self.go(Route::Products);
+                self.product_editor = Some(ProductEditor::new());
+                false
+            }
+            PaletteTarget::NewClient => {
+                self.go(Route::Clients);
+                self.client_editor = Some(ClientEditor::new());
+                false
+            }
+            PaletteTarget::NewVendor => {
+                self.go(Route::Vendors);
+                self.vendor_editor = Some(VendorEditor::new());
+                false
+            }
+            PaletteTarget::NewExpense => {
+                self.go(Route::Expenses);
+                self.expense_editor = Some(ExpenseEditor::new());
+                false
+            }
+            PaletteTarget::NewDelivery => {
+                self.go(Route::DeliveryNotes);
+                self.delivery_note_editor = Some(DeliveryNoteEditor::new());
+                false
+            }
+            PaletteTarget::FocusSearch => true,
+            PaletteTarget::SettingsProfile => {
+                self.settings_focus = SettingsFocus::Profile;
+                self.go(Route::Settings);
+                false
+            }
+            PaletteTarget::SettingsGeneral => {
+                self.settings_focus = SettingsFocus::General;
+                self.go(Route::Settings);
+                false
+            }
+            PaletteTarget::SignOut => {
+                self.confirm_dialog = Some(crate::dialogs::Confirm {
+                    title: crate::t!(self.locale, "Sign out").into_owned(),
+                    body: crate::t!(
+                        self.locale,
+                        "You will need to sign in again to reach this server."
+                    )
+                    .into_owned(),
+                    confirm_label: crate::t!(self.locale, "Sign out").into_owned(),
+                    danger: true,
+                    action: crate::dialogs::ConfirmAction::SignOut,
+                });
+                false
+            }
+        }
     }
 
     pub fn sign_out(&mut self) {

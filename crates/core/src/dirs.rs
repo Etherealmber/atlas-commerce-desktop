@@ -110,6 +110,14 @@ impl AppPaths {
         self.logs_dir().join("atlas-commerce-desktop.log")
     }
 
+    /// Where fastframe-log 0.14.1+ keeps the previous run's log beside the
+    /// current one (`atlas-commerce-desktop.previous.log`). The name comes
+    /// from the library so the logger and the settings screen never drift.
+    #[must_use]
+    pub fn previous_log_file(&self) -> PathBuf {
+        fastframe_log::previous_log(&self.log_file())
+    }
+
     #[must_use]
     pub fn panic_log(&self) -> PathBuf {
         self.logs_dir().join("panic.log")

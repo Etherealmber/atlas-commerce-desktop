@@ -4,6 +4,7 @@
 use egui::{Align, Color32, Layout, RichText, Sense, Vec2, vec2};
 
 use crate::dialogs::{Confirm, ConfirmAction};
+use crate::i18n::Locale;
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
 use crate::theme::Palette;
@@ -14,24 +15,30 @@ use crate::{t, widgets};
 const TITLEBAR_HEIGHT: f32 = 40.0;
 const RAIL_WIDTH: f32 = 212.0;
 
-/// French label + icon of every rail destination.
-fn route_meta(route: Route) -> (Icon, &'static str) {
+/// Localized label + icon of every rail destination. Shared with the Ctrl+K
+/// command palette so navigation labels never diverge and the English locale
+/// gets English route names instead of hard-coded French.
+pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
     match route {
-        Route::Dashboard => (Icon::Dashboard, "Tableau de bord"),
-        Route::Products => (Icon::Package, "Produits"),
-        Route::Catalog => (Icon::Boxes, "Catalogue"),
-        Route::Clients => (Icon::Users, "Clients"),
-        Route::Vendors => (Icon::Store, "Fournisseurs"),
-        Route::Expenses => (Icon::Wallet, "Dépenses"),
-        Route::DeliveryNotes => (Icon::Truck, "Bons de livraison"),
-        Route::Sales => (Icon::Receipt, "Ventes"),
-        Route::Agent => (Icon::Bot, "Agent IA"),
-        Route::Notifications => (Icon::Bell, "Notifications"),
-        Route::Settings => (Icon::Settings, "Réglages"),
+        Route::Dashboard => (Icon::Dashboard, t!(locale, "Dashboard").into_owned()),
+        Route::Products => (Icon::Package, t!(locale, "Products").into_owned()),
+        Route::Catalog => (Icon::Boxes, t!(locale, "Catalog").into_owned()),
+        Route::Clients => (Icon::Users, t!(locale, "Clients").into_owned()),
+        Route::Vendors => (Icon::Store, t!(locale, "Vendors").into_owned()),
+        Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
+        Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
+        Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
+        Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
+        Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
+        Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
     }
 }
 
 pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
+    // Global keyboard layer first: Ctrl+K palette, Ctrl+1…9, Ctrl+R/F5,
+    // Ctrl+F and Escape, all suppressed while a text field owns the keys.
+    crate::shortcuts::handle_shortcuts(app, ctx);
+
     // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
     // with an exact size reserves its width up front, so the rail can never
     // expand to the full window and starve the central column (the blank
@@ -72,6 +79,10 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .show(ui, |ui| {
             draw_content(app, ui, ctx, palette);
         });
+
+    // The palette sits above the panels but below a blocking confirmation,
+    // which always owns the topmost layer.
+    crate::shortcuts::draw_palette(app, ui, ctx, palette);
 
     if app.confirm_dialog.is_some() {
         draw_confirm_dialog(app, ui, palette);
@@ -491,8 +502,10 @@ fn menu_row(
             vec2(rect.width() - 44.0, rect.height()),
         ),
         |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.label(RichText::new(label.as_ref()).color(palette.text).size(13.5));
+            widgets::no_wrap_scope(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(RichText::new(label.as_ref()).color(palette.text).size(13.5));
+                });
             });
         },
     );
@@ -515,34 +528,14 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if matches!(route, Route::Notifications | Route::Settings) {
             continue;
         }
-        let (which, label) = route_meta(route);
+        let (which, label) = route_meta(app.locale, route);
         let is_active = active == Some(route);
-        let response = rail_row(ui, palette, which, label, is_active);
+        let response = rail_row(ui, palette, which, &label, is_active);
         if response.clicked() {
             app.go(route);
-            if route == Route::Clients && app.clients.data.is_none() {
-                app.load_clients();
-            }
-            if route == Route::Vendors && app.vendors.data.is_none() {
-                app.load_vendors();
-            }
-            if route == Route::Expenses && app.expenses.data.is_none() {
-                app.load_expenses();
-            }
-            if route == Route::DeliveryNotes && app.delivery_notes.data.is_none() {
-                app.load_delivery_notes();
-            }
-            if route == Route::Catalog {
-                if app.categories.data.is_none() {
-                    app.load_categories();
-                }
-                if app.units.data.is_none() {
-                    app.load_units();
-                }
-            }
-            if route == Route::Sales && app.invoices.data.is_none() {
-                app.load_invoices();
-            }
+            // Shared with the command palette so both entry points load the
+            // same first-visit data.
+            app.ensure_route_data(route);
         }
     }
 }
@@ -595,17 +588,20 @@ fn rail_row(
             vec2(rect.width() - 52.0, rect.height()),
         ),
         |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.label(
-                    RichText::new(label)
-                        .color(if is_active {
-                            palette.text
-                        } else {
-                            palette.secondary
-                        })
-                        .size(14.0)
-                        .strong(),
-                );
+            // Rail entries are one-line chrome labels, even at narrow widths.
+            widgets::no_wrap_scope(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    ui.label(
+                        RichText::new(label)
+                            .color(if is_active {
+                                palette.text
+                            } else {
+                                palette.secondary
+                            })
+                            .size(14.0)
+                            .strong(),
+                    );
+                });
             });
         },
     );

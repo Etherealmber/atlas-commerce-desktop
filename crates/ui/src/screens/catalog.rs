@@ -170,27 +170,31 @@ fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .inner_margin(egui::Margin::symmetric(14, 8));
             let response = frame
                 .show(ui, |ui| {
-                    ui.horizontal_centered(|ui| {
-                        icon(
-                            ui,
-                            which,
-                            if active {
-                                palette.accent
-                            } else {
-                                palette.secondary
-                            },
-                            15.0,
-                        );
-                        ui.label(
-                            RichText::new(label)
-                                .color(if active {
-                                    palette.text
+                    // Tabs are chrome: icon + one-line label, never a wrapped
+                    // block when the window gets narrow.
+                    widgets::no_wrap_scope(ui, |ui| {
+                        ui.horizontal_centered(|ui| {
+                            icon(
+                                ui,
+                                which,
+                                if active {
+                                    palette.accent
                                 } else {
                                     palette.secondary
-                                })
-                                .strong()
-                                .size(13.0),
-                        );
+                                },
+                                15.0,
+                            );
+                            ui.label(
+                                RichText::new(label)
+                                    .color(if active {
+                                        palette.text
+                                    } else {
+                                        palette.secondary
+                                    })
+                                    .strong()
+                                    .size(13.0),
+                            );
+                        });
                     });
                 })
                 .response;
