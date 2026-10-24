@@ -521,14 +521,16 @@ mod tests {
         // Each measurement gets its own headless frame: an overflowing
         // control must never widen the shared Ui seen by the other probe.
         // Both modes are set explicitly because this fork defaults to Extend.
-        let extended = run_headless(|ui| {
-            ui.add(
-                egui::Button::new(RichText::new("Ajuster le stock"))
-                    .wrap_mode(TextWrapMode::Extend),
-            )
-            .rect
+        let (extended_width, extended_height) = run_headless(|ui| {
+            let rect = ui
+                .add(
+                    egui::Button::new(RichText::new("Ajuster le stock"))
+                        .wrap_mode(TextWrapMode::Extend),
+                )
+                .rect;
+            (rect.width(), rect.height())
         });
-        let wrapped_height = run_headless(|ui| {
+        let wrapped_height: f32 = run_headless(|ui| {
             ui.add_sized(
                 [72.0, 0.0],
                 egui::Button::new(RichText::new("Ajuster le stock"))
@@ -540,12 +542,11 @@ mod tests {
         // The extending button keeps its natural one-line width and overflows
         // the starved column instead of stacking one word per line.
         assert!(
-            extended.width() > 72.0,
-            "Extend buttons must keep their natural width, got {}",
-            extended.width()
+            extended_width > 72.0,
+            "Extend buttons must keep their natural width, got {extended_width}"
         );
         assert!(
-            wrapped_height > extended.height() + 4.0,
+            wrapped_height > extended_height + 4.0,
             "the Wrap control must collapse to several lines, the Extend one stay single-line"
         );
     }
