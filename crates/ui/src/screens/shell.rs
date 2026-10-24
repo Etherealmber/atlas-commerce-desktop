@@ -26,10 +26,7 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Clients => (Icon::Users, t!(locale, "Clients").into_owned()),
         Route::Vendors => (Icon::Store, t!(locale, "Vendors").into_owned()),
         Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
-        Route::DeliveryNotes => (
-            Icon::Truck,
-            t!(locale, "Delivery notes").into_owned(),
-        ),
+        Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
         Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
         Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
         Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
