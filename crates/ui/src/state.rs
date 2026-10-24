@@ -763,6 +763,11 @@ impl AtlasApp {
             self.profile_menu_open = false;
             return true;
         }
+        // The stock dialog paints above the product editor, so Escape must
+        // dismiss it first when both are open and leave the editor alone.
+        if self.stock_dialog.take().is_some() {
+            return true;
+        }
         if let Some(editor) = self.product_editor.take() {
             if editor.is_dirty() {
                 self.product_editor = Some(editor);
@@ -783,7 +788,6 @@ impl AtlasApp {
             || self.delivery_note_editor.take().is_some()
             || self.category_editor.take().is_some()
             || self.unit_editor.take().is_some()
-            || self.stock_dialog.take().is_some()
             || self.quick_sale.take().is_some()
             || self.key_editor.take().is_some()
         {

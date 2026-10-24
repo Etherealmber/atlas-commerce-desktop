@@ -29,6 +29,17 @@ fn input_id() -> egui::Id {
     egui::Id::new("command-palette-input")
 }
 
+/// Releases whatever widget currently holds keyboard focus. Requesting the
+/// NULL id would leave a focused id in memory and keep the "typing" guard
+/// active on the next frame.
+fn clear_focus(ctx: &egui::Context) {
+    ctx.memory_mut(|memory| {
+        if let Some(id) = memory.focused() {
+            memory.surrender_focus(id);
+        }
+    });
+}
+
 /// Every command the palette can run. Routes are kept as data so the entry
 /// list and the shortcut digits share one source of truth.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -206,9 +217,9 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
     // Escape always wins: dialog → palette → popover → editor → text focus.
     if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
         app.dismiss_top_overlay();
-        // Whatever was open no longer owns the keyboard: drop focus so the
-        // next keystroke cannot land in a now-hidden text field.
-        ctx.memory_mut(|memory| memory.request_focus(egui::Id::NULL));
+        // Whatever was open no longer owns the keyboard: surrender focus so
+        // the next keystroke cannot land in a now-hidden text field.
+        clear_focus(ctx);
         return;
     }
 
@@ -221,7 +232,11 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
 
     // F5 refreshes without a modifier, even while a field is focused.
     if ctx.input(|input| input.key_pressed(egui::Key::F5)) {
+        let palette_was_open = app.palette_open;
         app.close_palette();
+        if palette_was_open {
+            clear_focus(ctx);
+        }
         app.refresh_current_route();
         return;
     }
@@ -237,7 +252,7 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
     if ctx.input(|input| input.key_pressed(egui::Key::K)) {
         if app.palette_open {
             app.close_palette();
-            ctx.memory_mut(|memory| memory.request_focus(egui::Id::NULL));
+            clear_focus(ctx);
         } else {
             app.open_palette();
             ctx.memory_mut(|memory| memory.request_focus(input_id()));
@@ -254,6 +269,7 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
     // A navigation/action shortcut always leaves the palette first.
     if app.palette_open {
         app.close_palette();
+        clear_focus(ctx);
     }
 
     if ctx.input(|input| input.key_pressed(egui::Key::R)) {
@@ -296,8 +312,15 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
         egui::vec2(width, max_height),
     );
 
-    // Click on the backdrop = cancel, with no data persisted. Pointer-based
-    // (not a full-screen interaction) so rows and scrolls keep their events.
+    // Register the full-screen backdrop as an interaction target first: this
+    // consumes the press so a rail row underneath cannot retain it and
+    // navigate on release. The pointer check also dismisses on the initial
+    // press, and palette rows (registered later) win inside the card.
+    let backdrop = ui.interact(
+        screen,
+        egui::Id::new("command-palette-backdrop"),
+        Sense::click(),
+    );
     let pressed_outside = ctx.input(|input| {
         input.pointer.any_pressed()
             && input
@@ -305,8 +328,9 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
                 .interact_pos()
                 .is_some_and(|pos| !card_rect.contains(pos))
     });
-    if pressed_outside {
+    if backdrop.clicked() || pressed_outside {
         app.close_palette();
+        clear_focus(ctx);
         return;
     }
     ui.painter()
@@ -407,7 +431,12 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
 
 fn run_target(app: &mut AtlasApp, ctx: &egui::Context, target: PaletteTarget) {
     if app.run_palette_target(target) {
+        // The product search explicitly takes the focus over.
         ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("titlebar-search")));
+    } else {
+        // Every other action leaves the palette: its field must not stay
+        // focused and suppress the next global shortcut.
+        clear_focus(ctx);
     }
 }
 
