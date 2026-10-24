@@ -533,8 +533,7 @@ mod tests {
         let wrapped_height: f32 = run_headless(|ui| {
             ui.add_sized(
                 [72.0, 0.0],
-                egui::Button::new(RichText::new("Ajuster le stock"))
-                    .wrap_mode(TextWrapMode::Wrap),
+                egui::Button::new(RichText::new("Ajuster le stock")).wrap_mode(TextWrapMode::Wrap),
             )
             .rect
             .height()
