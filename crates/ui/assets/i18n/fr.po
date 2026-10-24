@@ -1066,3 +1066,30 @@ msgstr "issue des produits"
 msgid "invoices"
 msgstr "factures"
 
+
+msgid "Search or jump to…"
+msgstr "Rechercher ou aller à…"
+
+msgid "No matching command."
+msgstr "Aucune commande correspondante."
+
+msgid "Escape to close"
+msgstr "Échap pour fermer"
+
+msgid "Refresh the current page"
+msgstr "Actualiser la page actuelle"
+
+msgid "New expense"
+msgstr "Nouvelle dépense"
+
+msgid "Logs"
+msgstr "Journaux"
+
+msgid "Plain-text per-run logs, useful when reporting a problem."
+msgstr "Journaux texte par session, utiles pour signaler un problème."
+
+msgid "Open the current log"
+msgstr "Ouvrir le journal actuel"
+
+msgid "Open the previous run's log"
+msgstr "Ouvrir le journal de la session précédente"

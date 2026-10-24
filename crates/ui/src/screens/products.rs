@@ -412,7 +412,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 }
 
 impl ProductEditor {
-    fn is_dirty(&self) -> bool {
+    pub(crate) fn is_dirty(&self) -> bool {
         !self.name.is_empty()
             || !self.sku.is_empty()
             || !self.barcode.is_empty()
@@ -545,6 +545,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             })
                             .size(13.0),
                     )
+                    .wrap_mode(egui::TextWrapMode::Extend)
                     .fill(if selected {
                         palette.accent
                     } else {

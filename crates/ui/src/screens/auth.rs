@@ -142,6 +142,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 .color(palette.on_accent)
                 .strong(),
         )
+        .wrap_mode(egui::TextWrapMode::Extend)
         .fill(palette.accent)
         .corner_radius(10.0)
         .min_size(egui::vec2(240.0, 42.0));
@@ -248,6 +249,9 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                                     app.locale, "Forget"
                                                                 ))
                                                                 .color(palette.secondary),
+                                                            )
+                                                            .wrap_mode(
+                                                                egui::TextWrapMode::Extend,
                                                             )
                                                             .fill(palette.surface)
                                                             .corner_radius(8.0),
@@ -527,6 +531,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                                 .color(palette.secondary)
                                                 .size(12.5),
                                         )
+                                        .wrap_mode(egui::TextWrapMode::Extend)
                                         .fill(Color32::TRANSPARENT)
                                         .stroke(egui::Stroke::NONE),
                                     )
@@ -596,6 +601,7 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     .strong()
                                     .size(13.5),
                             )
+                            .wrap_mode(egui::TextWrapMode::Extend)
                             .fill(if selected {
                                 palette.surface_active
                             } else {
@@ -714,6 +720,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .strong()
                         .size(14.0),
                 )
+                .wrap_mode(egui::TextWrapMode::Extend)
                 .fill(if !busy {
                     palette.accent
                 } else {

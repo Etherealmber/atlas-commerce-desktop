@@ -39,12 +39,16 @@ pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color:
         .inner_margin(egui::Margin::symmetric(10, 3))
         .stroke(Stroke::new(1.0, text_color.gamma_multiply(0.25)))
         .show(ui, |ui| {
-            ui.label(
-                RichText::new(text.as_ref())
-                    .color(text_color)
-                    .size(12.0)
-                    .strong(),
-            );
+            // A badge sizes to one line: a starved pill used to break its
+            // label across several lines instead of staying compact.
+            no_wrap_scope(ui, |ui| {
+                ui.label(
+                    RichText::new(text.as_ref())
+                        .color(text_color)
+                        .size(12.0)
+                        .strong(),
+                );
+            });
         });
 }
 
@@ -188,7 +192,8 @@ pub fn labelled_field(
 pub fn dialog_actions(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui)) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(4.0);
-        content(ui);
+        // Buttons keep their natural one-line width even in a narrow dialog.
+        no_wrap_scope(ui, content);
     });
 }
 
@@ -213,11 +218,15 @@ pub fn empty_state(
         ui.add_space(28.0);
         icon(ui, which, palette.dim, 40.0);
         ui.add_space(10.0);
-        ui.label(
-            RichText::new(title.as_ref())
-                .color(palette.secondary)
-                .strong(),
-        );
+        // The headline is chrome text and stays on one line; the hint below
+        // is descriptive prose and keeps normal wrapping for narrow windows.
+        no_wrap_scope(ui, |ui| {
+            ui.label(
+                RichText::new(title.as_ref())
+                    .color(palette.secondary)
+                    .strong(),
+            );
+        });
         ui.add_space(4.0);
         ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
     });
@@ -405,6 +414,7 @@ pub fn segmented<T: PartialEq + Copy>(
                     })
                     .size(12.5),
             )
+            .wrap_mode(TextWrapMode::Extend)
             .fill(if is_selected {
                 palette.accent
             } else {
@@ -418,6 +428,85 @@ pub fn segmented<T: PartialEq + Copy>(
         }
     });
     picked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::CentralPanel;
+
+    /// Headless frame: egui's `Context` runs without a backend, which is all
+    /// these layout regressions need (no window, no renderer, no network).
+    /// `Context::run` returns a `FullOutput` (not the closure's value), so the
+    /// probe writes into a captured variable.
+    fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        let ctx = egui::Context::default();
+        let mut result = R::default();
+        ctx.run(egui::RawInput::default(), |ctx| {
+            CentralPanel::default().show(ctx, |ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(72.0, 220.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        result = probe(ui);
+                    },
+                );
+            });
+        });
+        result
+    }
+
+    #[test]
+    fn buttons_extend_instead_of_collapsing_in_narrow_rows() {
+        let (extended, wrapped) = run_headless(|ui| {
+            let extended = ui
+                .add(
+                    egui::Button::new(RichText::new("Ajuster le stock"))
+                        .wrap_mode(TextWrapMode::Extend),
+                )
+                .rect
+                .width();
+            let wrapped = ui
+                .add(egui::Button::new(RichText::new("Ajuster le stock")))
+                .rect
+                .width();
+            (extended, wrapped)
+        });
+        // The extending button keeps its natural one-line width and overflows
+        // the starved column instead of stacking one word per line.
+        assert!(
+            extended > 72.0,
+            "Extend buttons must keep their natural width, got {extended}"
+        );
+        assert!(
+            wrapped <= 74.0,
+            "a default-wrapped control stays constrained to its column, got {wrapped}"
+        );
+    }
+
+    #[test]
+    fn no_wrap_scope_keeps_chrome_labels_on_one_line() {
+        let (scoped, plain) = run_headless(|ui| {
+            let scoped = no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
+                .inner
+                .rect
+                .height();
+            let plain = ui.label("Bons de livraison").rect.height();
+            (scoped, plain)
+        });
+        assert!(scoped < plain, "no-wrap label must be shorter than a wrapped one");
+    }
+
+    #[test]
+    fn primary_button_sizes_to_its_text() {
+        let width = run_headless(|ui| {
+            // Drive the exact widget the dialogs and wizards use.
+            let before = ui.min_rect().width();
+            let _ = primary_button(ui, "Supprimer le produit", &Palette::dark(), true);
+            ui.min_rect().width() - before
+        });
+        assert!(width > 120.0, "the full label must be measured, got {width}");
+    }
 }
 
 /// A floating action button (Android FAB) anchored to the window's bottom

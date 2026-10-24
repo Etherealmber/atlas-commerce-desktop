@@ -470,6 +470,7 @@ fn segmented_type(
                     })
                     .strong(),
             )
+            .wrap_mode(egui::TextWrapMode::Extend)
             .fill(if selected {
                 palette.accent
             } else {
