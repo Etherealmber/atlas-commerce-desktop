@@ -534,11 +534,7 @@ mod tests {
                         .wrap_mode(TextWrapMode::Wrap),
                 )
                 .rect;
-            (
-                extended.width(),
-                wrapped.height(),
-                extended.height(),
-            )
+            (extended.width(), wrapped.height(), extended.height())
         });
         // The extending button keeps its natural one-line width and overflows
         // the starved column instead of stacking one word per line.
