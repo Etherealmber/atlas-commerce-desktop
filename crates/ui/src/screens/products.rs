@@ -417,8 +417,10 @@ impl ProductEditor {
             || !self.sku.is_empty()
             || !self.barcode.is_empty()
             || !self.category.is_empty()
+            || !self.unit.is_empty()
             || !self.price.is_empty()
             || !self.stock.is_empty()
+            || !self.threshold.is_empty()
     }
 
     fn parse(&self) -> Result<atlas_api::models::CreateProduct, String> {

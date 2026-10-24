@@ -228,7 +228,11 @@ pub fn empty_state(
             );
         });
         ui.add_space(4.0);
-        ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
+        // Empty states are chrome too: the hint never wraps mid-word in a
+        // narrow pane; centered content keeps the overflow readable.
+        no_wrap_scope(ui, |ui| {
+            ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
+        });
     });
 }
 

@@ -71,7 +71,7 @@ pub fn rail_route_at(index: usize) -> Option<Route> {
 pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
     let mut list = Vec::with_capacity(24);
     for (index, route) in Route::ALL.into_iter().enumerate() {
-        let (_, label) = route_meta(route);
+        let (_, label) = route_meta(locale, route);
         let hint = rail_route_at(index).and_then(|rail| {
             (rail == route).then_some(match index {
                 0 => "Ctrl+1",
@@ -87,7 +87,7 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
         });
         list.push(PaletteEntry {
             target: PaletteTarget::Route(route),
-            label: label.to_owned(),
+            label,
             hint,
         });
     }
@@ -209,6 +209,13 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         // Whatever was open no longer owns the keyboard: drop focus so the
         // next keystroke cannot land in a now-hidden text field.
         ctx.memory_mut(|memory| memory.request_focus(egui::Id::NULL));
+        return;
+    }
+
+    // A modal editor or confirmation owns every other key: navigating,
+    // refreshing or opening the palette underneath could drop unsaved input
+    // or replace an editor (e.g. the palette's "New product" action).
+    if app.modal_open() {
         return;
     }
 

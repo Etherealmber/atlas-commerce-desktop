@@ -729,6 +729,24 @@ impl AtlasApp {
         }
     }
 
+    /// Whether a modal surface (dialog or editor overlay) is on screen.
+    /// Global shortcuts except Escape stay inactive while this is true so a
+    /// navigation, refresh or palette action cannot lose in-progress input.
+    #[must_use]
+    pub fn modal_open(&self) -> bool {
+        self.confirm_dialog.is_some()
+            || self.product_editor.is_some()
+            || self.client_editor.is_some()
+            || self.vendor_editor.is_some()
+            || self.expense_editor.is_some()
+            || self.delivery_note_editor.is_some()
+            || self.category_editor.is_some()
+            || self.unit_editor.is_some()
+            || self.stock_dialog.is_some()
+            || self.quick_sale.is_some()
+            || self.key_editor.is_some()
+    }
+
     /// Escape handling, topmost surface first. Returns true when something
     /// was dismissed. Dialogs cancel without persisting; the dirty product
     /// wizard routes through its existing discard confirmation, every other

@@ -4,6 +4,7 @@
 use egui::{Align, Color32, Layout, RichText, Sense, Vec2, vec2};
 
 use crate::dialogs::{Confirm, ConfirmAction};
+use crate::i18n::Locale;
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
 use crate::theme::Palette;
@@ -14,21 +15,25 @@ use crate::{t, widgets};
 const TITLEBAR_HEIGHT: f32 = 40.0;
 const RAIL_WIDTH: f32 = 212.0;
 
-/// French label + icon of every rail destination. Shared with the Ctrl+K
-/// command palette so navigation labels never diverge.
-pub(crate) fn route_meta(route: Route) -> (Icon, &'static str) {
+/// Localized label + icon of every rail destination. Shared with the Ctrl+K
+/// command palette so navigation labels never diverge and the English locale
+/// gets English route names instead of hard-coded French.
+pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
     match route {
-        Route::Dashboard => (Icon::Dashboard, "Tableau de bord"),
-        Route::Products => (Icon::Package, "Produits"),
-        Route::Catalog => (Icon::Boxes, "Catalogue"),
-        Route::Clients => (Icon::Users, "Clients"),
-        Route::Vendors => (Icon::Store, "Fournisseurs"),
-        Route::Expenses => (Icon::Wallet, "Dépenses"),
-        Route::DeliveryNotes => (Icon::Truck, "Bons de livraison"),
-        Route::Sales => (Icon::Receipt, "Ventes"),
-        Route::Agent => (Icon::Bot, "Agent IA"),
-        Route::Notifications => (Icon::Bell, "Notifications"),
-        Route::Settings => (Icon::Settings, "Réglages"),
+        Route::Dashboard => (Icon::Dashboard, t!(locale, "Dashboard").into_owned()),
+        Route::Products => (Icon::Package, t!(locale, "Products").into_owned()),
+        Route::Catalog => (Icon::Boxes, t!(locale, "Catalog").into_owned()),
+        Route::Clients => (Icon::Users, t!(locale, "Clients").into_owned()),
+        Route::Vendors => (Icon::Store, t!(locale, "Vendors").into_owned()),
+        Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
+        Route::DeliveryNotes => (
+            Icon::Truck,
+            t!(locale, "Delivery notes").into_owned(),
+        ),
+        Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
+        Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
+        Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
+        Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
     }
 }
 
@@ -526,9 +531,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if matches!(route, Route::Notifications | Route::Settings) {
             continue;
         }
-        let (which, label) = route_meta(route);
+        let (which, label) = route_meta(app.locale, route);
         let is_active = active == Some(route);
-        let response = rail_row(ui, palette, which, label, is_active);
+        let response = rail_row(ui, palette, which, &label, is_active);
         if response.clicked() {
             app.go(route);
             // Shared with the command palette so both entry points load the
