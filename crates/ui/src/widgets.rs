@@ -442,6 +442,9 @@ mod tests {
     fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let ctx = egui::Context::default();
         let mut result = R::default();
+        // run_ui takes an FnMut, so the FnOnce probe rides in an Option and
+        // runs on the single headless frame.
+        let mut probe = Some(probe);
         // This egui fork names the headless entry point `run_ui`.
         ctx.run_ui(egui::RawInput::default(), |ctx| {
             CentralPanel::default().show(ctx, |ui| {
@@ -449,7 +452,9 @@ mod tests {
                     egui::vec2(72.0, 220.0),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
-                        result = probe(ui);
+                        if let Some(probe) = probe.take() {
+                            result = probe(ui);
+                        }
                     },
                 );
             });
