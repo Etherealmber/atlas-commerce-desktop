@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn rail_has_exactly_nine_keyboard_sections() {
-        let routes: Vec<Route> = (0..9).map(rail_route_at).flatten().collect();
+        let routes: Vec<Route> = (0..9).flat_map(rail_route_at).collect();
         assert_eq!(routes.len(), 9);
         // The title-bar sections are not in the rail's digit range.
         assert!(!routes.contains(&Route::Notifications));

@@ -430,6 +430,56 @@ pub fn segmented<T: PartialEq + Copy>(
     picked
 }
 
+/// A floating action button (Android FAB) anchored to the window's bottom
+/// right: 56 px accent disk, scale-in entrance and hover lift.
+pub fn fab(
+    ctx: &egui::Context,
+    palette: &Palette,
+    which: Icon,
+    id_salt: impl std::hash::Hash + Copy + std::fmt::Debug,
+    tooltip: &str,
+) -> egui::Response {
+    let id = egui::Id::new(("atlas-fab", id_salt));
+    // Android-style 220 ms scale-in, slower than egui's 83 ms default.
+    let entrance = ctx.animate_bool_with_time_and_easing(
+        egui::Id::new(("atlas-fab-in", id_salt)),
+        true,
+        0.22,
+        egui::emath::easing::cubic_out,
+    );
+    egui::Area::new(id)
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -24.0))
+        .order(egui::Order::Foreground)
+        .interactable(true)
+        .show(ctx, |ui| {
+            let full = 56.0;
+            let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
+            let hover = ctx.animate_bool(
+                egui::Id::new(("atlas-fab-hover", id_salt)),
+                response.hovered(),
+            );
+            let scale = entrance * (1.0 + 0.06 * hover);
+            let size = full * scale;
+            let center = rect.center();
+            let draw_rect = egui::Rect::from_center_size(center, egui::Vec2::splat(size));
+            // Soft shadow, then the accent disk.
+            ui.painter().circle_filled(
+                draw_rect.center() + egui::vec2(0.0, 2.0 * scale),
+                size / 2.0,
+                palette.shadow,
+            );
+            ui.painter()
+                .circle_filled(draw_rect.center(), size / 2.0, palette.accent);
+            overlay_at(
+                ui,
+                egui::Rect::from_center_size(center, egui::Vec2::splat(26.0)),
+                |ui| icon(ui, which, palette.on_accent, 24.0),
+            );
+            response.on_hover_text(tooltip)
+        })
+        .response
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,7 +496,7 @@ mod tests {
         // runs on the single headless frame.
         let mut probe = Some(probe);
         // This egui fork names the headless entry point `run_ui`.
-        ctx.run_ui(egui::RawInput::default(), |ctx| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
             CentralPanel::default().show(ctx, |ui| {
                 ui.allocate_ui_with_layout(
                     egui::vec2(72.0, 220.0),
@@ -459,6 +509,10 @@ mod tests {
                 );
             });
         });
+        // The fork panics when a FullOutput with unapplied font/texture
+        // deltas is dropped; headless layout tests never render them.
+        output.textures_delta.set.clear();
+        output.textures_delta.free.clear();
         result
     }
 
@@ -518,54 +572,4 @@ mod tests {
             "the full label must be measured, got {width}"
         );
     }
-}
-
-/// A floating action button (Android FAB) anchored to the window's bottom
-/// right: 56 px accent disk, scale-in entrance and hover lift.
-pub fn fab(
-    ctx: &egui::Context,
-    palette: &Palette,
-    which: Icon,
-    id_salt: impl std::hash::Hash + Copy + std::fmt::Debug,
-    tooltip: &str,
-) -> egui::Response {
-    let id = egui::Id::new(("atlas-fab", id_salt));
-    // Android-style 220 ms scale-in, slower than egui's 83 ms default.
-    let entrance = ctx.animate_bool_with_time_and_easing(
-        egui::Id::new(("atlas-fab-in", id_salt)),
-        true,
-        0.22,
-        egui::emath::easing::cubic_out,
-    );
-    egui::Area::new(id)
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -24.0))
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .show(ctx, |ui| {
-            let full = 56.0;
-            let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
-            let hover = ctx.animate_bool(
-                egui::Id::new(("atlas-fab-hover", id_salt)),
-                response.hovered(),
-            );
-            let scale = entrance * (1.0 + 0.06 * hover);
-            let size = full * scale;
-            let center = rect.center();
-            let draw_rect = egui::Rect::from_center_size(center, egui::Vec2::splat(size));
-            // Soft shadow, then the accent disk.
-            ui.painter().circle_filled(
-                draw_rect.center() + egui::vec2(0.0, 2.0 * scale),
-                size / 2.0,
-                palette.shadow,
-            );
-            ui.painter()
-                .circle_filled(draw_rect.center(), size / 2.0, palette.accent);
-            overlay_at(
-                ui,
-                egui::Rect::from_center_size(center, egui::Vec2::splat(26.0)),
-                |ui| icon(ui, which, palette.on_accent, 24.0),
-            );
-            response.on_hover_text(tooltip)
-        })
-        .response
 }
