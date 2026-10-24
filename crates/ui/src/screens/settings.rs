@@ -1050,6 +1050,48 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         });
 
+        // Per-run logs (fastframe-log): the current run and the previous one,
+        // which fastframe-log keeps beside it after a forced restart so a
+        // frozen/killed run still has its log for a bug report.
+        ui.add_space(14.0);
+        section_header(ui, palette, t!(app.locale, "Logs"));
+        card(palette).show(ui, |ui| {
+            ui.label(
+                RichText::new(t!(
+                    app.locale,
+                    "Plain-text per-run logs, useful when reporting a problem."
+                ))
+                .color(palette.secondary)
+                .size(12.5),
+            );
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                widgets::no_wrap_scope(ui, |ui| {
+                    if secondary_button(ui, t!(app.locale, "Open the current log"), palette) {
+                        let path = app.paths.log_file();
+                        if let Err(error) = open::that(if path.exists() {
+                            path
+                        } else {
+                            app.paths.logs_dir()
+                        }) {
+                            log::warn!("could not open the log file: {error}");
+                        }
+                    }
+                    let previous = app.paths.previous_log_file();
+                    if previous.exists()
+                        && secondary_button(
+                            ui,
+                            t!(app.locale, "Open the previous run's log"),
+                            palette,
+                        )
+                        && let Err(error) = open::that(previous)
+                    {
+                        log::warn!("could not open the previous log: {error}");
+                    }
+                });
+            });
+        });
+
         if app.update.last_manifest.is_some()
             && app.update.progress.is_none()
             && primary_button(ui, t!(app.locale, "Download and install"), palette, true)

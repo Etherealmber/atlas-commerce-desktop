@@ -20,6 +20,7 @@ chrono.workspace = true
 tokio.workspace = true
 fastframe-dirs.workspace = true
 fastframe-file.workspace = true
+fastframe-log.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
