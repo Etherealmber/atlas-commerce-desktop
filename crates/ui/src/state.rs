@@ -750,11 +750,9 @@ impl AtlasApp {
                 self.product_editor = Some(editor);
                 self.confirm_dialog = Some(crate::dialogs::Confirm {
                     title: crate::t!(self.locale, "Discard changes?").into_owned(),
-                    body: crate::t!(
-                        self.locale,
-                        "The product information has not been saved."
-                    )
-                    .into_owned(),
+                    body:
+                        crate::t!(self.locale, "The product information has not been saved.")
+                            .into_owned(),
                     confirm_label: crate::t!(self.locale, "Discard").into_owned(),
                     danger: true,
                     action: crate::dialogs::ConfirmAction::DiscardEditor,

@@ -437,12 +437,13 @@ mod tests {
 
     /// Headless frame: egui's `Context` runs without a backend, which is all
     /// these layout regressions need (no window, no renderer, no network).
-    /// `Context::run` returns a `FullOutput` (not the closure's value), so the
-    /// probe writes into a captured variable.
+    /// The fork names the entry point `run_ui` and does not return the
+    /// closure's value, so the probe writes into a captured variable.
     fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let ctx = egui::Context::default();
         let mut result = R::default();
-        ctx.run(egui::RawInput::default(), |ctx| {
+        // This egui fork names the headless entry point `run_ui`.
+        ctx.run_ui(egui::RawInput::default(), |ctx| {
             CentralPanel::default().show(ctx, |ui| {
                 ui.allocate_ui_with_layout(
                     egui::vec2(72.0, 220.0),
@@ -488,13 +489,15 @@ mod tests {
     fn no_wrap_scope_keeps_chrome_labels_on_one_line() {
         let (scoped, plain) = run_headless(|ui| {
             let scoped = no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
-                .inner
                 .rect
                 .height();
             let plain = ui.label("Bons de livraison").rect.height();
             (scoped, plain)
         });
-        assert!(scoped < plain, "no-wrap label must be shorter than a wrapped one");
+        assert!(
+            scoped < plain,
+            "no-wrap label must be shorter than a wrapped one"
+        );
     }
 
     #[test]
@@ -505,7 +508,10 @@ mod tests {
             let _ = primary_button(ui, "Supprimer le produit", &Palette::dark(), true);
             ui.min_rect().width() - before
         });
-        assert!(width > 120.0, "the full label must be measured, got {width}");
+        assert!(
+            width > 120.0,
+            "the full label must be measured, got {width}"
+        );
     }
 }
 

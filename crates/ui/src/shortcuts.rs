@@ -20,9 +20,9 @@ use crate::i18n::Locale;
 use crate::icons::Icon;
 use crate::screens::shell::route_meta;
 use crate::state::{AtlasApp, Route, Screen};
+use crate::t;
 use crate::theme::Palette;
 use crate::widgets;
-use crate::t;
 
 /// The fixed egui id of the palette's filter field, used to hand it focus.
 fn input_id() -> egui::Id {
@@ -145,7 +145,11 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
         ),
     ];
     for (target, label, hint) in actions {
-        list.push(PaletteEntry { target, label, hint });
+        list.push(PaletteEntry {
+            target,
+            label,
+            hint,
+        });
     }
     list
 }
@@ -215,8 +219,9 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         return;
     }
 
-    // `command()` is Ctrl on Windows/Linux and ⌘ on macOS.
-    let ctrl = ctx.input(|input| input.modifiers.command());
+    // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS. This fork exposes the
+    // modifier fields directly rather than the upstream `command()` helper.
+    let ctrl = ctx.input(|input| input.modifiers.ctrl || input.modifiers.mac_cmd);
     if !ctrl {
         return;
     }
@@ -275,7 +280,8 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
     if !app.palette_open {
         return;
     }
-    let screen = ctx.screen_rect();
+    // viewport_rect() (not Context::screen_rect, which this egui fork omits).
+    let screen = ctx.input(|input| input.viewport_rect());
     let width = 580.0;
     let max_height = 460.0;
     let card_rect = egui::Rect::from_min_size(
@@ -409,8 +415,7 @@ fn palette_row(
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click());
     if selected || response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 8.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
     }
     widgets::overlay_at(
         ui,
@@ -426,18 +431,11 @@ fn palette_row(
                         .color(palette.text)
                         .size(13.5),
                 );
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        if let Some(hint) = entry.hint {
-                            ui.label(
-                                RichText::new(hint)
-                                    .color(palette.dim)
-                                    .size(11.0),
-                            );
-                        }
-                    },
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let Some(hint) = entry.hint {
+                        ui.label(RichText::new(hint).color(palette.dim).size(11.0));
+                    }
+                });
             });
         },
     );
@@ -471,12 +469,16 @@ mod tests {
     fn filtering_matches_case_insensitively_and_accent_folded() {
         let entries = entries(Locale::French);
         // "ventes" matches the Ventes route; "reglages" folds into Réglages.
-        assert!(filter_entries("ventes", &entries)
-            .iter()
-            .any(|index| entries[*index].target == PaletteTarget::Route(Route::Sales)));
-        assert!(filter_entries("reglages", &entries)
-            .iter()
-            .any(|index| entries[*index].target == PaletteTarget::Route(Route::Settings)));
+        assert!(
+            filter_entries("ventes", &entries)
+                .iter()
+                .any(|index| entries[*index].target == PaletteTarget::Route(Route::Sales))
+        );
+        assert!(
+            filter_entries("reglages", &entries)
+                .iter()
+                .any(|index| entries[*index].target == PaletteTarget::Route(Route::Settings))
+        );
     }
 
     #[test]
@@ -485,9 +487,11 @@ mod tests {
         // Every word must hit: no label contains both "product" and "vendor".
         assert!(filter_entries("product vendor", &entries).is_empty());
         // Two words from the same label still match.
-        assert!(filter_entries("new product", &entries)
-            .iter()
-            .any(|index| entries[*index].target == PaletteTarget::NewProduct));
+        assert!(
+            filter_entries("new product", &entries)
+                .iter()
+                .any(|index| entries[*index].target == PaletteTarget::NewProduct)
+        );
     }
 
     #[test]

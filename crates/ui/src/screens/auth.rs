@@ -250,9 +250,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                                 ))
                                                                 .color(palette.secondary),
                                                             )
-                                                            .wrap_mode(
-                                                                egui::TextWrapMode::Extend,
-                                                            )
+                                                            .wrap_mode(egui::TextWrapMode::Extend)
                                                             .fill(palette.surface)
                                                             .corner_radius(8.0),
                                                         )
