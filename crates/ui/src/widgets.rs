@@ -518,44 +518,58 @@ mod tests {
 
     #[test]
     fn buttons_extend_instead_of_collapsing_in_narrow_rows() {
-        let (extended, wrapped) = run_headless(|ui| {
+        // Both modes are set explicitly: this fork defaults to Extend, so the
+        // regression only shows against an explicitly wrapping control.
+        let (extended_width, wrapped_height, extended_height) = run_headless(|ui| {
             let extended = ui
                 .add(
                     egui::Button::new(RichText::new("Ajuster le stock"))
                         .wrap_mode(TextWrapMode::Extend),
                 )
-                .rect
-                .width();
+                .rect;
             let wrapped = ui
-                .add(egui::Button::new(RichText::new("Ajuster le stock")))
-                .rect
-                .width();
-            (extended, wrapped)
+                .add_sized(
+                    [72.0, 0.0],
+                    egui::Button::new(RichText::new("Ajuster le stock"))
+                        .wrap_mode(TextWrapMode::Wrap),
+                )
+                .rect;
+            (
+                extended.width(),
+                wrapped.height(),
+                extended.height(),
+            )
         });
         // The extending button keeps its natural one-line width and overflows
         // the starved column instead of stacking one word per line.
         assert!(
-            extended > 72.0,
-            "Extend buttons must keep their natural width, got {extended}"
+            extended_width > 72.0,
+            "Extend buttons must keep their natural width, got {extended_width}"
         );
         assert!(
-            wrapped <= 74.0,
-            "a default-wrapped control stays constrained to its column, got {wrapped}"
+            wrapped_height > extended_height + 4.0,
+            "the Wrap control must collapse to several lines, the Extend one stay single-line"
         );
     }
 
     #[test]
     fn no_wrap_scope_keeps_chrome_labels_on_one_line() {
-        let (scoped, plain) = run_headless(|ui| {
+        let (scoped, wrapped) = run_headless(|ui| {
             let scoped = no_wrap_scope(ui, |ui| ui.label("Bons de livraison"))
                 .rect
                 .height();
-            let plain = ui.label("Bons de livraison").rect.height();
-            (scoped, plain)
+            let wrapped = ui
+                .scope(|ui| {
+                    ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
+                    ui.set_width(72.0);
+                    ui.label("Bons de livraison").rect.height()
+                })
+                .inner;
+            (scoped, wrapped)
         });
         assert!(
-            scoped < plain,
-            "no-wrap label must be shorter than a wrapped one"
+            scoped < wrapped,
+            "no-wrap label must be shorter than an explicitly wrapped one"
         );
     }
 
