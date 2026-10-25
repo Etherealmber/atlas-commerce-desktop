@@ -109,7 +109,6 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         );
         if fab.clicked() {
             app.go(Route::Agent);
-            app.ensure_route_data(Route::Agent);
         }
     }
 
@@ -194,9 +193,6 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
             }
             if bell.clicked() {
                 app.go(Route::Notifications);
-                if app.alerts.data.is_none() {
-                    app.load_alerts();
-                }
             }
 
             // While a release is downloading, surface a live progress pill
@@ -578,10 +574,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         let is_active = active == Some(route);
         let response = rail_row(ui, palette, which, &label, is_active);
         if response.clicked() {
+            // go() centralises the first-visit data loading for every
+            // navigation entry point.
             app.go(route);
-            // Shared with the command palette so both entry points load the
-            // same first-visit data.
-            app.ensure_route_data(route);
         }
     }
 }

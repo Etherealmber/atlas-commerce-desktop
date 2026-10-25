@@ -329,6 +329,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        let notifications_were_enabled = app.settings.notifications_enabled;
         if switch_row(
             ui,
             palette,
@@ -340,6 +341,15 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             &mut app.settings.notifications_enabled,
         ) {
             app.save_settings();
+            // Enabling toasts immediately needs alert data: start the first
+            // fetch now instead of waiting for the Notifications screen.
+            if app.settings.notifications_enabled
+                && !notifications_were_enabled
+                && app.alerts.data.is_none()
+                && !app.alerts.loading
+            {
+                app.load_alerts();
+            }
         }
 
         ui.add_space(10.0);

@@ -291,7 +291,6 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
             && let Some(route) = rail_route_at(digit as usize - 1)
         {
             app.go(route);
-            app.ensure_route_data(route);
             return;
         }
     }

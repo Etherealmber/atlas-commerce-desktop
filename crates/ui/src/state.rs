@@ -659,6 +659,10 @@ impl AtlasApp {
             self.begin_route_transition();
         }
         self.screen = Screen::Shell(route);
+        // Centralised first-visit loading, so every navigation entry point
+        // (rail, palette, profile menu, deep links, FAB) gets the route's
+        // data without each call site having to remember it.
+        self.ensure_route_data(route);
     }
 
     /// Browser-style back. Returns false when no history is available.
@@ -671,6 +675,7 @@ impl AtlasApp {
         }
         self.begin_route_transition();
         self.screen = Screen::Shell(previous);
+        self.ensure_route_data(previous);
         true
     }
 
@@ -684,6 +689,7 @@ impl AtlasApp {
         }
         self.begin_route_transition();
         self.screen = Screen::Shell(next);
+        self.ensure_route_data(next);
         true
     }
 
@@ -730,6 +736,25 @@ impl AtlasApp {
             }
             Route::Sales if self.invoices.data.is_none() => self.load_invoices(),
             Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
+            // Settings aggregates four independent caches; load each once,
+            // leaving the in-screen Retry action in charge of failed loads.
+            Route::Settings => {
+                if self.profile.data.is_none()
+                    && !self.profile.loading
+                    && self.profile.error.is_none()
+                {
+                    self.load_profile();
+                }
+                if self.devices.data.is_none() && !self.devices.loading {
+                    self.load_devices();
+                }
+                if self.api_keys.data.is_none() && !self.api_keys.loading {
+                    self.load_api_keys();
+                }
+                if self.assist.data.is_none() && !self.assist.loading {
+                    self.load_assist();
+                }
+            }
             _ => {}
         }
     }
@@ -840,7 +865,6 @@ impl AtlasApp {
         match target {
             PaletteTarget::Route(route) => {
                 self.go(route);
-                self.ensure_route_data(route);
                 false
             }
             PaletteTarget::Refresh => {

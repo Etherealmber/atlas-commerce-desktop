@@ -66,6 +66,12 @@ impl AtlasApp {
     /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
         self.load_dashboard();
+        // Native stock toasts need alert data even if the user never opens
+        // the Notifications screen; only spend the request when the
+        // persisted setting is enabled.
+        if self.settings.notifications_enabled {
+            self.load_alerts();
+        }
         if self.settings.update_check_on_start {
             self.check_for_updates(false);
         }
