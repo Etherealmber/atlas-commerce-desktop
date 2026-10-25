@@ -156,10 +156,31 @@ pub fn install_fonts_and_icons(ctx: &egui::Context) {
 
 /// Applies the palette to every egui widget so dialogs, menus and inputs
 /// agree with the custom views.
+///
+/// Both theme slots are styled, not only the active one: egui keeps a dark
+/// and a light [`egui::Style`] and swaps them instantly when the OS
+/// appearance changes (or the user switches mode). A slot left at egui's
+/// default style would show for a frame as stock grey widgets before the
+/// next palette resolution caught up — the "theme detection" flash.
 pub fn apply(ctx: &egui::Context, palette: &Palette) {
-    let mut style = (*ctx.global_style()).clone();
-    apply_to_style(&mut style, palette);
-    ctx.set_global_style(style);
+    let active_theme = if palette.dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    };
+    let mut active_style = (*ctx.style_of(active_theme)).clone();
+    apply_to_style(&mut active_style, palette);
+    ctx.set_style_of(active_theme, active_style);
+
+    let other_theme = if palette.dark {
+        egui::Theme::Light
+    } else {
+        egui::Theme::Dark
+    };
+    let other_palette = resolve(!palette.dark);
+    let mut other_style = (*ctx.style_of(other_theme)).clone();
+    apply_to_style(&mut other_style, &other_palette);
+    ctx.set_style_of(other_theme, other_style);
 }
 
 fn apply_to_style(style: &mut Style, palette: &Palette) {
@@ -379,5 +400,22 @@ mod tests {
         assert!(!style.interaction.selectable_labels);
         apply_to_style(&mut style, &Palette::light());
         assert!(!style.interaction.selectable_labels);
+    }
+
+    #[test]
+    fn apply_styles_both_theme_slots_with_their_own_palette() {
+        // A theme flip swaps egui's dark/light style slots instantly: both
+        // must carry the Atlas style, or stock egui widgets would show for
+        // a frame when the OS appearance changes.
+        let ctx = egui::Context::default();
+        apply(&ctx, &Palette::dark());
+
+        let dark = ctx.style_of(egui::Theme::Dark);
+        let light = ctx.style_of(egui::Theme::Light);
+        assert!(!dark.interaction.selectable_labels);
+        assert!(!light.interaction.selectable_labels);
+        assert_eq!(dark.visuals.panel_fill, Palette::dark().window);
+        assert_eq!(light.visuals.panel_fill, Palette::light().window);
+        assert_ne!(dark.visuals.panel_fill, light.visuals.panel_fill);
     }
 }
