@@ -58,13 +58,14 @@ impl AtlasApp {
     }
 
     /// First loads after entering the shell or restoring a session.
+    ///
+    /// On-demand only: the landing dashboard is the single automatic call,
+    /// so startup does not fan out one request per screen. Every other cache
+    /// is fetched the first time its route opens (`ensure_route_data`) or
+    /// when a chrome surface needs it (bell badge, profile popover). The
+    /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
         self.load_dashboard();
-        self.load_products();
-        self.load_alerts();
-        self.load_nav_badges();
-        self.load_profile();
-        self.load_assist();
         if self.settings.update_check_on_start {
             self.check_for_updates(false);
         }
@@ -675,19 +676,25 @@ impl AtlasApp {
         self.poll_update_jobs(ctx);
         self.enforce_session_binding();
 
-        // Periodic refresh while a session is live.
+        // Periodic refresh while a session is live. A cache only enters the
+        // rotation once its screen has actually been opened (last_updated is
+        // Some): an unvisited route never generates background traffic, so
+        // the app no longer fans out one request per screen on a timer.
         if self.session.is_some() && !self.power_paused {
             let interval = Duration::from_secs(self.settings.poll_interval_secs.max(15));
-            if self.dashboard.stale_for(interval) {
+            if self.dashboard.last_updated.is_some() && self.dashboard.stale_for(interval) {
                 self.load_dashboard();
             }
-            if self.products.stale_for(interval) && self.product_search.is_empty() {
+            if self.products.last_updated.is_some()
+                && self.products.stale_for(interval)
+                && self.product_search.is_empty()
+            {
                 self.load_products();
             }
-            if self.alerts.stale_for(interval) {
+            if self.alerts.last_updated.is_some() && self.alerts.stale_for(interval) {
                 self.load_alerts();
             }
-            if self.nav_badges.stale_for(interval) {
+            if self.nav_badges.last_updated.is_some() && self.nav_badges.stale_for(interval) {
                 self.load_nav_badges();
             }
         }
@@ -774,20 +781,16 @@ impl AtlasApp {
             self.agent.busy = false;
             match result {
                 Ok(reply) => {
-                    self.agent.messages.push(crate::state::ChatMessage {
-                        from_user: false,
-                        text: if reply.reply.is_empty() {
-                            "Aucune réponse de l'agent.".to_owned()
-                        } else {
-                            reply.reply
-                        },
-                    });
+                    let text = if reply.reply.is_empty() {
+                        "Aucune réponse de l'agent.".to_owned()
+                    } else {
+                        reply.reply
+                    };
+                    self.agent.push_message(false, text);
                 }
                 Err(error) => {
-                    self.agent.messages.push(crate::state::ChatMessage {
-                        from_user: false,
-                        text: format!("Erreur : {}", error.message),
-                    });
+                    self.agent
+                        .push_message(false, format!("Erreur : {}", error.message));
                 }
             }
         }

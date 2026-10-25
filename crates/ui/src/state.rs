@@ -214,6 +214,22 @@ pub struct AgentState {
     pub policy_retry_at: Option<Instant>,
 }
 
+impl AgentState {
+    /// Maximum messages kept in the local transcript; the worker-side thread
+    /// retains the full conversation regardless.
+    const MAX_TRANSCRIPT: usize = 500;
+
+    /// Appends a message and trims the oldest entries past the cap, so a
+    /// very long single conversation cannot grow memory without a bound.
+    pub fn push_message(&mut self, from_user: bool, text: String) {
+        self.messages.push(ChatMessage { from_user, text });
+        if self.messages.len() > Self::MAX_TRANSCRIPT {
+            let excess = self.messages.len() - Self::MAX_TRANSCRIPT;
+            self.messages.drain(0..excess);
+        }
+    }
+}
+
 /// Notifications seen during the last alerts poll, for native toasts.
 #[derive(Default)]
 pub struct NotificationState {
@@ -618,6 +634,13 @@ impl AtlasApp {
             && current != route
         {
             self.nav_back.push(current);
+            // Bound history so a long-lived session cannot grow it without
+            // limit; the oldest entries fall off the back of the stack.
+            const MAX_HISTORY: usize = 32;
+            if self.nav_back.len() > MAX_HISTORY {
+                let excess = self.nav_back.len() - MAX_HISTORY;
+                self.nav_back.drain(0..excess);
+            }
             // A new branch of history invalidates the forward stack.
             self.nav_forward.clear();
             self.begin_route_transition();
