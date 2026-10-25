@@ -60,6 +60,8 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     }
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let max_width = (screen.width() * 0.42).clamp(220.0, 420.0);
+    // A bottom-anchored toast must never grow past the window it lives in.
+    let max_height = (screen.height() - 32.0).max(80.0);
     let mut y = screen.bottom() - 16.0;
     let toasts: Vec<String> = app.notices.clone();
     for toast in toasts.iter().rev() {
@@ -84,17 +86,29 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
             palette.text,
             max_width - 28.0,
         );
-        let size = egui::vec2(galley.size().x + 28.0, galley.size().y + 18.0);
+        let inner_height = galley.size().y.min(max_height - 18.0);
+        let scrolls = galley.size().y > inner_height + 0.5;
+        let size = egui::vec2(galley.size().x + 28.0, inner_height + 18.0);
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
         crate::widgets::overlay_at(ui, rect, |ui| {
-            // The fork's allocate_exact_size returns (Rect, Response).
-            let (content_rect, _) = frame
-                .show(ui, |ui| {
-                    ui.allocate_exact_size(galley.size(), Sense::hover())
-                })
-                .inner;
-            ui.painter().galley(content_rect.min, galley, palette.text);
+            frame.show(ui, |ui| {
+                if scrolls {
+                    // Edge case: an unusually long notice stays reachable
+                    // inside a bounded, wheel-scrollable toast.
+                    egui::ScrollArea::vertical()
+                        .max_height(inner_height)
+                        .show(ui, |ui| {
+                            ui.set_width(galley.size().x);
+                            ui.label(RichText::new(toast).color(palette.text).size(13.0));
+                        });
+                } else {
+                    // The fork's allocate_exact_size returns (Rect, Response).
+                    let (content_rect, _) =
+                        ui.allocate_exact_size(galley.size(), Sense::hover());
+                    ui.painter().galley(content_rect.min, galley, palette.text);
+                }
+            });
         });
         y -= 8.0;
     }
