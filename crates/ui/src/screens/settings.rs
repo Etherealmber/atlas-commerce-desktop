@@ -992,7 +992,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
 
         ui.horizontal(|ui| {
-            crate::brand(ui, palette, 32.0);
+            crate::branding::mark(ui, palette, 32.0);
             ui.vertical(|ui| {
                 ui.label(
                     RichText::new(t!(app.locale, "Atlas Commerce Desktop"))

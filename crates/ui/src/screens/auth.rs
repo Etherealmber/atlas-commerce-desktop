@@ -55,7 +55,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui,
             egui::Rect::from_center_size(center, egui::Vec2::splat(56.0)),
             |ui| {
-                crate::brand(ui, palette, 56.0);
+                crate::branding::mark(ui, palette, 56.0);
             },
         );
 
@@ -129,7 +129,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.vertical_centered(|ui| {
         ui.add_space(ui.available_height() * 0.2);
-        crate::brand(ui, palette, 48.0);
+        crate::branding::mark(ui, palette, 48.0);
         ui.add_space(20.0);
         page_title(ui, t!(app.locale, "Welcome to Atlas Commerce"), palette);
         ui.add_space(10.0);
@@ -472,7 +472,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.add_space(ui.available_height() * 0.05);
 
                 // Compact brand lockup above the card.
-                crate::brand(ui, palette, 46.0);
+                crate::branding::mark(ui, palette, 46.0);
                 ui.add_space(12.0);
                 ui.label(
                     RichText::new("Atlas Commerce")

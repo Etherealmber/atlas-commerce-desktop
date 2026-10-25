@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="packaging/icons/atlas-commerce-desktop.svg" alt="Atlas Commerce Desktop logo" width="88" height="88">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="packaging/branding/atlas-wordmark-dark.png">
+    <img src="packaging/branding/atlas-wordmark-light.png" alt="Atlas Commerce — logo" width="320">
+  </picture>
 </p>
 
 <h1 align="center">Atlas Commerce Desktop</h1>
@@ -26,8 +29,8 @@ construit sur [fastframe](https://fastframe.dev), la même fondation que
 ZapFast et Spotifast. Il se connecte à un espace Atlas Commerce — Atlas Cloud
 (`https://stock.afmarbre.com`) ou votre propre Worker auto-hébergé — et donne
 accès au tableau de bord, au catalogue produits, aux ventes rapides, aux
-alertes de stock et à l'agent IA, dans une interface sombre zinc en français
-(avec catalogue anglais inclus).
+alertes de stock et à l'agent IA, dans une interface zinc déclinée en thèmes
+clair et sombre, en français (avec catalogue anglais inclus).
 
 Aucun moteur de navigateur, aucune télémétrie : tout le réseau passe par
 `reqwest` avec rustls, et l'application ne stocke jamais de mot de passe.
@@ -45,6 +48,7 @@ Aucun moteur de navigateur, aucune télémétrie : tout le réseau passe par
 | **Notifications** | Alertes de stock et de factures, pastilles dans la barre latérale et notifications système natives. |
 | **Réglages** | Langue, thème sombre/clair/système, zone de notification, démarrage à la connexion, intervalle d'actualisation, serveurs, appareils de confiance et canaux de mise à jour. |
 | **Vie du bureau** | Barre de titre personnalisée, zone de notification (`tray`), instance unique, gestion de l'alimentation et liens profonds transmis entre lancements. |
+| **Identité visuelle** | Symbole soleil et mot-symbole « Atlas » déclinés automatiquement en clair et en sombre, depuis des masques alpha embarqués ; photo de profil dans la barre de titre avec initiales contrastées en secours. |
 
 ## Sécurité et vie privée
 
@@ -127,12 +131,37 @@ macOS universel (lipo, DMG, signature conditionnelle), des paquets Linux
 (AppImage + zsync, deb, rpm) et des workflows GitHub Actions (`ci.yml`,
 `release.yml`, `packaging.yml`, `ci-bot.yml`, `dependabot.yml`).
 
+## Identité de marque et icônes
+
+Le logo est le symbole soleil accompagné du mot-symbole « Atlas ». Deux
+variantes sont fournies : encre noire sur fond blanc et encre blanche sur
+fond noir.
+
+- `crates/ui/assets/branding/atlas-mark.mask` et `atlas-wordmark.mask` :
+  masques de couverture 8 bits (en-tête `u32` largeur, `u32` hauteur, puis
+  un octet de couverture par pixel) embarqués dans le binaire. L'interface
+  les teinte avec le jeton `accent` du thème actif, sans décodeur d'image à
+  l'exécution.
+- `packaging/branding/atlas-wordmark-light.png` et
+  `atlas-wordmark-dark.png` : versions PNG pour la documentation.
+- `packaging/icons/atlas-commerce-desktop.svg`,
+  `packaging/macos/icon-1024.png` et
+  `packaging/windows/atlas-commerce-desktop.ico` : icône applicative
+  (tuile noir mat `#0a0a0a` et symbole papier `#fafafa`).
+
+Tous ces fichiers se régénèrent depuis les masques avec :
+
+```sh
+python3 scripts/generate-icons.py   # Pillow requis
+```
+
 ## Remerciements
 
 Atlas Commerce Desktop s'appuie sur
 [egui](https://www.egui.rs), [fastframe](https://fastframe.dev),
 [reqwest](https://crates.io/crates/reqwest), les icônes
-[Lucide](https://lucide.dev) (ISC) et la police Inter (OFL).
+[Lucide](https://lucide.dev) (ISC), les polices DM Sans et Spline Sans Mono
+(OFL) et le logo Atlas fourni par le projet (voir `packaging/branding/`).
 
 ## Licence
 

@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod app;
+pub mod branding;
 pub mod dialogs;
 pub mod fonts;
 pub mod i18n;
@@ -27,26 +28,3 @@ pub use state::AtlasApp;
 /// instance must leave the tray and show its window. Travels through the same
 /// queue as `open-link:` handoffs, so it needs no extra shared state.
 pub const SHOW_REQUEST: &str = "atlas-desktop:show";
-
-use theme::Palette;
-
-/// The brand mark: a rounded primary tile carrying an "A" in the on-primary
-/// colour (white tile with black "A" in dark mode, inverted in light mode).
-/// Drawn with the painter so no image asset is needed before fonts are ready.
-pub fn brand(ui: &mut egui::Ui, palette: &Palette, size: f32) {
-    let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());
-    ui.painter().rect_filled(rect, size * 0.24, palette.accent);
-    let galley = ui.painter().layout_no_wrap(
-        "A".to_owned(),
-        egui::FontId::proportional(size * 0.62),
-        palette.on_accent,
-    );
-    ui.painter().galley(
-        egui::pos2(
-            rect.center().x - galley.size().x / 2.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        palette.on_accent,
-    );
-}
