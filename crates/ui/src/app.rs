@@ -360,8 +360,14 @@ impl AtlasApp {
                     self.profile_form.loaded = true;
                     self.fill_profile_form(&merged);
                     if let Some(session) = self.session.as_mut() {
+                        // Drop the previous picture from the texture cache
+                        // when the avatar URL actually changes.
+                        let new_url = merged.avatar_url.clone().unwrap_or_default();
+                        if !session.avatar_url.is_empty() && session.avatar_url != new_url {
+                            self.avatar_evict = Some(session.avatar_url.clone());
+                        }
                         session.display_name = merged.display_name.clone().unwrap_or_default();
-                        session.avatar_url = merged.avatar_url.clone().unwrap_or_default();
+                        session.avatar_url = new_url;
                         session.email = merged.email.clone().unwrap_or_default();
                     }
                     self.save_session();
@@ -603,6 +609,10 @@ impl AtlasApp {
         self.drain_power_events();
         self.drain_tray(ctx);
         self.consume_deep_links();
+        // Release HTTP-loaded avatar textures queued by state changes.
+        if let Some(uri) = self.avatar_evict.take() {
+            ctx.forget_image(&uri);
+        }
         // A queued show request while a window already exists: bring it back.
         // With no viewport (hidden to tray) headless_frame returns
         // Headless::Show from the same flag instead.

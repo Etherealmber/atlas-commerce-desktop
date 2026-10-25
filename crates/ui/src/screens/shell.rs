@@ -135,8 +135,19 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            let avatar =
-                widgets::avatar_circle(ui, palette, &initial, 30.0, palette.surface_active);
+            let avatar_url = app
+                .session
+                .as_ref()
+                .map(|session| session.avatar_url.as_str());
+            let avatar = widgets::avatar(
+                ui,
+                avatar_url,
+                &initial,
+                30.0,
+                palette.surface_active,
+                palette.on_accent,
+                palette.outline,
+            );
             avatar_rect = avatar.rect;
             if avatar.clicked() {
                 app.profile_menu_open = !app.profile_menu_open;
@@ -387,12 +398,14 @@ fn draw_profile_menu(
                                 session.display_name.chars().next().unwrap_or('A')
                             }
                             .to_string();
-                            widgets::avatar_circle(
+                            widgets::avatar(
                                 ui,
-                                palette,
+                                Some(session.avatar_url.as_str()),
                                 &initial,
                                 34.0,
                                 palette.surface_active,
+                                palette.on_accent,
+                                palette.outline,
                             );
                             ui.vertical(|ui| {
                                 ui.label(

@@ -14,9 +14,8 @@ use crate::icons::Icon;
 use crate::state::{ApiKeyScope, AtlasApp, Screen, SettingsFocus};
 use crate::theme::Palette;
 use crate::widgets::{
-    avatar_circle, card, danger_button, error_banner, icon, info_banner, labelled_field,
-    page_title, pill, primary_button, secondary_button, section_header, segmented, setting_row,
-    switch_row,
+    avatar, card, danger_button, error_banner, icon, info_banner, labelled_field, page_title,
+    pill, primary_button, secondary_button, section_header, segmented, setting_row, switch_row,
 };
 use crate::{t, widgets};
 
@@ -136,7 +135,22 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            avatar_circle(ui, palette, &initial, 52.0, palette.surface_active);
+            // Prefer the form's edited URL, then the live session value, so
+            // the preview updates as soon as the user types a new URL.
+            let avatar_url = if app.profile_form.avatar_url.trim().is_empty() {
+                app.session.as_ref().map(|session| session.avatar_url.as_str())
+            } else {
+                Some(app.profile_form.avatar_url.as_str())
+            };
+            avatar(
+                ui,
+                avatar_url,
+                &initial,
+                52.0,
+                palette.surface_active,
+                palette.on_accent,
+                palette.outline,
+            );
             ui.vertical(|ui| {
                 ui.label(
                     RichText::new(

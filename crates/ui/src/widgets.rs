@@ -288,31 +288,105 @@ pub fn icon_circle_button(
     response
 }
 
-/// A filled circle showing the user's initial, the monochrome stand-in for
-/// profile pictures (avatars are a URL the user provides in their profile).
-pub fn avatar_circle(
+/// A profile picture: the user's remote avatar image clipped to a circle via
+/// a triangle-fan mesh, with the monochrome initials disk painted while the
+/// photo is still loading, on a fetch/decode error, or when no URL exists.
+/// The HTTP texture is cached by the egui_extras loader across frames.
+pub fn avatar(
     ui: &mut egui::Ui,
-    palette: &Palette,
+    url: Option<&str>,
     initial: &str,
     size: f32,
     fill: egui::Color32,
+    text_color: egui::Color32,
+    ring: egui::Color32,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(size), Sense::click());
-    ui.painter().circle_filled(rect.center(), size / 2.0, fill);
-    let galley = ui.painter().layout_no_wrap(
-        initial.to_owned(),
-        egui::FontId::proportional(size * 0.42),
-        palette.on_accent,
-    );
-    ui.painter().galley(
-        egui::pos2(
-            rect.center().x - galley.size().x / 2.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
-        galley,
-        palette.on_accent,
-    );
+    let texture = url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| {
+            match ui.ctx().try_load_texture(
+                value,
+                egui::TextureOptions::LINEAR,
+                egui::load::SizeHint::default(),
+            ) {
+                Ok(egui::load::TexturePoll::Ready { texture }) => Some(texture),
+                Ok(egui::load::TexturePoll::Pending { .. }) | Err(_) => None,
+            }
+        });
+    match texture {
+        Some(texture) => paint_circle_photo(ui.painter(), rect, texture.id, ring),
+        None => {
+            ui.painter().circle_filled(rect.center(), size / 2.0, fill);
+            let galley = ui.painter().layout_no_wrap(
+                initial.to_owned(),
+                egui::FontId::proportional(size * 0.42),
+                text_color,
+            );
+            ui.painter().galley(
+                egui::pos2(
+                    rect.center().x - galley.size().x / 2.0,
+                    rect.center().y - galley.size().y / 2.0,
+                ),
+                galley,
+                text_color,
+            );
+            ui.painter()
+                .circle_stroke(rect.center(), size / 2.0, egui::Stroke::new(1.0, ring));
+        }
+    }
     response
+}
+
+/// Draws a texture inside a circle using an indexed triangle fan so no
+/// square corners escape the avatar slot, then a hairline ring so a bright
+/// photo never blends into a bright surface.
+fn paint_circle_photo(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    texture_id: egui::TextureId,
+    ring: egui::Color32,
+) {
+    const SEGMENTS: usize = 48;
+    let center = rect.center();
+    let radius = rect.width() / 2.0;
+    let to_uv = |point: egui::Pos2| {
+        egui::Pos2::new(
+            (point.x - rect.left()) / rect.width(),
+            (point.y - rect.top()) / rect.height(),
+        )
+    };
+    let mut vertices = vec![egui::epaint::Vertex {
+        pos: center,
+        uv: to_uv(center),
+        color: egui::Color32::WHITE,
+    }];
+    for index in 0..=SEGMENTS {
+        let angle = index as f32 * std::f32::consts::TAU / SEGMENTS as f32;
+        let point = egui::pos2(
+            center.x + radius * angle.cos(),
+            center.y + radius * angle.sin(),
+        );
+        vertices.push(egui::epaint::Vertex {
+            pos: point,
+            uv: to_uv(point),
+            color: egui::Color32::WHITE,
+        });
+    }
+    let mut indices = Vec::with_capacity(SEGMENTS * 3);
+    for index in 1..=SEGMENTS as u32 {
+        indices.extend_from_slice(&[0, index, index + 1]);
+    }
+    painter.add(egui::Shape::Mesh(
+        egui::epaint::Mesh {
+            indices,
+            vertices,
+            texture_id,
+        }
+        .into(),
+    ));
+    painter.circle_stroke(center, radius, egui::Stroke::new(1.0, ring));
 }
 
 /// An Android-style switch with an animated knob. Returns the click response;

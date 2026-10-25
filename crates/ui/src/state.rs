@@ -329,6 +329,10 @@ pub struct AtlasApp {
     pub screen: Screen,
     pub started_at: Instant,
     pub pending_deep_links: Vec<String>,
+    /// Avatar URI whose cached HTTP texture must be evicted via the egui
+    /// context (sign-out or profile-picture change). State cannot touch the
+    /// egui context itself, so the app loop drains this each frame.
+    pub avatar_evict: Option<String>,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -481,6 +485,7 @@ impl AtlasApp {
             screen,
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
+            avatar_evict: None,
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             login: LoginState::default(),
@@ -889,6 +894,11 @@ impl AtlasApp {
 
     pub fn sign_out(&mut self) {
         if let Some(session) = self.session.take() {
+            // Evict the user's cached avatar texture so a later account does
+            // not keep the previous picture resident in the texture cache.
+            if !session.avatar_url.trim().is_empty() {
+                self.avatar_evict = Some(session.avatar_url.clone());
+            }
             self.account_store.remove(&session);
             self.save_accounts();
         }
