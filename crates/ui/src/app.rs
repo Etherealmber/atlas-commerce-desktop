@@ -996,6 +996,7 @@ impl EframeShell {
         // palette and make the first frame skip theme::apply on that fresh
         // context, so every new context starts with an empty cache.
         held.applied_palette = None;
+        held.applied_reduced_motion = None;
         crate::theme::install_fonts_and_icons(ctx);
         // Make egui's own preference follow the app setting before the first
         // palette read, so a forced Light/Dark mode resolves correctly even
@@ -1058,9 +1059,28 @@ impl eframe::App for EframeShell {
         // frame. Comparing the whole palette also catches token edits, not
         // just dark/light flips.
         self.held.last_clear_color = Some(palette.window.to_normalized_gamma_f32());
-        if self.held.applied_palette != Some(palette) {
-            crate::theme::apply(ctx, &palette);
+        let reduced_motion = self.held.settings.reduced_motion;
+        if self.held.applied_palette != Some(palette)
+            || self.held.applied_reduced_motion != Some(reduced_motion)
+        {
+            crate::theme::apply(ctx, &palette, reduced_motion);
             self.held.applied_palette = Some(palette);
+            self.held.applied_reduced_motion = Some(reduced_motion);
+        }
+
+        // Window title contract: "Atlas Commerce — <serveur>" once a server
+        // is selected, plain "Atlas Commerce" on the auth screens. Pushed
+        // only when it changes, so no per-frame viewport commands.
+        let window_title = match self.held.server_store.selected_url() {
+            Some(base) => format!(
+                "Atlas Commerce — {}",
+                atlas_core::servers::ServerStore::host(base)
+            ),
+            None => "Atlas Commerce".to_owned(),
+        };
+        if self.held.applied_title.as_deref() != Some(window_title.as_str()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(window_title.clone()));
+            self.held.applied_title = Some(window_title);
         }
 
         self.held.poll_background(ctx);

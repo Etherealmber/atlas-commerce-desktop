@@ -51,6 +51,10 @@ pub struct Settings {
     pub notifications_enabled: bool,
     /// Custom title bar drawn by the app.
     pub custom_titlebar: bool,
+    /// Honour the web's `prefers-reduced-motion` rule: every animation then
+    /// resolves instantly (the forked egui exposes no OS signal, so the
+    /// choice is an in-app, persisted toggle).
+    pub reduced_motion: bool,
 }
 
 impl Default for Settings {
@@ -67,6 +71,7 @@ impl Default for Settings {
             poll_interval_secs: 120,
             notifications_enabled: true,
             custom_titlebar: true,
+            reduced_motion: false,
         }
     }
 }

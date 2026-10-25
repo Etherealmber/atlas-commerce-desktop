@@ -318,6 +318,12 @@ pub struct AtlasApp {
     /// per-frame style rebuild while nothing changed (a flicker/recompute
     /// source) and re-applies as soon as any token changes.
     pub applied_palette: Option<Palette>,
+    /// Last reduced-motion value baked into the egui style, so flipping the
+    /// setting rebuilds styles even when the palette is unchanged.
+    pub applied_reduced_motion: Option<bool>,
+    /// Last OS window title pushed via `ViewportCommand::Title`, so the
+    /// `Atlas Commerce — <serveur>` title is only sent when it changes.
+    pub applied_title: Option<String>,
 
     // ── persisted state ──
     pub settings: Settings,
@@ -557,6 +563,8 @@ impl AtlasApp {
             update_receipt: None,
             last_clear_color: None,
             applied_palette: None,
+            applied_reduced_motion: None,
+            applied_title: None,
             notices: Vec::new(),
             notices_expire_at: None,
         }

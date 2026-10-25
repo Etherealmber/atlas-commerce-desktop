@@ -544,6 +544,9 @@ msgstr "Aucune donnée pour le moment"
 msgid "No delivery note yet"
 msgstr "Aucun bon de livraison pour le moment"
 
+msgid "No document is open to print."
+msgstr "Aucun document ouvert à imprimer."
+
 msgid "No expense yet"
 msgstr "Aucune dépense pour le moment"
 
@@ -715,6 +718,9 @@ msgstr "Les dépenses et recettes enregistrées apparaissent ici."
 msgid "Recorded sales appear here."
 msgstr "Les ventes enregistrées apparaissent ici."
 
+msgid "Reduce animations"
+msgstr "Réduire les animations"
+
 msgid "Reference (optional)"
 msgstr "Référence (facultatif)"
 
@@ -732,6 +738,9 @@ msgstr "Supprimer"
 
 msgid "Remove server?"
 msgstr "Supprimer le serveur ?"
+
+msgid "Remove transition and entrance effects."
+msgstr "Supprime les effets de transition et d’entrée."
 
 msgid "Restore"
 msgstr "Restaurer"
