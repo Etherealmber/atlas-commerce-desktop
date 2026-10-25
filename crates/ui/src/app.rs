@@ -437,7 +437,9 @@ impl AtlasApp {
         self.update.stage = t!(self.locale, "Downloading…").into_owned();
         let locale = self.locale;
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
-            tokio::task::spawn_blocking(move || {
+            // Pin the blocking closure's error type: without this, inference
+            // starts from the &str guard below and resolves it to unsized str.
+            tokio::task::spawn_blocking(move || -> Result<(), String> {
                 let updater = crate::update::build_updater().map_err(|error| error.to_string())?;
                 // Refuse early with a clear message when this copy has no
                 // portable/installer marker (e.g. a dev build): the helper
@@ -467,12 +469,14 @@ impl AtlasApp {
             })
             .await
             .map_err(|error| error.to_string())
-            .and_then(|job_outcome| {
+            .and_then(|job_outcome: Result<(), String>| {
                 // Classify after the blocking work unwinds: a 404 / missing
                 // asset in the release's publish window is a "try again
                 // shortly", not a permanent fault.
                 match job_outcome {
-                    Err(message) if crate::update::is_release_not_ready(&message) => {
+                    Err(message)
+                        if crate::update::is_release_not_ready(message.as_str()) =>
+                    {
                         Err(t!(
                             locale,
                             "The new release is still being published on GitHub. Try again in a few minutes."
