@@ -18,6 +18,35 @@ pub fn overlay_at<R>(
     content(&mut child)
 }
 
+/// Paints the modal scrim and reports whether the click landed on the scrim
+/// itself (outside the dialog rect): the web pattern where an outside click
+/// cancels the wizard and resets its form. Call it *before* the dialog
+/// overlay so the dialog's own widgets win overlapping interactions. Both
+/// the initial press and the release outside the dialog count, mirroring
+/// the command palette's backdrop handling.
+pub fn scrim_clicked(
+    ui: &mut egui::Ui,
+    screen: egui::Rect,
+    dialog: egui::Rect,
+    id: egui::Id,
+) -> bool {
+    let response = ui.interact(screen, id, egui::Sense::click());
+    let pressed_outside = ui.ctx().input(|input| {
+        input.pointer.any_pressed()
+            && input
+                .pointer
+                .interact_pos()
+                .is_some_and(|pos| !dialog.contains(pos))
+    });
+    let released_outside = response.clicked()
+        && ui
+            .input(|input| input.pointer.latest_pos())
+            .is_some_and(|pos| !dialog.contains(pos));
+    ui.painter()
+        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    pressed_outside || released_outside
+}
+
 /// Runs `content` with text wrapping switched off. Action clusters on card
 /// rows (price + button columns) keep their natural width this way instead
 /// of being squeezed to a single character per line by a neighbouring label
@@ -45,8 +74,7 @@ pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color:
                 ui.label(
                     RichText::new(text.as_ref())
                         .color(text_color)
-                        .size(12.0)
-                        .strong(),
+                        .font(crate::fonts::semibold(12.0)),
                 );
             });
         });
@@ -72,12 +100,13 @@ pub fn primary_button(
     // Extend instead of wrapping: a starved row used to collapse the label
     // one character per line ("Ajuster le stock" rendered vertically).
     .wrap_mode(TextWrapMode::Extend)
+    .min_size(egui::vec2(0.0, crate::theme::PRIMARY_BUTTON_HEIGHT))
     .fill(if enabled {
         palette.accent
     } else {
         palette.surface_active
     })
-    .corner_radius(8.0);
+    .corner_radius(crate::theme::RADIUS_CONTROL as f32);
     ui.add_enabled(enabled, button).clicked()
 }
 
@@ -85,9 +114,10 @@ pub fn primary_button(
 pub fn secondary_button(ui: &mut egui::Ui, text: impl AsRef<str>, palette: &Palette) -> bool {
     let button = egui::Button::new(RichText::new(text.as_ref()).color(palette.text))
         .wrap_mode(TextWrapMode::Extend)
+        .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
         .fill(palette.surface)
         .stroke(Stroke::new(1.0, palette.outline))
-        .corner_radius(8.0);
+        .corner_radius(crate::theme::RADIUS_CONTROL as f32);
     ui.add(button).clicked()
 }
 
@@ -100,12 +130,13 @@ pub fn danger_button(
 ) -> bool {
     let button = egui::Button::new(RichText::new(text.as_ref()).color(Color32::WHITE).strong())
         .wrap_mode(TextWrapMode::Extend)
+        .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
         .fill(if enabled {
             palette.danger
         } else {
             palette.surface_active
         })
-        .corner_radius(8.0);
+        .corner_radius(crate::theme::RADIUS_CONTROL as f32);
     ui.add_enabled(enabled, button).clicked()
 }
 
@@ -114,20 +145,15 @@ pub fn card(palette: &Palette) -> egui::Frame {
     egui::Frame::NONE
         .fill(palette.surface)
         .stroke(Stroke::new(1.0, palette.outline))
-        .corner_radius(12.0)
+        .corner_radius(crate::theme::RADIUS_CARD as f32)
         .inner_margin(egui::Margin::same(16))
 }
 
 /// A card that floats above the chrome (menus, popovers): same surface as
-/// [`card`] but with the short popup shadow that separates it from the
-/// content underneath.
+/// [`card`] but carrying the shared elevation token (invisible in dark
+/// mode, where the web shadow rule is `--ac-shadow: none`).
 pub fn pop_card(palette: &Palette) -> egui::Frame {
-    card(palette).shadow(egui::Shadow {
-        offset: [0, 4],
-        blur: 16,
-        spread: 0,
-        color: palette.shadow,
-    })
+    card(palette).shadow(crate::theme::elevation_shadow(palette))
 }
 
 /// A banner showing a verbatim worker error (or a local message).
@@ -135,7 +161,7 @@ pub fn error_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palet
     egui::Frame::NONE
         .fill(palette.danger.gamma_multiply(0.14))
         .stroke(Stroke::new(1.0, palette.danger.gamma_multiply(0.6)))
-        .corner_radius(10.0)
+        .corner_radius(crate::theme::RADIUS_CONTROL as f32)
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -154,7 +180,7 @@ pub fn info_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palett
     egui::Frame::NONE
         .fill(palette.accent.gamma_multiply(0.12))
         .stroke(Stroke::new(1.0, palette.accent.gamma_multiply(0.55)))
-        .corner_radius(10.0)
+        .corner_radius(crate::theme::RADIUS_CONTROL as f32)
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -168,13 +194,12 @@ pub fn info_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palett
         });
 }
 
-/// A page/section title with an optional icon.
+/// A page title: DM Sans Bold 19 px, the web/Android `titleLarge` token.
 pub fn page_title(ui: &mut egui::Ui, title: impl AsRef<str>, palette: &Palette) {
     ui.heading(
         RichText::new(title.as_ref())
             .color(palette.text)
-            .size(22.0)
-            .strong(),
+            .font(crate::fonts::bold(19.0)),
     );
 }
 
@@ -190,14 +215,35 @@ pub fn labelled_field(
         ui.label(
             RichText::new(label.as_ref())
                 .color(palette.secondary)
-                .size(12.5),
+                .font(crate::fonts::medium(12.0)),
         );
         let edit = egui::TextEdit::singleline(value)
-            .margin(egui::Margin::symmetric(10, 8))
+            .margin(egui::Margin::symmetric(14, 8))
             .clip_text(true);
         let edit = if password { edit.password(true) } else { edit };
-        ui.add_sized([ui.available_width(), 34.0], edit);
+        // 44 px tall inputs: the parity spec's minimum interactive target.
+        ui.add_sized(
+            [ui.available_width(), crate::theme::TARGET_MIN_HEIGHT],
+            edit,
+        );
     });
+}
+
+/// A single-line search/filter input pre-sized to the 44 px interactive
+/// target with the shared 14 px horizontal padding. The fork's TextEdit has
+/// no `desired_height`, so the height is enforced through `add_sized`; the
+/// call site only chooses the width and keeps any Enter-key handling.
+pub fn search_field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    hint: impl Into<egui::WidgetText>,
+    width: f32,
+) -> egui::Response {
+    let edit = egui::TextEdit::singleline(value)
+        .hint_text(hint)
+        .margin(egui::Margin::symmetric(14, 8))
+        .clip_text(true);
+    ui.add_sized([width, crate::theme::TARGET_MIN_HEIGHT], edit)
 }
 
 /// Right-aligned dialog action row (the web app always right-aligns them).
@@ -214,13 +260,8 @@ pub fn dialog_frame(palette: &Palette) -> egui::Frame {
     egui::Frame::NONE
         .fill(palette.overlay)
         .stroke(Stroke::new(1.0, palette.outline))
-        .corner_radius(16.0)
-        .shadow(egui::Shadow {
-            offset: [0, 12],
-            blur: 40,
-            spread: 0,
-            color: palette.shadow,
-        })
+        .corner_radius(crate::theme::RADIUS_LARGE as f32)
+        .shadow(crate::theme::elevation_shadow(palette))
         .inner_margin(egui::Margin::same(22))
 }
 
@@ -314,8 +355,9 @@ pub fn row_button(ui: &mut egui::Ui, palette: &Palette, height: f32) -> egui::Re
     response
 }
 
-/// A circular, dark icon button in the Spotifast/Android style: 32 px disk,
-/// dimmed when disabled. Used by the shell's top bar (back/forward, bell…).
+/// A circular, dark icon button in the Spotifast/Android style. The disk is
+/// 44 px, the parity spec's minimum interactive target, and is dimmed when
+/// disabled. Used by the shell's top bar (back/forward, bell…).
 pub fn icon_circle_button(
     ui: &mut egui::Ui,
     palette: &Palette,
@@ -323,7 +365,7 @@ pub fn icon_circle_button(
     enabled: bool,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(
-        egui::Vec2::splat(30.0),
+        egui::Vec2::splat(crate::theme::TARGET_MIN_HEIGHT),
         if enabled {
             Sense::click()
         } else {
@@ -337,9 +379,9 @@ pub fn icon_circle_button(
     };
     if enabled && response.hovered() {
         ui.painter()
-            .circle_filled(rect.center(), 15.0, palette.surface_hover);
+            .circle_filled(rect.center(), 20.0, palette.surface_hover);
     } else {
-        ui.painter().circle_filled(rect.center(), 15.0, fill);
+        ui.painter().circle_filled(rect.center(), 20.0, fill);
     }
     let tint = if !enabled {
         palette.dim
@@ -350,8 +392,8 @@ pub fn icon_circle_button(
     };
     overlay_at(
         ui,
-        egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(18.0)),
-        |ui| icon(ui, which, tint, 17.0),
+        egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(20.0)),
+        |ui| icon(ui, which, tint, 19.0),
     );
     response
 }
@@ -455,35 +497,49 @@ fn paint_circle_photo(
 
 /// An Android-style switch with an animated knob. Returns the click response;
 /// the caller owns the bool.
-pub fn switch(ui: &mut egui::Ui, value: &mut bool, palette: &Palette) -> egui::Response {
-    const WIDTH: f32 = 42.0;
-    const HEIGHT: f32 = 24.0;
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(WIDTH, HEIGHT), Sense::click());
+pub fn switch(
+    ui: &mut egui::Ui,
+    value: &mut bool,
+    palette: &Palette,
+    reduced_motion: bool,
+) -> egui::Response {
+    // The track keeps the web's 42×24 visual, centred inside a 44 px hit
+    // area so the toggle meets the minimum interactive-target rule.
+    const TRACK_WIDTH: f32 = 42.0;
+    const TRACK_HEIGHT: f32 = 24.0;
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(crate::theme::TARGET_MIN_HEIGHT, 44.0), Sense::click());
     if response.clicked() {
         *value = !*value;
     }
-    let t = ui
-        .ctx()
-        .animate_bool_with_easing(response.id, *value, egui::emath::easing::cubic_out);
+    let track_rect =
+        egui::Rect::from_center_size(rect.center(), egui::vec2(TRACK_WIDTH, TRACK_HEIGHT));
+    let t = ui.ctx().animate_bool_with_time_and_easing(
+        response.id,
+        *value,
+        crate::motion::duration(crate::motion::FAST, reduced_motion),
+        crate::motion::standard,
+    );
     let track_off = palette.surface_active;
     let track = track_off.lerp_to_gamma(palette.accent, t);
-    ui.painter().rect_filled(rect, HEIGHT / 2.0, track);
-    let knob_radius = HEIGHT / 2.0 - 3.0;
-    let x = rect.left() + knob_radius + 3.0 + t * (WIDTH - 2.0 * (knob_radius + 3.0));
-    let knob_center = egui::pos2(x, rect.center().y);
+    ui.painter()
+        .rect_filled(track_rect, TRACK_HEIGHT / 2.0, track);
+    let knob_radius = TRACK_HEIGHT / 2.0 - 3.0;
+    let x = track_rect.left() + knob_radius + 3.0
+        + t * (TRACK_WIDTH - 2.0 * (knob_radius + 3.0));
+    let knob_center = egui::pos2(x, track_rect.center().y);
     ui.painter()
         .circle_filled(knob_center, knob_radius, egui::Color32::WHITE);
     response
 }
 
-/// A bold section header above a settings card, Spotifast-style.
+/// A SemiBold 16 px section header above a settings card (`titleMedium`).
 pub fn section_header(ui: &mut egui::Ui, palette: &Palette, title: impl AsRef<str>) {
     ui.add_space(6.0);
     ui.label(
         RichText::new(title.as_ref())
             .color(palette.text)
-            .strong()
-            .size(19.0),
+            .font(crate::fonts::semibold(16.0)),
     );
     ui.add_space(8.0);
 }
@@ -526,10 +582,11 @@ pub fn switch_row(
     title: impl AsRef<str>,
     description: Option<&str>,
     value: &mut bool,
+    reduced_motion: bool,
 ) -> bool {
     let before = *value;
     setting_row(ui, palette, title, description, |ui| {
-        switch(ui, value, palette)
+        switch(ui, value, palette, reduced_motion)
     });
     *value != before
 }
@@ -557,6 +614,7 @@ pub fn segmented<T: PartialEq + Copy>(
                     .size(12.5),
             )
             .wrap_mode(TextWrapMode::Extend)
+            .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
             .fill(if is_selected {
                 palette.accent
             } else {
@@ -580,14 +638,15 @@ pub fn fab(
     which: Icon,
     id_salt: impl std::hash::Hash + Copy + std::fmt::Debug,
     tooltip: &str,
+    reduced_motion: bool,
 ) -> egui::Response {
     let id = egui::Id::new(("atlas-fab", id_salt));
-    // Android-style 220 ms scale-in, slower than egui's 83 ms default.
+    // 220 ms scale-in on the shared standard curve (web motion `.22s`).
     let entrance = ctx.animate_bool_with_time_and_easing(
         egui::Id::new(("atlas-fab-in", id_salt)),
         true,
-        0.22,
-        egui::emath::easing::cubic_out,
+        crate::motion::duration(crate::motion::FAST, reduced_motion),
+        crate::motion::standard,
     );
     egui::Area::new(id)
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -24.0))
@@ -596,11 +655,23 @@ pub fn fab(
         .show(ctx, |ui| {
             let full = 56.0;
             let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(full), Sense::click());
-            let hover = ctx.animate_bool(
+            let hover = ctx.animate_bool_with_time_and_easing(
                 egui::Id::new(("atlas-fab-hover", id_salt)),
                 response.hovered(),
+                crate::motion::duration(crate::motion::FAST, reduced_motion),
+                crate::motion::standard,
             );
-            let scale = entrance * (1.0 + 0.06 * hover);
+            // Web press feedback: scale down to .96 while the pointer is
+            // held, otherwise the hover lift to 1.06 applies. Reduced
+            // motion keeps the disk at its rest size throughout.
+            let press = if reduced_motion {
+                1.0
+            } else if response.is_pointer_button_down_on() {
+                crate::motion::PRESS_SCALE
+            } else {
+                1.0 + 0.06 * hover
+            };
+            let scale = entrance * press;
             let size = full * scale;
             let center = rect.center();
             let draw_rect = egui::Rect::from_center_size(center, egui::Vec2::splat(size));

@@ -90,14 +90,15 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::QrCode, palette.secondary, 18.0);
-            let code_response = ui.add(
-                egui::TextEdit::singleline(&mut app.scan.code)
-                    .hint_text(t!(
-                        app.locale,
-                        "Scan or type a barcode / SKU, then press Enter"
-                    ))
-                    .margin(egui::Margin::symmetric(10, 8))
-                    .desired_width((ui.available_width() - 220.0).max(160.0)),
+            let field_width = (ui.available_width() - 220.0).max(160.0);
+            let code_response = widgets::search_field(
+                ui,
+                &mut app.scan.code,
+                t!(
+                    app.locale,
+                    "Scan or type a barcode / SKU, then press Enter"
+                ),
+                field_width,
             );
             if code_response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 start_lookup(app);
@@ -208,8 +209,12 @@ fn draw_result(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 480.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(
+        ui, screen, rect, egui::Id::new("scan-quick-scrim")
+    ) {
+        app.scan.quick = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -218,8 +223,7 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(t!(locale, "Create from barcode"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(10.0);
 

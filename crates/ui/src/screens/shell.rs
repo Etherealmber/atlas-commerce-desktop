@@ -1,7 +1,7 @@
 //! The authenticated shell: custom title bar, left icon rail, top bar and
 //! the routed page content.
 
-use egui::{Align, Color32, Layout, RichText, Sense, Vec2, vec2};
+use egui::{Align, Layout, RichText, Sense, Vec2, vec2};
 
 use crate::dialogs::{Confirm, ConfirmAction};
 use crate::i18n::Locale;
@@ -11,9 +11,13 @@ use crate::theme::Palette;
 use crate::widgets::{danger_button, icon, secondary_button};
 use crate::{t, widgets};
 
-/// Height of the custom caption row.
-const TITLEBAR_HEIGHT: f32 = 40.0;
-const RAIL_WIDTH: f32 = 212.0;
+/// Height of the custom caption row (web topbar: 56 px).
+const TITLEBAR_HEIGHT: f32 = 56.0;
+/// Web sidebar widths: 17.5 rem (280 px) expanded, 4.5 rem (72 px) when the
+/// rail collapses to icons below the 1180 px breakpoint.
+const RAIL_WIDTH_EXPANDED: f32 = 280.0;
+const RAIL_WIDTH_COLLAPSED: f32 = 72.0;
+const RAIL_COLLAPSE_BELOW: f32 = 1180.0;
 
 /// Localized label + icon of every rail destination. Shared with the Ctrl+K
 /// command palette so navigation labels never diverge and the English locale
@@ -70,17 +74,31 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
         });
 
+    // Below the 1180 px breakpoint the rail drops its labels and becomes
+    // the 72 px icon strip, mirroring the web sidebar's collapsed state.
+    let viewport_width = ctx.input(|input| input.viewport_rect().width());
+    let rail_collapsed = viewport_width < RAIL_COLLAPSE_BELOW;
+    let rail_width = if rail_collapsed {
+        RAIL_WIDTH_COLLAPSED
+    } else {
+        RAIL_WIDTH_EXPANDED
+    };
     let rail_frame = egui::Frame::NONE
         .fill(palette.panel)
         .stroke(egui::Stroke::new(1.0, palette.outline))
-        .inner_margin(egui::Margin::symmetric(10, 14));
+        .inner_margin(if rail_collapsed {
+            // 12 px side gutters keep the 44 px rows centred in 72 px.
+            egui::Margin::symmetric(14, 14)
+        } else {
+            egui::Margin::symmetric(10, 14)
+        });
     egui::Panel::left(egui::Id::new("shell-rail"))
-        .exact_size(RAIL_WIDTH)
+        .exact_size(rail_width)
         .resizable(false)
         .show_separator_line(false)
         .frame(rail_frame)
         .show(ui, |ui| {
-            draw_rail(app, ui, palette);
+            draw_rail(app, ui, palette, rail_collapsed);
         });
 
     egui::CentralPanel::no_frame()
@@ -106,6 +124,7 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             Icon::Bot,
             "shell-agent-fab",
             &t!(app.locale, "AI Agent"),
+            app.settings.reduced_motion,
         );
         if fab.clicked() {
             app.go(Route::Agent);
@@ -169,7 +188,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 ui,
                 avatar_url,
                 &initial,
-                30.0,
+                crate::theme::TARGET_MIN_HEIGHT,
                 palette.surface_active,
                 palette.on_accent,
                 palette.outline,
@@ -206,7 +225,9 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             // The pill takes the room left by the action cluster and the
             // navigation arrows, clamped to a readable range.
-            let search_width = (ui.available_width() - 2.0 * 30.0 - 18.0).clamp(120.0, 420.0);
+            let search_width =
+                (ui.available_width() - 2.0 * crate::theme::TARGET_MIN_HEIGHT - 18.0)
+                    .clamp(120.0, 420.0);
             draw_search_pill(app, ui, palette, search_width);
 
             ui.add_space(8.0);
@@ -279,11 +300,11 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
         .fill(palette.surface)
         .stroke(egui::Stroke::new(1.0, palette.outline))
         .corner_radius(999.0)
-        .inner_margin(egui::Margin::symmetric(12, 0))
+        .inner_margin(egui::Margin::symmetric(14, 0))
         .show(ui, |ui| {
-            ui.set_height(30.0);
+            ui.set_height(crate::theme::TARGET_MIN_HEIGHT);
             ui.allocate_ui_with_layout(
-                vec2(width, 30.0),
+                vec2(width, crate::theme::TARGET_MIN_HEIGHT),
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
@@ -316,22 +337,23 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
     } else {
         count.to_string()
     };
+    // Counters are the one sanctioned saffron surface (Theme.kt badge).
     let galley =
         ui.painter()
-            .layout_no_wrap(text, egui::FontId::proportional(10.5), palette.on_accent);
+            .layout_no_wrap(text, egui::FontId::proportional(10.5), palette.on_badge);
     let width = (galley.size().x + 8.0).max(15.0);
     let rect = egui::Rect::from_min_size(
         egui::pos2(button.rect.right() - width + 2.0, button.rect.top() - 2.0),
         vec2(width, 15.0),
     );
-    ui.painter().rect_filled(rect, 999.0, palette.accent);
+    ui.painter().rect_filled(rect, 999.0, palette.badge);
     ui.painter().galley(
         egui::pos2(
             rect.center().x - galley.size().x / 2.0,
             rect.center().y - galley.size().y / 2.0,
         ),
         galley,
-        palette.on_accent,
+        palette.on_badge,
     );
 }
 
@@ -363,7 +385,7 @@ fn draw_update_pill(
         .corner_radius(999.0)
         .inner_margin(egui::Margin::symmetric(10, 0))
         .show(ui, |ui| {
-            ui.set_height(30.0);
+            ui.set_height(crate::theme::TARGET_MIN_HEIGHT);
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 7.0;
                 icon(ui, Icon::Download, palette.accent, 14.0);
@@ -525,7 +547,10 @@ fn menu_row(
     which: Icon,
     label: impl AsRef<str>,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(ui.available_width(), crate::theme::TARGET_MIN_HEIGHT),
+        Sense::click(),
+    );
     if response.hovered() {
         ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
     }
@@ -546,7 +571,11 @@ fn menu_row(
         |ui| {
             widgets::no_wrap_scope(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.label(RichText::new(label.as_ref()).color(palette.text).size(13.5));
+                    ui.label(
+                        RichText::new(label.as_ref())
+                            .color(palette.text)
+                            .font(crate::fonts::medium(13.5)),
+                    );
                 });
             });
         },
@@ -556,7 +585,7 @@ fn menu_row(
 
 // ── Left rail ──────────────────────────────────────────────────────────────
 
-fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed: bool) {
     let active = match app.screen {
         Screen::Shell(route) => Some(route),
         _ => None,
@@ -572,7 +601,7 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         }
         let (which, label) = route_meta(app.locale, route);
         let is_active = active == Some(route);
-        let response = rail_row(ui, palette, which, &label, is_active);
+        let response = rail_row(ui, palette, which, &label, is_active, collapsed);
         if response.clicked() {
             // go() centralises the first-visit data loading for every
             // navigation entry point.
@@ -587,8 +616,11 @@ fn rail_row(
     which: Icon,
     label: &str,
     is_active: bool,
+    collapsed: bool,
 ) -> egui::Response {
-    let height = 42.0;
+    // Web sidebar items are 40 px rows; the desktop parity floor is 44 px
+    // touch targets.
+    let height = 44.0;
     // Reserve the row with a passive hover sense first. The icon and label
     // are painted through overlay child UIs whose widgets register their own
     // hover rectangles and used to swallow presses landing on the text; the
@@ -598,14 +630,18 @@ fn rail_row(
     let hovered = ui.rect_contains_pointer(rect);
     if is_active {
         ui.painter().rect_filled(rect, 10.0, palette.surface_active);
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(rect.left() + 2.0, rect.center().y - 10.0),
-                vec2(3.0, 20.0),
-            ),
-            2.0,
-            palette.accent,
-        );
+        // The accent stripe belongs to the labelled rail only; the 72 px
+        // collapsed strip communicates selection through tint + surface.
+        if !collapsed {
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(rect.left() + 2.0, rect.center().y - 10.0),
+                    vec2(3.0, 20.0),
+                ),
+                2.0,
+                palette.accent,
+            );
+        }
     } else if hovered {
         ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
     }
@@ -614,59 +650,79 @@ fn rail_row(
     } else {
         palette.secondary
     };
-    widgets::overlay_at(
-        ui,
-        egui::Rect::from_center_size(
-            egui::pos2(rect.left() + 22.0, rect.center().y),
-            Vec2::splat(20.0),
-        ),
-        |ui| icon(ui, which, tint, 19.0),
-    );
-    widgets::overlay_at(
-        ui,
-        egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 44.0, rect.top()),
-            vec2(rect.width() - 52.0, rect.height()),
-        ),
-        |ui| {
-            // Rail entries are one-line chrome labels, even at narrow widths.
-            widgets::no_wrap_scope(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.label(
-                        RichText::new(label)
-                            .color(if is_active {
-                                palette.text
-                            } else {
-                                palette.secondary
-                            })
-                            .size(14.0)
-                            .strong(),
-                    );
+    if collapsed {
+        // Icon-only strip: centre the glyph in the 44 px row and expose the
+        // route name as a tooltip for the collapsed navigation.
+        widgets::overlay_at(
+            ui,
+            egui::Rect::from_center_size(rect.center(), Vec2::splat(20.0)),
+            |ui| icon(ui, which, tint, 19.0),
+        );
+    } else {
+        widgets::overlay_at(
+            ui,
+            egui::Rect::from_center_size(
+                egui::pos2(rect.left() + 22.0, rect.center().y),
+                Vec2::splat(20.0),
+            ),
+            |ui| icon(ui, which, tint, 19.0),
+        );
+        widgets::overlay_at(
+            ui,
+            egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 44.0, rect.top()),
+                vec2(rect.width() - 52.0, rect.height()),
+            ),
+            |ui| {
+                // Rail entries are one-line chrome labels, even at narrow widths.
+                widgets::no_wrap_scope(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        let font = if is_active {
+                            crate::fonts::semibold(13.0)
+                        } else {
+                            crate::fonts::medium(13.0)
+                        };
+                        ui.label(
+                            RichText::new(label)
+                                .color(if is_active {
+                                    palette.text
+                                } else {
+                                    palette.secondary
+                                })
+                                .font(font),
+                        );
+                    });
                 });
-            });
-        },
-    );
+            },
+        );
+    }
     // Last interaction wins for overlapping rectangles, so registering the
     // row click after the overlay widgets keeps the label text clickable.
-    ui.interact(rect, egui::Id::new(("rail-row", label)), Sense::click())
+    let response = ui.interact(rect, egui::Id::new(("rail-row", label)), Sense::click());
+    if collapsed {
+        response.on_hover_text(label)
+    } else {
+        response
+    }
 }
 
 // ── Routed content ─────────────────────────────────────────────────────────
 
 fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
-    // Android-style entrance: each navigation replays a quick cubic-out
-    // fade while the content rises ~18 px into place. The id carries the
-    // animation token, so a fresh navigation starts from zero. The very
-    // first shell entry (token 0) stays static: a fade from opacity zero
-    // on a cold window reads as launch flicker, not as navigation.
+    // Web-style entrance: each navigation replays the standard 320 ms
+    // cubic-bezier(0.2, 0, 0, 1) fade while the content rises ~18 px into
+    // place. The id carries the animation token, so a fresh navigation
+    // starts from zero. The very first shell entry (token 0) stays static:
+    // a fade from opacity zero on a cold window reads as launch flicker,
+    // not as navigation.
     let entrance = if app.anim_token == 0 {
         1.0
     } else {
         ctx.animate_bool_with_time_and_easing(
             egui::Id::new(("shell-route-enter", app.anim_token)),
             true,
-            0.24,
-            egui::emath::easing::cubic_out,
+            crate::motion::duration(crate::motion::BASE, app.settings.reduced_motion),
+            crate::motion::standard,
         )
     };
     egui::ScrollArea::both()
@@ -724,16 +780,18 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
     let height = 210.0;
     let rect = egui::Rect::from_center_size(screen.center(), vec2(width, height));
 
-    ui.painter()
-        .rect_filled(screen, 0.0, Color32::from_black_alpha(140));
+    // Outside click cancels, mirroring the web wizard behaviour.
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("confirm-scrim")) {
+        app.confirm_dialog = None;
+        return;
+    }
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(vec2(width - 44.0, 0.0));
             ui.label(
                 RichText::new(dialog.title.clone())
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(8.0);
             ui.label(

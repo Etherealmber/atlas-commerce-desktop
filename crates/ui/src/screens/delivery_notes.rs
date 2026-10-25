@@ -180,8 +180,12 @@ fn status_label(status: &str) -> &'static str {
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 420.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(
+        ui, screen, rect, egui::Id::new("delivery-note-scrim")
+    ) {
+        app.delivery_note_editor = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -190,8 +194,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(t!(locale, "New delivery note"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(10.0);
 

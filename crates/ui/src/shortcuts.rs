@@ -7,12 +7,15 @@
 //! * `Ctrl/⌘+K` — open the command palette (jump to any screen or action),
 //! * `Ctrl/⌘+R` and `F5` — reload the current screen's data,
 //! * `Ctrl/⌘+F` — focus the title-bar product search,
+//! * `Ctrl/⌘+,` — open Settings,
+//! * `F2` — open the quick-sale screen,
+//! * `Ctrl/⌘+P` — print the open document,
 //! * `Escape` — dismiss the topmost overlay, then release text focus.
 //!
-//! While a text field owns the focus, every shortcut except `Ctrl+K` and
-//! `Escape` belongs to the field, so Ctrl+A/C/V never get hijacked. All
-//! filtering logic lives in pure functions so it is unit-tested without a
-//! window (`cargo test -p atlas-ui shortcuts`).
+//! While a text field owns the focus, every shortcut except `Ctrl+K`,
+//! `F5`, `F2` and `Escape` belongs to the field, so Ctrl+A/C/V never get
+//! hijacked. All filtering logic lives in pure functions so it is
+//! unit-tested without a window (`cargo test -p atlas-ui shortcuts`).
 
 use egui::{Color32, RichText, Sense, TextWrapMode};
 
@@ -241,6 +244,18 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         return;
     }
 
+    // F2 jumps to the quick-sale screen (master parity spec §8), a
+    // function key like F5 so it works even while a field is focused.
+    if ctx.input(|input| input.key_pressed(egui::Key::F2)) {
+        let palette_was_open = app.palette_open;
+        app.close_palette();
+        if palette_was_open {
+            clear_focus(ctx);
+        }
+        app.go(Route::Sales);
+        return;
+    }
+
     // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS. This fork exposes the
     // modifier fields directly rather than the upstream `command()` helper.
     let ctrl = ctx.input(|input| input.modifiers.ctrl || input.modifiers.mac_cmd);
@@ -282,6 +297,18 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         return;
     }
 
+    // Ctrl/Cmd+, opens Settings (master parity spec §8).
+    if ctx.input(|input| input.key_pressed(egui::Key::Comma)) {
+        app.go(Route::Settings);
+        return;
+    }
+
+    // Ctrl/Cmd+P prints the document currently open, if any.
+    if ctx.input(|input| input.key_pressed(egui::Key::P)) {
+        print_open_document(app);
+        return;
+    }
+
     // Digit variants are resolved by name so no fragile Key enum path is used.
     for digit in 1..=9u32 {
         let Some(key) = egui::Key::from_name(&digit.to_string()) else {
@@ -294,6 +321,29 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
             return;
         }
     }
+}
+
+/// Ctrl/Cmd+P: print the document the user is currently viewing. The
+/// desktop shell has no document viewer of its own, so the printable
+/// document is the selected client record; its full situation report opens
+/// in the system browser through the existing short-lived report ticket
+/// flow. Anywhere else, a notice explains that nothing is open to print.
+fn print_open_document(app: &mut AtlasApp) {
+    if let Screen::Shell(Route::Clients) = app.screen
+        && let Some(client_id) = app.selected_client
+        && let Some(client) = app
+            .clients
+            .data
+            .as_ref()
+            .and_then(|clients| clients.iter().find(|item| item.id == client_id))
+            .cloned()
+    {
+        app.open_client_situation(&client, true);
+        return;
+    }
+    app.notice(
+        t!(app.locale, "No document is open to print.").into_owned(),
+    );
 }
 
 /// Draws the centered palette overlay when open. Backdrop clicks cancel;
@@ -365,12 +415,12 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 widgets::icon(ui, Icon::Search, palette.secondary, 17.0);
-                ui.add(
+                ui.add_sized(
+                    [width - 110.0, crate::theme::TARGET_MIN_HEIGHT],
                     egui::TextEdit::singleline(&mut app.palette_query)
                         .id(input_id())
                         .frame(egui::Frame::NONE)
                         .hint_text(t!(app.locale, "Search or jump to…"))
-                        .desired_width(width - 110.0)
                         .clip_text(true),
                 );
             });
@@ -446,7 +496,7 @@ fn palette_row(
     entry: &PaletteEntry,
     selected: bool,
 ) -> egui::Response {
-    let height = 38.0;
+    let height = crate::theme::TARGET_MIN_HEIGHT;
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click());
     if selected || response.hovered() {

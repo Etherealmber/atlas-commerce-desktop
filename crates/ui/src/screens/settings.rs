@@ -280,6 +280,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 "Closing the window hides the app instead of quitting it."
             )),
             &mut app.settings.close_to_tray,
+            app.settings.reduced_motion,
         ) {
             app.save_settings();
         }
@@ -295,6 +296,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 "Launches Atlas Commerce when the computer starts."
             )),
             &mut autostart,
+            app.settings.reduced_motion,
         ) {
             apply_autostart(autostart, app.settings.start_hidden);
             app.settings.autostart = autostart;
@@ -311,6 +313,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     "No window opens until you click the tray icon."
                 )),
                 &mut app.settings.start_hidden,
+                app.settings.reduced_motion,
             ) {
                 apply_autostart(true, app.settings.start_hidden);
                 app.save_settings();
@@ -339,6 +342,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 "High-severity alerts also raise a system notification."
             )),
             &mut app.settings.notifications_enabled,
+            app.settings.reduced_motion,
         ) {
             app.save_settings();
             // Enabling toasts immediately needs alert data: start the first
@@ -362,8 +366,24 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 "Draws the caption bar inside the application."
             )),
             &mut app.settings.custom_titlebar,
+            app.settings.reduced_motion,
         ) {
             fastframe_titlebar::set_enabled(app.settings.custom_titlebar);
+            app.save_settings();
+        }
+
+        ui.add_space(10.0);
+        if switch_row(
+            ui,
+            palette,
+            t!(app.locale, "Reduce animations"),
+            Some(&t!(
+                app.locale,
+                "Remove transition and entrance effects."
+            )),
+            &mut app.settings.reduced_motion,
+            app.settings.reduced_motion,
+        ) {
             app.save_settings();
         }
 
@@ -492,15 +512,15 @@ fn assist_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     pill(
                         ui,
                         t!(app.locale, "Configured"),
-                        palette.accent.gamma_multiply(0.18),
-                        palette.accent,
+                        palette.finance_positive_soft,
+                        palette.finance_positive,
                     );
                 } else {
                     pill(
                         ui,
                         t!(app.locale, "Not configured"),
-                        palette.warning.gamma_multiply(0.18),
-                        palette.warning,
+                        palette.finance_warning_soft,
+                        palette.finance_warning,
                     );
                 }
             },
@@ -725,16 +745,19 @@ fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palet
     let width = 480.0;
     let height = 250.0;
     let rect = egui::Rect::from_center_size(screen.center(), egui::vec2(width, height));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(
+        ui, screen, rect, egui::Id::new("created-key-scrim")
+    ) {
+        app.created_key = None;
+        return;
+    }
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(egui::vec2(width - 44.0, 0.0));
             ui.label(
                 RichText::new(t!(app.locale, "Copy this key now"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(8.0);
             ui.label(
@@ -749,7 +772,7 @@ fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palet
             egui::Frame::NONE
                 .fill(palette.window)
                 .stroke(egui::Stroke::new(1.0, palette.outline))
-                .corner_radius(8.0)
+                .corner_radius(crate::theme::RADIUS_CONTROL as f32)
                 .inner_margin(egui::Margin::symmetric(10, 8))
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
@@ -1045,6 +1068,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 "GitHub Releases are the only update source."
             )),
             &mut app.settings.update_check_on_start,
+            app.settings.reduced_motion,
         ) {
             app.save_settings();
         }

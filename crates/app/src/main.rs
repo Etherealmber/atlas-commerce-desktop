@@ -222,10 +222,14 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     let app_id = SLUG;
 
     let viewport = egui::ViewportBuilder::default()
-        .with_title(APP_NAME)
+        // Pre-login base title; the app promotes it to
+        // "Atlas Commerce — <serveur>" once a server is selected.
+        .with_title("Atlas Commerce")
         .with_app_id(app_id)
-        .with_inner_size([1180.0, 760.0])
-        .with_min_inner_size([960.0, 620.0])
+        // Default 1280×800 keeps the rail above its 1180 px collapse
+        // breakpoint at first launch; 1024×680 is the parity floor.
+        .with_inner_size([1280.0, 800.0])
+        .with_min_inner_size([1024.0, 680.0])
         .with_decorations(!custom_titlebar)
         // Born hidden: the OS would otherwise paint the default white
         // window background for several frames before the first egui

@@ -276,10 +276,11 @@ fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .color(palette.text)
                             .size(13.0),
                     );
-                    ui.add(
+                    ui.add_sized(
+                        [76.0, crate::theme::TARGET_MIN_HEIGHT],
                         egui::TextEdit::singleline(&mut line.quantity)
-                            .desired_width(70.0)
-                            .margin(egui::Margin::symmetric(8, 6)),
+                            .margin(egui::Margin::symmetric(10, 8))
+                            .clip_text(true),
                     );
                     let currency = app
                         .dashboard
@@ -299,7 +300,11 @@ fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .add(
                             egui::Button::new(RichText::new("×").color(palette.danger).strong())
                                 .fill(palette.surface)
-                                .corner_radius(8.0),
+                                .min_size(egui::vec2(
+                                    crate::theme::TARGET_MIN_HEIGHT,
+                                    crate::theme::TARGET_MIN_HEIGHT,
+                                ))
+                                .corner_radius(crate::theme::RADIUS_CONTROL as f32),
                         )
                         .clicked()
                     {

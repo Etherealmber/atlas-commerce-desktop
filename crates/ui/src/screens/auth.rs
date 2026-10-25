@@ -16,6 +16,12 @@ use crate::t;
 use crate::theme::Palette;
 use crate::widgets::*;
 
+/// Short local aliases for the 44 px interactive-target and 12 px control
+/// radius constants, so the deeply indented builder chains in the server
+/// cards stay within width.
+const TARGET: f32 = crate::theme::TARGET_MIN_HEIGHT;
+const RADIUS: f32 = crate::theme::RADIUS_CONTROL as f32;
+
 // ── Splash ────────────────────────────────────────────────────────────────
 
 pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -56,8 +62,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(22.0);
         ui.label(
             RichText::new(t!(app.locale, "Atlas Commerce Desktop"))
-                .strong()
-                .size(24.0)
+                .font(crate::fonts::bold(24.0))
                 .color(palette.text),
         );
         ui.add_space(6.0);
@@ -144,8 +149,8 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         )
         .wrap_mode(egui::TextWrapMode::Extend)
         .fill(palette.accent)
-        .corner_radius(10.0)
-        .min_size(egui::vec2(240.0, 42.0));
+        .corner_radius(RADIUS)
+        .min_size(egui::vec2(240.0, crate::theme::PRIMARY_BUTTON_HEIGHT));
         if ui.add(button).clicked() {
             app.screen = Screen::ServerSetup;
         }
@@ -223,7 +228,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                             palette.outline
                                         },
                                     ))
-                                    .corner_radius(10.0)
+                                    .corner_radius(crate::theme::RADIUS_CARD as f32)
                                     .inner_margin(egui::Margin::symmetric(12, 10))
                                     .show(ui, |ui| {
                                         ui.horizontal(|ui| {
@@ -252,7 +257,8 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                             )
                                                             .wrap_mode(egui::TextWrapMode::Extend)
                                                             .fill(palette.surface)
-                                                            .corner_radius(8.0),
+                                                            .min_size(egui::vec2(0.0, TARGET))
+                                                            .corner_radius(RADIUS),
                                                         )
                                                         .clicked()
                                                     {
@@ -350,17 +356,13 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                     }
                                 }
                                 if let Some(report) = &app.server_form.probe_report {
-                                    // Android positive token: #34D399 in dark
-                                    // mode, #0F7B4F in light mode.
-                                    let positive = if palette.dark {
-                                        Color32::from_rgb(0x34, 0xd3, 0x99)
-                                    } else {
-                                        Color32::from_rgb(0x0f, 0x7b, 0x4f)
-                                    };
+                                    // Probe result is a status: the finance
+                                    // positive token already resolves to
+                                    // #34D399 (dark) or #0F7B4F (light).
                                     let (icon, color) = if report.ok {
-                                        (Icon::CircleCheck, positive)
+                                        (Icon::CircleCheck, palette.finance_positive)
                                     } else {
-                                        (Icon::CircleX, palette.danger)
+                                        (Icon::CircleX, palette.finance_danger)
                                     };
                                     self::icon(ui, icon, color, 16.0);
                                 }
@@ -531,7 +533,8 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                         )
                                         .wrap_mode(egui::TextWrapMode::Extend)
                                         .fill(Color32::TRANSPARENT)
-                                        .stroke(egui::Stroke::NONE),
+                                        .stroke(egui::Stroke::NONE)
+                                        .min_size(egui::vec2(0.0, TARGET)),
                                     )
                                     .clicked()
                                 {
@@ -575,7 +578,7 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     egui::Frame::NONE
         .fill(palette.window)
         .stroke(egui::Stroke::new(1.0, palette.outline))
-        .corner_radius(10.0)
+        .corner_radius(RADIUS)
         .inner_margin(egui::Margin::symmetric(4, 4))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -588,7 +591,7 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     let selected = tab == candidate;
                     let response = ui
                         .add_sized(
-                            [button_width, 36.0],
+                            [button_width, crate::theme::TARGET_MIN_HEIGHT],
                             egui::Button::new(
                                 RichText::new(label.as_ref())
                                     .color(if selected {
@@ -605,7 +608,7 @@ fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             } else {
                                 Color32::TRANSPARENT
                             })
-                            .corner_radius(8.0),
+                            .corner_radius(RADIUS),
                         )
                         .on_hover_text(label.as_ref());
                     icon(
@@ -660,9 +663,15 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.horizontal(|ui| {
                 let edit = egui::TextEdit::singleline(&mut app.login.password)
                     .password(!app.login.show_password)
-                    .margin(egui::Margin::symmetric(10, 8))
+                    .margin(egui::Margin::symmetric(14, 8))
                     .clip_text(true);
-                ui.add_sized([ui.available_width() - 38.0, 34.0], edit);
+                ui.add_sized(
+                    [
+                        ui.available_width() - crate::theme::TARGET_MIN_HEIGHT - 8.0,
+                        crate::theme::TARGET_MIN_HEIGHT,
+                    ],
+                    edit,
+                );
                 let eye = if app.login.show_password {
                     Icon::EyeOff
                 } else {
@@ -672,7 +681,11 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .add(
                         egui::Button::new(eye.image(palette.secondary, 17.0))
                             .fill(palette.surface)
-                            .corner_radius(8.0),
+                            .min_size(egui::vec2(
+                                crate::theme::TARGET_MIN_HEIGHT,
+                                crate::theme::TARGET_MIN_HEIGHT,
+                            ))
+                            .corner_radius(RADIUS),
                     )
                     .on_hover_text(t!(app.locale, "Show password"))
                     .clicked()
@@ -711,7 +724,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         };
         let clicked = ui
             .add_sized(
-                [ui.available_width(), 40.0],
+                [ui.available_width(), crate::theme::PRIMARY_BUTTON_HEIGHT],
                 egui::Button::new(
                     RichText::new(label.as_ref())
                         .color(palette.on_accent)
@@ -724,7 +737,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 } else {
                     palette.surface_active
                 })
-                .corner_radius(8.0),
+                .corner_radius(RADIUS),
             )
             .clicked();
         if clicked && !busy {

@@ -159,11 +159,11 @@ fn draw_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 18.0);
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut app.product_search)
-                    .hint_text(t!(app.locale, "Search by name, SKU or barcode"))
-                    .margin(egui::Margin::symmetric(10, 8))
-                    .desired_width(320.0),
+            let response = widgets::search_field(
+                ui,
+                &mut app.product_search,
+                t!(app.locale, "Search by name, SKU or barcode"),
+                320.0,
             );
             if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 app.load_products();
@@ -259,12 +259,14 @@ fn stock_pill(
         number(product.stock),
         product.unit.clone().unwrap_or_else(|| "unité".to_owned())
     );
+    // Stock is a finance-style status: the Android semantic pairs carry
+    // the out-of-stock / low / healthy states (soft fill + strong text).
     let (fill, tint) = if product.is_out_of_stock() {
-        (palette.danger.gamma_multiply(0.18), palette.danger)
+        (palette.finance_danger_soft, palette.finance_danger)
     } else if product.is_low_stock() {
-        (palette.warning.gamma_multiply(0.18), palette.warning)
+        (palette.finance_warning_soft, palette.finance_warning)
     } else {
-        (palette.accent.gamma_multiply(0.16), palette.accent)
+        (palette.finance_positive_soft, palette.finance_positive)
     };
     pill(ui, text, fill, tint);
 }
@@ -308,8 +310,12 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 560.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(
+        ui, screen, rect, egui::Id::new("product-editor-scrim")
+    ) {
+        app.product_editor = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -318,8 +324,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(t!(locale, "New product"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(10.0);
 
@@ -508,8 +513,12 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(460.0, 360.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(
+        ui, screen, rect, egui::Id::new("stock-scrim")
+    ) {
+        app.stock_dialog = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -518,8 +527,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(t!(locale, "Adjust stock"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(6.0);
             let product_name = app
@@ -550,12 +558,13 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .size(13.0),
                     )
                     .wrap_mode(egui::TextWrapMode::Extend)
+                    .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
                     .fill(if selected {
                         palette.accent
                     } else {
                         palette.surface
                     })
-                    .corner_radius(8.0);
+                    .corner_radius(crate::theme::RADIUS_CONTROL as f32);
                     if ui.add(button).clicked()
                         && let Some(dialog) = app.stock_dialog.as_mut()
                     {
