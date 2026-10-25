@@ -67,10 +67,8 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             let bottom = ui.min_rect().bottom();
             let left = egui::pos2(ui.min_rect().left(), bottom);
             let right = egui::pos2(ui.max_rect().right(), bottom);
-            ui.painter().line_segment(
-                [left, right],
-                egui::Stroke::new(1.0, palette.outline),
-            );
+            ui.painter()
+                .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
         });
 
     let rail_frame = egui::Frame::NONE

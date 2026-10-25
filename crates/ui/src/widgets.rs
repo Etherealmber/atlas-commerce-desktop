@@ -422,14 +422,10 @@ fn paint_circle_photo(
     for index in 1..=SEGMENTS as u32 {
         indices.extend_from_slice(&[0, index, index + 1]);
     }
-    painter.add(egui::Shape::Mesh(
-        egui::epaint::Mesh {
-            indices,
-            vertices,
-            texture_id,
-        }
-        .into(),
-    ));
+    let mut mesh = egui::epaint::Mesh::with_texture(texture_id);
+    mesh.indices = indices;
+    mesh.vertices = vertices;
+    painter.add(egui::Shape::Mesh(mesh.into()));
     painter.circle_stroke(center, radius, egui::Stroke::new(1.0, ring));
 }
 

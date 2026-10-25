@@ -124,7 +124,7 @@ pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, 
 
 /// Whether a fastframe error describes a release whose assets are not
 /// downloadable yet. fastframe reports a missing/duplicated asset as
-/// "The release has no unique <name> download"; a not-yet-propagated file
+/// "The release has no unique {name} download"; a not-yet-propagated file
 /// comes back as an HTTP 404 from the release asset host. Both happen in the
 /// publish window between release creation and the asset upload step.
 #[must_use]
