@@ -152,11 +152,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         icon(ui, Icon::Search, palette.secondary, 16.0);
-        ui.add(
-            egui::TextEdit::singleline(&mut app.client_search)
-                .hint_text(t!(app.locale, "Search by name, city, phone or ICE"))
-                .margin(egui::Margin::symmetric(10, 8))
-                .desired_width(ui.available_width() - 24.0),
+        let field_width = ui.available_width() - 24.0;
+        widgets::search_field(
+            ui,
+            &mut app.client_search,
+            t!(app.locale, "Search by name, city, phone or ICE"),
+            field_width,
         );
     });
     ui.add_space(10.0);
@@ -286,8 +287,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.label(
             RichText::new(client.name.clone())
                 .color(palette.text)
-                .strong()
-                .size(17.0),
+                .font(crate::fonts::semibold(17.0)),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if secondary_button(ui, t!(app.locale, "Edit"), palette) {
@@ -389,8 +389,10 @@ fn detail_row(
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 620.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
+        app.client_editor = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -405,7 +407,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New client")
             };
-            ui.label(RichText::new(title).color(palette.text).strong().size(17.0));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
 
             if let Some(editor) = app.client_editor.as_mut() {

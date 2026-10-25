@@ -118,14 +118,15 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 16.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut app.expense_search)
-                    .hint_text(t!(
-                        app.locale,
-                        "Search by description, category, vendor or reference"
-                    ))
-                    .margin(egui::Margin::symmetric(10, 8))
-                    .desired_width(ui.available_width() - 24.0),
+            let field_width = ui.available_width() - 24.0;
+            widgets::search_field(
+                ui,
+                &mut app.expense_search,
+                t!(
+                    app.locale,
+                    "Search by description, category, vendor or reference"
+                ),
+                field_width,
             );
         });
         ui.add_space(10.0);
@@ -301,7 +302,11 @@ fn stat_card(ui: &mut egui::Ui, palette: &Palette, width: f32, label: &str, valu
         ui.set_width(width);
         ui.label(RichText::new(label).color(palette.secondary).size(12.0));
         ui.add_space(4.0);
-        ui.label(RichText::new(value).color(palette.text).strong().size(17.0));
+        ui.label(
+            RichText::new(value)
+                .color(palette.text)
+                .font(crate::fonts::semibold(17.0)),
+        );
     });
 }
 
@@ -319,8 +324,10 @@ fn payment_source(key: &str) -> &'static str {
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 620.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("expense-editor-scrim")) {
+        app.expense_editor = None;
+        return;
+    }
 
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
@@ -329,8 +336,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(t!(locale, "New entry"))
                     .color(palette.text)
-                    .strong()
-                    .size(17.0),
+                    .font(crate::fonts::semibold(17.0)),
             );
             ui.add_space(10.0);
 
@@ -481,7 +487,8 @@ fn segmented_type(
             } else {
                 egui::Stroke::new(1.0, palette.outline)
             })
-            .corner_radius(8.0);
+            .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
+            .corner_radius(crate::theme::RADIUS_CONTROL as f32);
             if ui.add(button).clicked() {
                 editor.entry_type = key.to_owned();
             }

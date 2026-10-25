@@ -55,10 +55,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             Some("medium") => Icon::CircleAlert,
             _ => Icon::Info,
         };
+        // Alert severities are status semantics: the Android finance
+        // danger/warning/info tokens, never brand chrome colours.
         let tint = match alert.severity.as_deref() {
-            Some("high") => palette.danger,
-            Some("medium") => palette.warning,
-            _ => palette.accent,
+            Some("high") => palette.finance_danger,
+            Some("medium") => palette.finance_warning,
+            _ => palette.finance_info,
         };
         // The worker sends a web `href` (/products, /invoices/…); map the
         // known prefixes onto desktop routes so an alert is one click away.
@@ -83,7 +85,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     let label = super::severity_label(alert.severity.as_deref());
-                    pill(ui, label, tint.gamma_multiply(0.16), tint);
+                    let soft = match alert.severity.as_deref() {
+                        Some("high") => palette.finance_danger_soft,
+                        Some("medium") => palette.finance_warning_soft,
+                        _ => palette.finance_info_soft,
+                    };
+                    pill(ui, label, soft, tint);
                 });
             });
             // Thin severity rail on the card's left edge.

@@ -166,7 +166,7 @@ fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     palette.surface
                 })
                 .stroke(egui::Stroke::new(1.0, palette.outline))
-                .corner_radius(10.0)
+                .corner_radius(crate::theme::RADIUS_CARD as f32)
                 .inner_margin(egui::Margin::symmetric(14, 8));
             let response = frame
                 .show(ui, |ui| {
@@ -345,8 +345,10 @@ fn list_row(
 fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 380.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("category-scrim")) {
+        app.category_editor = None;
+        return;
+    }
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
@@ -360,7 +362,11 @@ fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New category")
             };
-            ui.label(RichText::new(title).color(palette.text).strong().size(17.0));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
             if let Some(editor) = app.category_editor.as_mut() {
                 labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
@@ -409,8 +415,10 @@ fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 360.0));
-    ui.painter()
-        .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(140));
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("unit-scrim")) {
+        app.unit_editor = None;
+        return;
+    }
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
@@ -424,7 +432,11 @@ fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New unit")
             };
-            ui.label(RichText::new(title).color(palette.text).strong().size(17.0));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
             if let Some(editor) = app.unit_editor.as_mut() {
                 labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);

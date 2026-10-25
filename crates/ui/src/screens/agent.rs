@@ -92,11 +92,13 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .as_ref()
         .is_some_and(|policy| policy.blocked);
     ui.horizontal(|ui| {
-        let response = ui.add(
+        let draft_width = ui.available_width() - 150.0;
+        let response = ui.add_sized(
+            [draft_width, crate::theme::TARGET_MIN_HEIGHT],
             egui::TextEdit::singleline(&mut app.agent.draft)
                 .hint_text(t!(app.locale, "Write a message…"))
-                .margin(egui::Margin::symmetric(12, 10))
-                .desired_width(ui.available_width() - 150.0),
+                .margin(egui::Margin::symmetric(14, 10))
+                .clip_text(true),
         );
         let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         let send = primary_button(
@@ -118,6 +120,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         Icon::Plus,
         "agent-new-conversation",
         &t!(app.locale, "New conversation"),
+        app.settings.reduced_motion,
     );
     if new_chat.clicked() && !app.agent.busy {
         app.agent.messages.clear();

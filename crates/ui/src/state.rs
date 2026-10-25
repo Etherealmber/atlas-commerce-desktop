@@ -318,6 +318,12 @@ pub struct AtlasApp {
     /// per-frame style rebuild while nothing changed (a flicker/recompute
     /// source) and re-applies as soon as any token changes.
     pub applied_palette: Option<Palette>,
+    /// Last reduced-motion value baked into the egui style, so flipping the
+    /// setting rebuilds styles even when the palette is unchanged.
+    pub applied_reduced_motion: Option<bool>,
+    /// Last OS window title pushed via `ViewportCommand::Title`, so the
+    /// `Atlas Commerce — <serveur>` title is only sent when it changes.
+    pub applied_title: Option<String>,
 
     // ── persisted state ──
     pub settings: Settings,
@@ -557,6 +563,8 @@ impl AtlasApp {
             update_receipt: None,
             last_clear_color: None,
             applied_palette: None,
+            applied_reduced_motion: None,
+            applied_title: None,
             notices: Vec::new(),
             notices_expire_at: None,
         }
@@ -827,7 +835,10 @@ impl AtlasApp {
             || self.category_editor.is_some()
             || self.unit_editor.is_some()
             || self.stock_dialog.is_some()
-            || self.quick_sale.is_some()
+            // The quick-sale draft is an inline screen form, not a modal:
+            // counting it here would block global shortcuts and hide the
+            // FAB for the whole Sales screen. Escape still clears it via
+            // dismiss_top_overlay's explicit handling below.
             || self.key_editor.is_some()
     }
 

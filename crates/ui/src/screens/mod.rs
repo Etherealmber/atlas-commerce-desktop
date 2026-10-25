@@ -70,13 +70,8 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         let frame = egui::Frame::NONE
             .fill(palette.overlay)
             .stroke(egui::Stroke::new(1.0, palette.outline))
-            .corner_radius(10.0)
-            .shadow(egui::Shadow {
-                offset: [0, 4],
-                blur: 16,
-                spread: 0,
-                color: palette.shadow,
-            })
+            .corner_radius(crate::theme::RADIUS_CONTROL as f32)
+            .shadow(crate::theme::elevation_shadow(palette))
             .inner_margin(egui::Margin::symmetric(14, 9));
         // Measure the toast with the real wrap width first: a no-wrap
         // galley made long messages overflow the fixed-height frame and get
@@ -140,7 +135,11 @@ pub fn back_header(ui: &mut Ui, title: impl AsRef<str>, palette: &Palette) -> Op
             .add(
                 egui::Button::new(egui::RichText::new("‹").color(palette.secondary).size(22.0))
                     .fill(Color32::TRANSPARENT)
-                    .stroke(egui::Stroke::NONE),
+                    .stroke(egui::Stroke::NONE)
+                    .min_size(egui::vec2(
+                        crate::theme::TARGET_MIN_HEIGHT,
+                        crate::theme::TARGET_MIN_HEIGHT,
+                    )),
             )
             .on_hover_text("Retour");
         ui.label(

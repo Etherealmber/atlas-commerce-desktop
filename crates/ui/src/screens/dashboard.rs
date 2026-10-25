@@ -140,20 +140,27 @@ fn metric_card(
                 ui,
                 which,
                 if warn {
-                    palette.warning
+                    palette.finance_warning
                 } else {
                     palette.accent
                 },
                 20.0,
             );
-            ui.label(RichText::new(label).color(palette.secondary).size(12.5));
+            ui.label(
+                RichText::new(label)
+                    .color(palette.secondary)
+                    .font(crate::fonts::medium(12.0)),
+            );
         });
         ui.add_space(8.0);
         ui.label(
             RichText::new(value)
-                .color(if warn { palette.warning } else { palette.text })
-                .strong()
-                .size(21.0),
+                .color(if warn {
+                    palette.finance_warning
+                } else {
+                    palette.text
+                })
+                .font(crate::fonts::mono_semibold(22.0)),
         );
     });
 }
@@ -173,18 +180,22 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
         palette,
         t!(app.locale, "Open"),
         money(unpaid.open, currency),
+        palette.text,
     );
+    // Overdue money is a finance danger status, using the Android token.
     stat_row(
         ui,
         palette,
         t!(app.locale, "Overdue"),
         money(unpaid.overdue, currency),
+        palette.finance_danger,
     );
     stat_row(
         ui,
         palette,
         t!(app.locale, "Total due"),
         money(unpaid.total, currency),
+        palette.text,
     );
     ui.add_space(8.0);
     ui.horizontal(|ui| {
@@ -201,7 +212,13 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
     });
 }
 
-fn stat_row(ui: &mut egui::Ui, palette: &Palette, label: impl AsRef<str>, value: impl AsRef<str>) {
+fn stat_row(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    label: impl AsRef<str>,
+    value: impl AsRef<str>,
+    value_color: egui::Color32,
+) {
     ui.horizontal(|ui| {
         // Pinning the label to the full available width starved the value
         // column until both texts painted on top of each other.
@@ -213,9 +230,8 @@ fn stat_row(ui: &mut egui::Ui, palette: &Palette, label: impl AsRef<str>, value:
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.label(
                 RichText::new(value.as_ref())
-                    .color(palette.text)
-                    .strong()
-                    .size(13.5),
+                    .color(value_color)
+                    .font(crate::fonts::mono_semibold(13.5)),
             );
         });
     });
@@ -352,8 +368,7 @@ fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &
                 ui.label(
                     RichText::new(money(invoice.total, currency))
                         .color(palette.text)
-                        .strong()
-                        .size(13.5),
+                        .font(crate::fonts::mono_semibold(13.5)),
                 );
                 if let Some(status) = &invoice.status {
                     status_pill(ui, palette, status);
@@ -365,9 +380,11 @@ fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &
 }
 
 pub fn status_pill(ui: &mut egui::Ui, palette: &Palette, status: &str) {
+    // Financial invoice statuses use the Android finance semantics: green
+    // for paid, red for overdue; other states stay neutral chrome.
     let (fill, text) = match status {
-        "paid" | "payée" => (palette.accent.gamma_multiply(0.18), palette.accent),
-        "overdue" | "en_retard" => (palette.danger.gamma_multiply(0.18), palette.danger),
+        "paid" | "payée" => (palette.finance_positive_soft, palette.finance_positive),
+        "overdue" | "en_retard" => (palette.finance_danger_soft, palette.finance_danger),
         _ => (palette.surface_active, palette.secondary),
     };
     pill(ui, status_label(status), fill, text);

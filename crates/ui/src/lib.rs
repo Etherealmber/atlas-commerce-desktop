@@ -8,8 +8,10 @@
 
 pub mod app;
 pub mod dialogs;
+pub mod fonts;
 pub mod i18n;
 pub mod icons;
+pub mod motion;
 pub mod screens;
 pub mod shortcuts;
 pub mod state;
