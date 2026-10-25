@@ -183,9 +183,29 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
     visuals.selection.bg_fill = palette.accent.gamma_multiply(0.35);
     visuals.selection.stroke = Stroke::new(1.0, palette.accent);
     visuals.window_stroke = Stroke::new(1.0, palette.outline);
-    visuals.window_shadow.color = palette.shadow;
-    visuals.popup_shadow.color = palette.shadow;
+    // Layered elevation, the same recipe ZapFast and Spotifast use: dialogs
+    // and windows cast a deep ambient shadow, popups and menus a shorter
+    // one. The palette's shadow token is near-invisible on a light window
+    // and soft black in the dark scheme, so this stays monochrome.
+    visuals.window_corner_radius = CornerRadius::same(14);
+    visuals.menu_corner_radius = CornerRadius::same(10);
+    visuals.window_shadow = egui::Shadow {
+        offset: [0, 12],
+        blur: 40,
+        spread: 0,
+        color: palette.shadow,
+    };
+    visuals.popup_shadow = egui::Shadow {
+        offset: [0, 4],
+        blur: 16,
+        spread: 0,
+        color: palette.shadow,
+    };
     visuals.striped = false;
+    // A 2 px accent caret reads better than the default 1 px muted bar.
+    visuals.text_cursor.stroke = Stroke::new(2.0, palette.accent);
+    visuals.slider_trailing_fill = true;
+    visuals.handle_shape = egui::style::HandleShape::Circle;
 
     let corner = CornerRadius::same(8);
     visuals.widgets.noninteractive.corner_radius = corner;
@@ -212,10 +232,37 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
 
     visuals.widgets.open.bg_fill = palette.surface_hover;
     visuals.widgets.open.fg_stroke = Stroke::new(1.0, palette.text);
+    // Open popups (combo boxes) must not paint a second box outline around
+    // their trigger; the popup shadow already separates them.
+    visuals.widgets.open.bg_stroke = Stroke::NONE;
+
+    // No egui hover "grow": expansion makes every button and row look like
+    // a web link. The fill change alone signals interactivity.
+    for widget in [
+        &mut visuals.widgets.inactive,
+        &mut visuals.widgets.hovered,
+        &mut visuals.widgets.active,
+        &mut visuals.widgets.open,
+    ] {
+        widget.expansion = 0.0;
+    }
+
+    // One explicit type scale, matching the reference fastframe apps so the
+    // interface does not depend on egui's per-platform defaults.
+    use egui::{FontId, TextStyle};
+    style.text_styles = [
+        (TextStyle::Small, FontId::proportional(11.5)),
+        (TextStyle::Body, FontId::proportional(14.0)),
+        (TextStyle::Button, FontId::proportional(14.0)),
+        (TextStyle::Heading, FontId::proportional(22.0)),
+        (TextStyle::Monospace, FontId::monospace(13.0)),
+    ]
+    .into();
 
     style.spacing.item_spacing = egui::vec2(10.0, 10.0);
     style.spacing.button_padding = egui::vec2(14.0, 7.0);
     style.spacing.window_margin = egui::Margin::same(18);
+    style.spacing.menu_margin = egui::Margin::same(6);
 
     // Native-style scrollbars: invisible until hovered, then a thin floating
     // handle that expands under the cursor instead of a permanent gutter.
@@ -224,7 +271,20 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
     scroll.bar_width = 9.0;
     scroll.floating_width = 3.5;
     scroll.floating_allocated_width = 0.0;
+    scroll.handle_min_length = 28.0;
     scroll.dormant_handle_opacity = 0.0;
+    scroll.dormant_background_opacity = 0.0;
+    scroll.active_background_opacity = 0.0;
+    scroll.active_handle_opacity = 0.55;
+    scroll.interact_handle_opacity = 0.85;
+    scroll.foreground_color = true;
+
+    // Quick, calm motion (egui default is 0.2 s): hover fades and the FAB
+    // entrance share one short duration, respecting the brief's subtle
+    // motion directive.
+    style.animation_time = 0.12;
+    style.interaction.tooltip_delay = 0.4;
+    style.url_in_tooltip = false;
 
     // Native-app behaviour: chrome text (buttons, labels, pills, menu rows,
     // table cells, headings) must never behave like selectable web page text
