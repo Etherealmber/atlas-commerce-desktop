@@ -720,6 +720,12 @@ impl AtlasApp {
     /// never drift apart.
     pub fn ensure_route_data(&mut self, route: Route) {
         match route {
+            // Products was preloaded by startup before lazy loading; keep
+            // its first-visit fetch here so the rail does not open an empty
+            // state. load_products applies the current search query itself.
+            Route::Products if self.products.data.is_none() && !self.products.loading => {
+                self.load_products()
+            }
             Route::Clients if self.clients.data.is_none() => self.load_clients(),
             Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
             Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
