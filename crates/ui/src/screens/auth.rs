@@ -1101,11 +1101,7 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         );
         if !manifest.notes.is_empty() {
             ui.add_space(10.0);
-            ui.label(
-                RichText::new(manifest.notes.clone())
-                    .color(palette.secondary)
-                    .size(13.0),
-            );
+            crate::widgets::release_notes(ui, &manifest.notes, palette, 220.0);
         }
         if let Some(error) = &app.update.error {
             ui.add_space(10.0);

@@ -58,13 +58,20 @@ impl AtlasApp {
     }
 
     /// First loads after entering the shell or restoring a session.
+    ///
+    /// On-demand only: the landing dashboard is the single automatic call,
+    /// so startup does not fan out one request per screen. Every other cache
+    /// is fetched the first time its route opens (`ensure_route_data`) or
+    /// when a chrome surface needs it (bell badge, profile popover). The
+    /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
         self.load_dashboard();
-        self.load_products();
-        self.load_alerts();
-        self.load_nav_badges();
-        self.load_profile();
-        self.load_assist();
+        // Native stock toasts need alert data even if the user never opens
+        // the Notifications screen; only spend the request when the
+        // persisted setting is enabled.
+        if self.settings.notifications_enabled {
+            self.load_alerts();
+        }
         if self.settings.update_check_on_start {
             self.check_for_updates(false);
         }
@@ -165,6 +172,25 @@ impl AtlasApp {
         };
         let job = self.runner.spawn(async move { client.nav_badges().await });
         self.nav_badges.start(job);
+    }
+
+    /// Lazy fetch of the title-bar badge count. The first call starts a
+    /// request immediately; after a failure (`data` still `None`) retries are
+    /// rate-limited by [`crate::state::NAV_BADGES_RETRY_BACKOFF`] so a
+    /// persistently failing endpoint cannot trigger one request per frame.
+    pub fn ensure_nav_badges(&mut self) {
+        let backoff_open = self
+            .nav_badges_retry_at
+            .is_none_or(|at| Instant::now() >= at);
+        if self.session.is_some()
+            && self.nav_badges.data.is_none()
+            && !self.nav_badges.loading
+            && backoff_open
+        {
+            self.load_nav_badges();
+            self.nav_badges_retry_at =
+                Some(Instant::now() + crate::state::NAV_BADGES_RETRY_BACKOFF);
+        }
     }
 
     pub fn load_devices(&mut self) {
@@ -359,8 +385,14 @@ impl AtlasApp {
                     self.profile_form.loaded = true;
                     self.fill_profile_form(&merged);
                     if let Some(session) = self.session.as_mut() {
+                        // Drop the previous picture from the texture cache
+                        // when the avatar URL actually changes.
+                        let new_url = merged.avatar_url.clone().unwrap_or_default();
+                        if !session.avatar_url.is_empty() && session.avatar_url != new_url {
+                            self.avatar_evict = Some(session.avatar_url.clone());
+                        }
                         session.display_name = merged.display_name.clone().unwrap_or_default();
-                        session.avatar_url = merged.avatar_url.clone().unwrap_or_default();
+                        session.avatar_url = new_url;
                         session.email = merged.email.clone().unwrap_or_default();
                     }
                     self.save_session();
@@ -430,7 +462,9 @@ impl AtlasApp {
         self.update.stage = t!(self.locale, "Downloading…").into_owned();
         let locale = self.locale;
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
-            tokio::task::spawn_blocking(move || {
+            // Pin the blocking closure's error type: without this, inference
+            // starts from the &str guard below and resolves it to unsized str.
+            tokio::task::spawn_blocking(move || -> Result<(), String> {
                 let updater = crate::update::build_updater().map_err(|error| error.to_string())?;
                 // Refuse early with a clear message when this copy has no
                 // portable/installer marker (e.g. a dev build): the helper
@@ -459,7 +493,24 @@ impl AtlasApp {
                 Ok(())
             })
             .await
-            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())
+            .and_then(|job_outcome: Result<(), String>| {
+                // Classify after the blocking work unwinds: a 404 / missing
+                // asset in the release's publish window is a "try again
+                // shortly", not a permanent fault.
+                match job_outcome {
+                    Err(message)
+                        if crate::update::is_release_not_ready(message.as_str()) =>
+                    {
+                        Err(t!(
+                            locale,
+                            "The new release is still being published on GitHub. Try again in a few minutes."
+                        )
+                        .into_owned())
+                    }
+                    other => other,
+                }
+            })
         });
         self.update_download_job = Some(job);
     }
@@ -587,6 +638,10 @@ impl AtlasApp {
         self.drain_power_events();
         self.drain_tray(ctx);
         self.consume_deep_links();
+        // Release HTTP-loaded avatar textures queued by state changes.
+        if let Some(uri) = self.avatar_evict.take() {
+            ctx.forget_image(&uri);
+        }
         // A queued show request while a window already exists: bring it back.
         // With no viewport (hidden to tray) headless_frame returns
         // Headless::Show from the same flag instead.
@@ -660,19 +715,25 @@ impl AtlasApp {
         self.poll_update_jobs(ctx);
         self.enforce_session_binding();
 
-        // Periodic refresh while a session is live.
+        // Periodic refresh while a session is live. A cache only enters the
+        // rotation once its screen has actually been opened (last_updated is
+        // Some): an unvisited route never generates background traffic, so
+        // the app no longer fans out one request per screen on a timer.
         if self.session.is_some() && !self.power_paused {
             let interval = Duration::from_secs(self.settings.poll_interval_secs.max(15));
-            if self.dashboard.stale_for(interval) {
+            if self.dashboard.last_updated.is_some() && self.dashboard.stale_for(interval) {
                 self.load_dashboard();
             }
-            if self.products.stale_for(interval) && self.product_search.is_empty() {
+            if self.products.last_updated.is_some()
+                && self.products.stale_for(interval)
+                && self.product_search.is_empty()
+            {
                 self.load_products();
             }
-            if self.alerts.stale_for(interval) {
+            if self.alerts.last_updated.is_some() && self.alerts.stale_for(interval) {
                 self.load_alerts();
             }
-            if self.nav_badges.stale_for(interval) {
+            if self.nav_badges.last_updated.is_some() && self.nav_badges.stale_for(interval) {
                 self.load_nav_badges();
             }
         }
@@ -759,20 +820,16 @@ impl AtlasApp {
             self.agent.busy = false;
             match result {
                 Ok(reply) => {
-                    self.agent.messages.push(crate::state::ChatMessage {
-                        from_user: false,
-                        text: if reply.reply.is_empty() {
-                            "Aucune réponse de l'agent.".to_owned()
-                        } else {
-                            reply.reply
-                        },
-                    });
+                    let text = if reply.reply.is_empty() {
+                        "Aucune réponse de l'agent.".to_owned()
+                    } else {
+                        reply.reply
+                    };
+                    self.agent.push_message(false, text);
                 }
                 Err(error) => {
-                    self.agent.messages.push(crate::state::ChatMessage {
-                        from_user: false,
-                        text: format!("Erreur : {}", error.message),
-                    });
+                    self.agent
+                        .push_message(false, format!("Erreur : {}", error.message));
                 }
             }
         }
@@ -803,9 +860,23 @@ impl AtlasApp {
     /// Called by the binary when the system resumes from sleep.
     pub fn handle_resume(&mut self) {
         self.power_paused = false;
-        self.dashboard.last_updated = None;
-        self.products.last_updated = None;
-        self.alerts.last_updated = None;
+        // Reload every cache the user has actually opened. Clearing the
+        // timestamps instead would make the periodic rotation skip them,
+        // since it only refreshes caches whose last_updated is Some.
+        if self.session.is_some() {
+            if self.dashboard.last_updated.is_some() {
+                self.load_dashboard();
+            }
+            if self.products.last_updated.is_some() && self.product_search.is_empty() {
+                self.load_products();
+            }
+            if self.alerts.last_updated.is_some() {
+                self.load_alerts();
+            }
+            if self.nav_badges.last_updated.is_some() {
+                self.load_nav_badges();
+            }
+        }
     }
 
     /// Called by the binary when the system is about to sleep.

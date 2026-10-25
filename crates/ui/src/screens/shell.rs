@@ -39,6 +39,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Ctrl+F and Escape, all suppressed while a text field owns the keys.
     crate::shortcuts::handle_shortcuts(app, ctx);
 
+    // The title-bar bell is shell chrome and needs its counter before the
+    // user ever opens Notifications: one lazy request, then backoff-gated
+    // retries so a failing endpoint cannot fire once per frame.
+    app.ensure_nav_badges();
+
     // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
     // with an exact size reserves its width up front, so the rail can never
     // expand to the full window and starve the central column (the blank
@@ -49,12 +54,20 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .resizable(false)
         .show_separator_line(false)
         .frame(
+            // Same lifted chrome as the rail, with a single hairline on the
+            // bottom edge so the title bar reads as one piece with the rail
+            // instead of blending into the content background.
             egui::Frame::NONE
-                .fill(palette.window)
+                .fill(palette.panel)
                 .inner_margin(egui::Margin::same(0)),
         )
         .show(ui, |ui| {
             draw_titlebar(app, ui, ctx, palette);
+            let bottom = ui.min_rect().bottom();
+            let left = egui::pos2(ui.min_rect().left(), bottom);
+            let right = egui::pos2(ui.max_rect().right(), bottom);
+            ui.painter()
+                .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
         });
 
     let rail_frame = egui::Frame::NONE
@@ -79,6 +92,25 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .show(ui, |ui| {
             draw_content(app, ui, ctx, palette);
         });
+
+    // Global agent entry point, mirroring the web's floating Atlas Agent:
+    // one FAB on every shell screen except the agent itself (which carries
+    // its own new-conversation FAB). Hidden behind modal overlays.
+    if let Screen::Shell(route) = app.screen
+        && !matches!(route, Route::Agent)
+        && !app.modal_open()
+    {
+        let fab = widgets::fab(
+            ctx,
+            palette,
+            Icon::Bot,
+            "shell-agent-fab",
+            &t!(app.locale, "AI Agent"),
+        );
+        if fab.clicked() {
+            app.go(Route::Agent);
+        }
+    }
 
     // The palette sits above the panels but below a blocking confirmation,
     // which always owns the topmost layer.
@@ -129,8 +161,19 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            let avatar =
-                widgets::avatar_circle(ui, palette, &initial, 30.0, palette.surface_active);
+            let avatar_url = app
+                .session
+                .as_ref()
+                .map(|session| session.avatar_url.as_str());
+            let avatar = widgets::avatar(
+                ui,
+                avatar_url,
+                &initial,
+                30.0,
+                palette.surface_active,
+                palette.on_accent,
+                palette.outline,
+            );
             avatar_rect = avatar.rect;
             if avatar.clicked() {
                 app.profile_menu_open = !app.profile_menu_open;
@@ -150,9 +193,6 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
             }
             if bell.clicked() {
                 app.go(Route::Notifications);
-                if app.alerts.data.is_none() {
-                    app.load_alerts();
-                }
             }
 
             // While a release is downloading, surface a live progress pill
@@ -381,12 +421,14 @@ fn draw_profile_menu(
                                 session.display_name.chars().next().unwrap_or('A')
                             }
                             .to_string();
-                            widgets::avatar_circle(
+                            widgets::avatar(
                                 ui,
-                                palette,
+                                Some(session.avatar_url.as_str()),
                                 &initial,
                                 34.0,
                                 palette.surface_active,
+                                palette.on_accent,
+                                palette.outline,
                             );
                             ui.vertical(|ui| {
                                 ui.label(
@@ -532,10 +574,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         let is_active = active == Some(route);
         let response = rail_row(ui, palette, which, &label, is_active);
         if response.clicked() {
+            // go() centralises the first-visit data loading for every
+            // navigation entry point.
             app.go(route);
-            // Shared with the command palette so both entry points load the
-            // same first-visit data.
-            app.ensure_route_data(route);
         }
     }
 }

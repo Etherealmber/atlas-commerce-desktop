@@ -14,9 +14,8 @@ use crate::icons::Icon;
 use crate::state::{ApiKeyScope, AtlasApp, Screen, SettingsFocus};
 use crate::theme::Palette;
 use crate::widgets::{
-    avatar_circle, card, danger_button, error_banner, icon, info_banner, labelled_field,
-    page_title, pill, primary_button, secondary_button, section_header, segmented, setting_row,
-    switch_row,
+    avatar, card, danger_button, error_banner, icon, info_banner, labelled_field, page_title, pill,
+    primary_button, secondary_button, section_header, segmented, setting_row, switch_row,
 };
 use crate::{t, widgets};
 
@@ -136,7 +135,22 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            avatar_circle(ui, palette, &initial, 52.0, palette.surface_active);
+            // Preview the saved picture only: fetching every intermediate
+            // URL while typing would spam the HTTP loader (and arbitrary
+            // hosts). The new URL appears here once the profile is saved.
+            let avatar_url = app
+                .session
+                .as_ref()
+                .map(|session| session.avatar_url.as_str());
+            avatar(
+                ui,
+                avatar_url,
+                &initial,
+                52.0,
+                palette.surface_active,
+                palette.on_accent,
+                palette.outline,
+            );
             ui.vertical(|ui| {
                 ui.label(
                     RichText::new(
@@ -315,6 +329,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        let notifications_were_enabled = app.settings.notifications_enabled;
         if switch_row(
             ui,
             palette,
@@ -326,6 +341,15 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             &mut app.settings.notifications_enabled,
         ) {
             app.save_settings();
+            // Enabling toasts immediately needs alert data: start the first
+            // fetch now instead of waiting for the Notifications screen.
+            if app.settings.notifications_enabled
+                && !notifications_were_enabled
+                && app.alerts.data.is_none()
+                && !app.alerts.loading
+            {
+                app.load_alerts();
+            }
         }
 
         ui.add_space(10.0);
@@ -977,16 +1001,25 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             });
         } else if let Some(manifest) = app.update.last_manifest.clone() {
-            info_banner(
-                ui,
-                format!(
-                    "{} : v{} — {}",
-                    t!(app.locale, "Update available"),
-                    manifest.version,
-                    manifest.notes
-                ),
-                palette,
-            );
+            card(palette)
+                .inner_margin(egui::Margin::same(14))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        icon(ui, Icon::Download, palette.accent, 18.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "{} v{}",
+                                t!(app.locale, "Update available"),
+                                manifest.version
+                            ))
+                            .color(palette.text)
+                            .strong()
+                            .size(13.5),
+                        );
+                    });
+                    ui.add_space(8.0);
+                    crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
+                });
         } else if app.update.up_to_date_at.is_some() {
             ui.horizontal(|ui| {
                 icon(ui, Icon::CircleCheck, palette.accent, 18.0);

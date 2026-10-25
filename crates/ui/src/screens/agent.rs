@@ -171,10 +171,7 @@ fn send_message(app: &mut AtlasApp) {
         );
     }
     let thread_id = app.agent.thread_id.clone();
-    app.agent.messages.push(ChatMessage {
-        from_user: true,
-        text: text.clone(),
-    });
+    app.agent.push_message(true, text.clone());
     app.agent.draft.clear();
     app.agent.busy = true;
     app.agent.job = Some(

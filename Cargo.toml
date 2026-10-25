@@ -71,7 +71,9 @@ eframe = { version = "0.36.2", default-features = false, features = [
     "persistence",
 ] }
 egui = "0.36.2"
-egui_extras = { version = "0.36.2", features = ["image", "svg"] }
+# "http" lets the shared egui_extras loader fetch remote profile pictures
+# (avatar URLs) with its built-in byte cache; reqwest is already a dependency.
+egui_extras = { version = "0.36.2", features = ["image", "svg", "http"] }
 
 # fastframe — every crate on the same git tag, v0.14.1.
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.14.1" }

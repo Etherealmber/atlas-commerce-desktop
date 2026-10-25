@@ -214,6 +214,22 @@ pub struct AgentState {
     pub policy_retry_at: Option<Instant>,
 }
 
+impl AgentState {
+    /// Maximum messages kept in the local transcript; the worker-side thread
+    /// retains the full conversation regardless.
+    const MAX_TRANSCRIPT: usize = 500;
+
+    /// Appends a message and trims the oldest entries past the cap, so a
+    /// very long single conversation cannot grow memory without a bound.
+    pub fn push_message(&mut self, from_user: bool, text: String) {
+        self.messages.push(ChatMessage { from_user, text });
+        if self.messages.len() > Self::MAX_TRANSCRIPT {
+            let excess = self.messages.len() - Self::MAX_TRANSCRIPT;
+            self.messages.drain(0..excess);
+        }
+    }
+}
+
 /// Notifications seen during the last alerts poll, for native toasts.
 #[derive(Default)]
 pub struct NotificationState {
@@ -313,6 +329,10 @@ pub struct AtlasApp {
     pub screen: Screen,
     pub started_at: Instant,
     pub pending_deep_links: Vec<String>,
+    /// Avatar URI whose cached HTTP texture must be evicted via the egui
+    /// context (sign-out or profile-picture change). State cannot touch the
+    /// egui context itself, so the app loop drains this each frame.
+    pub avatar_evict: Option<String>,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -381,6 +401,9 @@ pub struct AtlasApp {
     pub invoices: Cache<Vec<Invoice>>,
     pub alerts: Cache<Vec<Alert>>,
     pub nav_badges: Cache<NavBadges>,
+    /// Backoff gate for the lazy title-bar badge fetch: set each time a
+    /// badge request starts while no data is present yet.
+    pub nav_badges_retry_at: Option<Instant>,
 
     // ── editors / dialogs ──
     pub product_editor: Option<ProductEditor>,
@@ -412,6 +435,10 @@ pub const NOTICE_TTL: Duration = Duration::from_secs(4);
 
 /// Wait between two agent-policy fetches after a failed attempt.
 pub const POLICY_RETRY_BACKOFF: Duration = Duration::from_secs(30);
+
+/// Wait before retrying the title-bar badge count after a failed fetch, so
+/// a persistently failing endpoint cannot spawn one request per frame.
+pub const NAV_BADGES_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 impl AtlasApp {
     /// Builds the app from already-loaded on-disk state.
@@ -465,6 +492,7 @@ impl AtlasApp {
             screen,
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
+            avatar_evict: None,
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             login: LoginState::default(),
@@ -511,6 +539,7 @@ impl AtlasApp {
             invoices: Cache::default(),
             alerts: Cache::default(),
             nav_badges: Cache::default(),
+            nav_badges_retry_at: None,
             product_editor: None,
             client_editor: None,
             vendor_editor: None,
@@ -618,11 +647,22 @@ impl AtlasApp {
             && current != route
         {
             self.nav_back.push(current);
+            // Bound history so a long-lived session cannot grow it without
+            // limit; the oldest entries fall off the back of the stack.
+            const MAX_HISTORY: usize = 32;
+            if self.nav_back.len() > MAX_HISTORY {
+                let excess = self.nav_back.len() - MAX_HISTORY;
+                self.nav_back.drain(0..excess);
+            }
             // A new branch of history invalidates the forward stack.
             self.nav_forward.clear();
             self.begin_route_transition();
         }
         self.screen = Screen::Shell(route);
+        // Centralised first-visit loading, so every navigation entry point
+        // (rail, palette, profile menu, deep links, FAB) gets the route's
+        // data without each call site having to remember it.
+        self.ensure_route_data(route);
     }
 
     /// Browser-style back. Returns false when no history is available.
@@ -635,6 +675,7 @@ impl AtlasApp {
         }
         self.begin_route_transition();
         self.screen = Screen::Shell(previous);
+        self.ensure_route_data(previous);
         true
     }
 
@@ -648,6 +689,7 @@ impl AtlasApp {
         }
         self.begin_route_transition();
         self.screen = Screen::Shell(next);
+        self.ensure_route_data(next);
         true
     }
 
@@ -678,6 +720,12 @@ impl AtlasApp {
     /// never drift apart.
     pub fn ensure_route_data(&mut self, route: Route) {
         match route {
+            // Products was preloaded by startup before lazy loading; keep
+            // its first-visit fetch here so the rail does not open an empty
+            // state. load_products applies the current search query itself.
+            Route::Products if self.products.data.is_none() && !self.products.loading => {
+                self.load_products()
+            }
             Route::Clients if self.clients.data.is_none() => self.load_clients(),
             Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
             Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
@@ -694,6 +742,25 @@ impl AtlasApp {
             }
             Route::Sales if self.invoices.data.is_none() => self.load_invoices(),
             Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
+            // Settings aggregates four independent caches; load each once,
+            // leaving the in-screen Retry action in charge of failed loads.
+            Route::Settings => {
+                if self.profile.data.is_none()
+                    && !self.profile.loading
+                    && self.profile.error.is_none()
+                {
+                    self.load_profile();
+                }
+                if self.devices.data.is_none() && !self.devices.loading {
+                    self.load_devices();
+                }
+                if self.api_keys.data.is_none() && !self.api_keys.loading {
+                    self.load_api_keys();
+                }
+                if self.assist.data.is_none() && !self.assist.loading {
+                    self.load_assist();
+                }
+            }
             _ => {}
         }
     }
@@ -804,7 +871,6 @@ impl AtlasApp {
         match target {
             PaletteTarget::Route(route) => {
                 self.go(route);
-                self.ensure_route_data(route);
                 false
             }
             PaletteTarget::Refresh => {
@@ -866,6 +932,11 @@ impl AtlasApp {
 
     pub fn sign_out(&mut self) {
         if let Some(session) = self.session.take() {
+            // Evict the user's cached avatar texture so a later account does
+            // not keep the previous picture resident in the texture cache.
+            if !session.avatar_url.trim().is_empty() {
+                self.avatar_evict = Some(session.avatar_url.clone());
+            }
             self.account_store.remove(&session);
             self.save_accounts();
         }
@@ -897,6 +968,7 @@ impl AtlasApp {
         self.invoices = Cache::default();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
+        self.nav_badges_retry_at = None;
         // A stale 401 on the devices cache would otherwise sign out the next
         // session on its first frame: every session-scoped cache resets here.
         self.devices = Cache::default();
