@@ -220,7 +220,11 @@ pub fn release_notes(ui: &mut egui::Ui, notes: &str, palette: &Palette, max_heig
                     ui.add_space(6.0);
                     continue;
                 }
-                if let Some(title) = line.strip_prefix('#') {
+                // A heading only when the run of '#' is followed by a space
+                // (or ends the line), so "#123 fix" stays ordinary text.
+                let hashes = line.len() - line.trim_start_matches('#').len();
+                let title = &line[hashes..];
+                if hashes > 0 && (title.is_empty() || title.starts_with(' ')) {
                     ui.label(
                         RichText::new(title.trim())
                             .color(palette.text)
@@ -234,7 +238,9 @@ pub fn release_notes(ui: &mut egui::Ui, notes: &str, palette: &Palette, max_heig
                     .or_else(|| line.strip_prefix("* "))
                     .or_else(|| line.strip_prefix('•'))
                 {
-                    ui.horizontal(|ui| {
+                    // Wrapped row: long commit-style bullets stay inside the
+                    // scroll area instead of overflowing past its right edge.
+                    ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         ui.label(RichText::new("•").color(palette.accent));
                         ui.label(

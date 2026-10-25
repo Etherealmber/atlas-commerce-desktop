@@ -401,6 +401,9 @@ pub struct AtlasApp {
     pub invoices: Cache<Vec<Invoice>>,
     pub alerts: Cache<Vec<Alert>>,
     pub nav_badges: Cache<NavBadges>,
+    /// Backoff gate for the lazy title-bar badge fetch: set each time a
+    /// badge request starts while no data is present yet.
+    pub nav_badges_retry_at: Option<Instant>,
 
     // ── editors / dialogs ──
     pub product_editor: Option<ProductEditor>,
@@ -432,6 +435,10 @@ pub const NOTICE_TTL: Duration = Duration::from_secs(4);
 
 /// Wait between two agent-policy fetches after a failed attempt.
 pub const POLICY_RETRY_BACKOFF: Duration = Duration::from_secs(30);
+
+/// Wait before retrying the title-bar badge count after a failed fetch, so
+/// a persistently failing endpoint cannot spawn one request per frame.
+pub const NAV_BADGES_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 impl AtlasApp {
     /// Builds the app from already-loaded on-disk state.
@@ -532,6 +539,7 @@ impl AtlasApp {
             invoices: Cache::default(),
             alerts: Cache::default(),
             nav_badges: Cache::default(),
+            nav_badges_retry_at: None,
             product_editor: None,
             client_editor: None,
             vendor_editor: None,
@@ -930,6 +938,7 @@ impl AtlasApp {
         self.invoices = Cache::default();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
+        self.nav_badges_retry_at = None;
         // A stale 401 on the devices cache would otherwise sign out the next
         // session on its first frame: every session-scoped cache resets here.
         self.devices = Cache::default();

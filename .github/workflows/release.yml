@@ -692,15 +692,18 @@ jobs:
         run: |
           set -euo pipefail
           out="dist/atlas-commerce-desktop-${RELEASE_TAG}-source.tar.gz"
-          # On a dispatch run the tag was just created through the API, so the
-          # canonical source archive is now reachable. Fall back to a local
-          # archive if the CDN lags.
+          # Prefer GitHub's canonical tag archive. If the tag was just
+          # created through the API and its archive has not propagated yet,
+          # archive the exact release commit locally — never the working
+          # tree, which holds uncommitted generated note files that do not
+          # belong in a source tarball.
           if ! curl --fail --location --retry 3 \
               "https://github.com/${RELEASE_REPO}/archive/refs/tags/${RELEASE_TAG}.tar.gz" \
               --output "$out"; then
-            echo "Téléchargement de l'archive du tag impossible, archive locale."
-            tar --exclude='.git' --exclude='target' --exclude='dist' \
-              -czf "$out" .
+            echo "Archive du tag indisponible, archive du commit de release."
+            git archive --format=tar.gz \
+              --output="$out" \
+              "${{ needs.prepare.outputs.bump_sha || github.sha }}"
           fi
       - name: Per-architecture setup aliases
         run: |

@@ -168,6 +168,25 @@ impl AtlasApp {
         self.nav_badges.start(job);
     }
 
+    /// Lazy fetch of the title-bar badge count. The first call starts a
+    /// request immediately; after a failure (`data` still `None`) retries are
+    /// rate-limited by [`crate::state::NAV_BADGES_RETRY_BACKOFF`] so a
+    /// persistently failing endpoint cannot trigger one request per frame.
+    pub fn ensure_nav_badges(&mut self) {
+        let backoff_open = self
+            .nav_badges_retry_at
+            .is_none_or(|at| Instant::now() >= at);
+        if self.session.is_some()
+            && self.nav_badges.data.is_none()
+            && !self.nav_badges.loading
+            && backoff_open
+        {
+            self.load_nav_badges();
+            self.nav_badges_retry_at =
+                Some(Instant::now() + crate::state::NAV_BADGES_RETRY_BACKOFF);
+        }
+    }
+
     pub fn load_devices(&mut self) {
         let Some(client) = self.client.clone() else {
             return;
@@ -835,9 +854,23 @@ impl AtlasApp {
     /// Called by the binary when the system resumes from sleep.
     pub fn handle_resume(&mut self) {
         self.power_paused = false;
-        self.dashboard.last_updated = None;
-        self.products.last_updated = None;
-        self.alerts.last_updated = None;
+        // Reload every cache the user has actually opened. Clearing the
+        // timestamps instead would make the periodic rotation skip them,
+        // since it only refreshes caches whose last_updated is Some.
+        if self.session.is_some() {
+            if self.dashboard.last_updated.is_some() {
+                self.load_dashboard();
+            }
+            if self.products.last_updated.is_some() && self.product_search.is_empty() {
+                self.load_products();
+            }
+            if self.alerts.last_updated.is_some() {
+                self.load_alerts();
+            }
+            if self.nav_badges.last_updated.is_some() {
+                self.load_nav_badges();
+            }
+        }
     }
 
     /// Called by the binary when the system is about to sleep.

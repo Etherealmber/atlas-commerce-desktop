@@ -40,10 +40,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     crate::shortcuts::handle_shortcuts(app, ctx);
 
     // The title-bar bell is shell chrome and needs its counter before the
-    // user ever opens Notifications: one lazy, non-repeating request.
-    if app.session.is_some() && app.nav_badges.data.is_none() && !app.nav_badges.loading {
-        app.load_nav_badges();
-    }
+    // user ever opens Notifications: one lazy request, then backoff-gated
+    // retries so a failing endpoint cannot fire once per frame.
+    app.ensure_nav_badges();
 
     // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
     // with an exact size reserves its width up front, so the rail can never

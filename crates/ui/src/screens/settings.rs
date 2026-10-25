@@ -135,15 +135,13 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            // Prefer the form's edited URL, then the live session value, so
-            // the preview updates as soon as the user types a new URL.
-            let avatar_url = if app.profile_form.avatar_url.trim().is_empty() {
-                app.session
-                    .as_ref()
-                    .map(|session| session.avatar_url.as_str())
-            } else {
-                Some(app.profile_form.avatar_url.as_str())
-            };
+            // Preview the saved picture only: fetching every intermediate
+            // URL while typing would spam the HTTP loader (and arbitrary
+            // hosts). The new URL appears here once the profile is saved.
+            let avatar_url = app
+                .session
+                .as_ref()
+                .map(|session| session.avatar_url.as_str());
             avatar(
                 ui,
                 avatar_url,
