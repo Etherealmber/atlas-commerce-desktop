@@ -102,17 +102,35 @@ pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, 
     else {
         return Ok(None);
     };
-    let manifest: UpdateManifest = client
+    let manifest_response = client
         .get(&asset.browser_download_url)
         .send()
         .await
-        .map_err(|error| format!("Téléchargement du manifeste impossible : {error}"))?
+        .map_err(|error| format!("Téléchargement du manifeste impossible : {error}"))?;
+    // A freshly created release is visible through the API before every asset
+    // has propagated (the workflow creates the release, then uploads files).
+    // Treat that window as "no update yet", not as an error the user sees.
+    if manifest_response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let manifest: UpdateManifest = manifest_response
         .error_for_status()
         .map_err(|error| format!("GitHub a répondu {error}"))?
         .json()
         .await
         .map_err(|error| format!("Manifeste illisible : {error}"))?;
     Ok(Some(manifest))
+}
+
+/// Whether a fastframe error describes a release whose assets are not
+/// downloadable yet. fastframe reports a missing/duplicated asset as
+/// "The release has no unique <name> download"; a not-yet-propagated file
+/// comes back as an HTTP 404 from the release asset host. Both happen in the
+/// publish window between release creation and the asset upload step.
+#[must_use]
+pub fn is_release_not_ready(error: &str) -> bool {
+    let lower = error.to_lowercase();
+    lower.contains("404") || lower.contains("no unique")
 }
 
 /// Builds the blocking fastframe updater on the system-proxy-aware client.

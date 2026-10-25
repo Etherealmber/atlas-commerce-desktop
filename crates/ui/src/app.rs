@@ -457,9 +457,24 @@ impl AtlasApp {
                     .handoff(prepared, Vec::new())
                     .map_err(|error| error.to_string())?;
                 Ok(())
-            })
-            .await
-            .map_err(|error| error.to_string())?
+            }
+        })
+        .await
+        .map_err(|error| error.to_string())
+        .and_then(|job_outcome| {
+            // Classify after the blocking work unwinds: a 404 / missing asset
+            // in the release's publish window is a "try again shortly", not a
+            // permanent fault.
+            match job_outcome {
+                Err(message) if crate::update::is_release_not_ready(&message) => {
+                    Err(t!(
+                        locale,
+                        "The new release is still being published on GitHub. Try again in a few minutes."
+                    )
+                    .into_owned())
+                }
+                other => other,
+            }
         });
         self.update_download_job = Some(job);
     }

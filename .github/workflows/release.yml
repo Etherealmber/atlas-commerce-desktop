@@ -672,7 +672,7 @@ jobs:
       # release-signing environment. It creates the tag through the API on
       # the current commit, and re-runs update the same release instead of
       # failing on an existing tag.
-      - name: Create the GitHub Release (tag via API, no git push, always latest)
+      - name: Create the GitHub Release as a draft (tag via API, no git push)
         id: release
         uses: softprops/action-gh-release@v2
         with:
@@ -683,7 +683,11 @@ jobs:
           target_commitish: ${{ needs.prepare.outputs.bump_sha || github.sha }}
           name: Atlas Commerce Desktop ${{ needs.prepare.outputs.tag }}
           body_path: RELEASE_NOTES.md
-          make_latest: 'true'
+          # Draft while assets upload: a published release with missing files
+          # is what made the in-app updater answer 404 during the publish
+          # window. It is promoted to public (and latest) only after every
+          # asset and checksum is attached, in the Publish step below.
+          draft: true
       - name: Source archive
         run: |
           set -euo pipefail
@@ -769,6 +773,15 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files: dist/*
           fail_on_unmatched_files: true
+          # Stay a draft: publishing happens only after this succeeds.
+          draft: true
+      - name: Publish the release (only now is it visible to updaters)
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ needs.prepare.outputs.repo }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          draft: false
+          make_latest: 'true'
       - name: Job summary
         if: always()
         run: |
