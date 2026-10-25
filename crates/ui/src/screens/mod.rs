@@ -104,8 +104,7 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
                         });
                 } else {
                     // The fork's allocate_exact_size returns (Rect, Response).
-                    let (content_rect, _) =
-                        ui.allocate_exact_size(galley.size(), Sense::hover());
+                    let (content_rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
                     ui.painter().galley(content_rect.min, galley, palette.text);
                 }
             });
