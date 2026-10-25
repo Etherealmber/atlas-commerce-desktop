@@ -83,7 +83,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         if app.delivery_notes.loading && app.delivery_notes.data.is_none() {
-            super::spinner(ui, palette);
+            super::centered_spinner(ui, palette);
             return;
         }
         let notes = app.delivery_notes.data.clone().unwrap_or_default();

@@ -136,7 +136,7 @@ fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(10.0);
 
     if app.vendors.loading && app.vendors.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
     let vendors = app.vendors.data.clone().unwrap_or_default();

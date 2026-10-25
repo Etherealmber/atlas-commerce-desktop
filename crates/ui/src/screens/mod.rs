@@ -35,6 +35,17 @@ pub fn spinner(ui: &mut Ui, palette: &Palette) {
     });
 }
 
+/// A horizontally-centered loading block for page and card loading states,
+/// so a fetch no longer renders as three dots stuck to the top-left corner.
+/// The inline [`spinner`] stays available for chat-style flows.
+pub fn centered_spinner(ui: &mut Ui, palette: &Palette) {
+    ui.vertical_centered(|ui| {
+        ui.add_space(28.0);
+        spinner(ui, palette);
+        ui.add_space(28.0);
+    });
+}
+
 /// Renders the transient notice stack (bottom-left toasts).
 pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     if app.notices.is_empty() {

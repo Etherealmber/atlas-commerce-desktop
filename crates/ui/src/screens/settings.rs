@@ -113,7 +113,7 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
 
         if app.profile.loading && app.profile.data.is_none() {
-            super::spinner(ui, palette);
+            super::centered_spinner(ui, palette);
             return;
         }
         if let Some(error) = app.profile.error.clone() {
@@ -459,7 +459,7 @@ fn assist_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         if app.assist.loading && app.assist.data.is_none() {
-            super::spinner(ui, palette);
+            super::centered_spinner(ui, palette);
             return;
         }
         if let Some(error) = app.assist.error.clone() {
@@ -534,7 +534,7 @@ fn integrations_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         ui.add_space(10.0);
 
         if app.api_keys.loading && app.api_keys.data.is_none() {
-            super::spinner(ui, palette);
+            super::centered_spinner(ui, palette);
         } else if let Some(error) = app.api_keys.error.clone() {
             error_banner(ui, &error, palette);
             ui.add_space(8.0);
@@ -907,7 +907,7 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(6.0);
 
         if app.devices.loading && app.devices.data.is_none() {
-            super::spinner(ui, palette);
+            super::centered_spinner(ui, palette);
         } else if let Some(devices) = app.devices.data.clone() {
             if devices.is_empty() {
                 widgets::empty_state(

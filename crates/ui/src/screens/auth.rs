@@ -772,7 +772,7 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(12.0);
 
         if app.qr.qr_url.is_empty() {
-            crate::screens::spinner(ui, palette);
+            crate::screens::centered_spinner(ui, palette);
         } else {
             qr_image(ui, &app.qr.qr_url, palette);
         }

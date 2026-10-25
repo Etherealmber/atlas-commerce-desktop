@@ -118,7 +118,7 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     );
     ui.add_space(8.0);
     if app.invoices.loading && app.invoices.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
     if let Some(error) = &app.invoices.error {
