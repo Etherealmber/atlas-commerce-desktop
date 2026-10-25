@@ -221,7 +221,7 @@ fn categories_tab(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
     if app.categories.loading && app.categories.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
     let categories = app.categories.data.clone().unwrap_or_default();
@@ -273,7 +273,7 @@ fn units_tab(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
     if app.units.loading && app.units.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
     let units = app.units.data.clone().unwrap_or_default();

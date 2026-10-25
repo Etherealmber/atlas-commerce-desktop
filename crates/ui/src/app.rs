@@ -990,7 +990,17 @@ impl EframeShell {
     pub fn new(lease: Lease<AtlasApp>, ctx: &Context) -> Self {
         // `take` attaches the shell waker to this context itself.
         let mut held = lease.take(ctx);
+        // Hiding to the tray destroys the eframe window while the app state
+        // survives; showing it again builds a brand-new egui Context with
+        // stock styles. The retained cache would otherwise match the
+        // palette and make the first frame skip theme::apply on that fresh
+        // context, so every new context starts with an empty cache.
+        held.applied_palette = None;
         crate::theme::install_fonts_and_icons(ctx);
+        // Make egui's own preference follow the app setting before the first
+        // palette read, so a forced Light/Dark mode resolves correctly even
+        // when the OS reports the opposite appearance.
+        held.sync_egui_theme(ctx);
         // eframe asks for the clear colour before the first `logic` run, so
         // seed it at construction (the CreationContext already knows the
         // system theme) to avoid the dark fallback on even the first frame.
@@ -1038,14 +1048,19 @@ impl eframe::App for EframeShell {
                 });
             }
         }
+        // Keep egui's preference and the native window chrome aligned with
+        // the app setting before resolving the palette for this frame.
+        self.held.sync_egui_theme(ctx);
         self.held.scrolling.apply(ctx);
         let palette = self.held.palette(ctx);
         // Keep the framebuffer clear colour in sync, and rebuild the global
-        // style only when the theme actually flips instead of every frame.
+        // styles only when the palette actually changes instead of every
+        // frame. Comparing the whole palette also catches token edits, not
+        // just dark/light flips.
         self.held.last_clear_color = Some(palette.window.to_normalized_gamma_f32());
-        if self.held.theme_applied_dark != Some(palette.dark) {
+        if self.held.applied_palette != Some(palette) {
             crate::theme::apply(ctx, &palette);
-            self.held.theme_applied_dark = Some(palette.dark);
+            self.held.applied_palette = Some(palette);
         }
 
         self.held.poll_background(ctx);

@@ -314,9 +314,10 @@ pub struct AtlasApp {
     /// Last clear colour handed to eframe, so a light theme never flashes
     /// the hard-coded dark background on its first frames.
     pub last_clear_color: Option<[f32; 4]>,
-    /// Dark flag the global egui style was last built for; skips the
-    /// per-frame global-style rebuild (a flicker/recompute source).
-    pub theme_applied_dark: Option<bool>,
+    /// Palette the global egui styles were last built for; skips the
+    /// per-frame style rebuild while nothing changed (a flicker/recompute
+    /// source) and re-applies as soon as any token changes.
+    pub applied_palette: Option<Palette>,
 
     // ── persisted state ──
     pub settings: Settings,
@@ -555,13 +556,29 @@ impl AtlasApp {
             update_download_job: None,
             update_receipt: None,
             last_clear_color: None,
-            theme_applied_dark: None,
+            applied_palette: None,
             notices: Vec::new(),
             notices_expire_at: None,
         }
     }
 
     // ── palette ──────────────────────────────────────────────────────────
+
+    /// Pushes the app's theme choice into egui's own preference. Without
+    /// this, egui keeps its default "follow system" preference even when the
+    /// user forced Light or Dark: the native window chrome follows the OS,
+    /// and an OS appearance flip swaps egui's style slot to one the app
+    /// never styled — the whole interface briefly reverts to default egui
+    /// visuals. Cheap to call per frame; the viewport command is only sent
+    /// when the preference actually changes.
+    pub fn sync_egui_theme(&self, ctx: &Context) {
+        let preference = match self.settings.theme {
+            atlas_core::settings::ThemeMode::Dark => egui::ThemePreference::Dark,
+            atlas_core::settings::ThemeMode::Light => egui::ThemePreference::Light,
+            atlas_core::settings::ThemeMode::System => egui::ThemePreference::System,
+        };
+        ctx.set_theme(preference);
+    }
 
     #[must_use]
     pub fn palette(&self, ctx: &Context) -> Palette {

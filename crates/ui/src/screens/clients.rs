@@ -162,7 +162,7 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(10.0);
 
     if app.clients.loading && app.clients.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
     let clients = app.clients.data.clone().unwrap_or_default();

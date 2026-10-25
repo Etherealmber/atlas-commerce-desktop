@@ -36,7 +36,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.dashboard.loading && app.dashboard.data.is_none() {
-        super::spinner(ui, palette);
+        super::centered_spinner(ui, palette);
         return;
     }
 

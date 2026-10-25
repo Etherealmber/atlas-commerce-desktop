@@ -35,6 +35,17 @@ pub fn spinner(ui: &mut Ui, palette: &Palette) {
     });
 }
 
+/// A horizontally-centered loading block for page and card loading states,
+/// so a fetch no longer renders as three dots stuck to the top-left corner.
+/// The inline [`spinner`] stays available for chat-style flows.
+pub fn centered_spinner(ui: &mut Ui, palette: &Palette) {
+    ui.vertical_centered(|ui| {
+        ui.add_space(28.0);
+        spinner(ui, palette);
+        ui.add_space(28.0);
+    });
+}
+
 /// Renders the transient notice stack (bottom-left toasts).
 pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     if app.notices.is_empty() {
@@ -49,28 +60,67 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     }
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let max_width = (screen.width() * 0.42).clamp(220.0, 420.0);
+    // A bottom-anchored toast must never grow past the window it lives in.
+    let max_height = (screen.height() - 32.0).max(80.0);
     let mut y = screen.bottom() - 16.0;
+    // Matches the theme's 9 px scrollbar plus a pixel of breathing room.
+    const SCROLLBAR_RESERVE: f32 = 10.0;
     let toasts: Vec<String> = app.notices.clone();
-    for toast in toasts.iter().rev() {
+    for (index, toast) in toasts.iter().rev().enumerate() {
         let frame = egui::Frame::NONE
             .fill(palette.overlay)
             .stroke(egui::Stroke::new(1.0, palette.outline))
             .corner_radius(10.0)
+            .shadow(egui::Shadow {
+                offset: [0, 4],
+                blur: 16,
+                spread: 0,
+                color: palette.shadow,
+            })
             .inner_margin(egui::Margin::symmetric(14, 9));
-        // Measure the toast first, then place it over the screen's
-        // bottom-left corner without touching the in-flow cursor.
-        let galley = ui.painter().layout_no_wrap(
+        // Measure the toast with the real wrap width first: a no-wrap
+        // galley made long messages overflow the fixed-height frame and get
+        // clipped. The same galley is painted back at the content origin so
+        // wrapping cannot reflow differently inside the frame.
+        let wrap_width = max_width - 28.0;
+        let galley = ui.painter().layout(
             toast.clone(),
             egui::FontId::proportional(13.0),
             palette.text,
+            wrap_width,
         );
-        let width = galley.size().x.min(max_width);
-        let size = egui::vec2(width + 28.0, galley.size().y + 18.0);
+        let inner_height = galley.size().y.min(max_height - 18.0);
+        let scrolls = galley.size().y > inner_height + 0.5;
+        // A scrolling toast spans the full allowed width; an ordinary one
+        // hugs its measured galley.
+        let frame_width = if scrolls {
+            wrap_width + 28.0
+        } else {
+            galley.size().x + 28.0
+        };
+        let size = egui::vec2(frame_width, inner_height + 18.0);
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
         crate::widgets::overlay_at(ui, rect, |ui| {
             frame.show(ui, |ui| {
-                ui.label(RichText::new(toast).color(palette.text).size(13.0));
+                if scrolls {
+                    // Edge case: an unusually long notice stays reachable
+                    // inside a bounded, wheel-scrollable toast. The salt
+                    // keeps sibling toasts from sharing scroll memory, and
+                    // the reserved width keeps text clear of the floating
+                    // scrollbar at the right edge.
+                    egui::ScrollArea::vertical()
+                        .id_salt(egui::Id::new(("notice-scroll", index)))
+                        .max_height(inner_height)
+                        .show(ui, |ui| {
+                            ui.set_width(wrap_width - SCROLLBAR_RESERVE);
+                            ui.label(RichText::new(toast).color(palette.text).size(13.0));
+                        });
+                } else {
+                    // The fork's allocate_exact_size returns (Rect, Response).
+                    let (content_rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+                    ui.painter().galley(content_rect.min, galley, palette.text);
+                }
             });
         });
         y -= 8.0;
