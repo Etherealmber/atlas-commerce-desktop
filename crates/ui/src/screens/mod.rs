@@ -90,7 +90,9 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         crate::widgets::overlay_at(ui, rect, |ui| {
             // The fork's allocate_exact_size returns (Rect, Response).
             let (content_rect, _) = frame
-                .show(ui, |ui| ui.allocate_exact_size(galley.size(), Sense::hover()))
+                .show(ui, |ui| {
+                    ui.allocate_exact_size(galley.size(), Sense::hover())
+                })
                 .inner;
             ui.painter().galley(content_rect.min, galley, palette.text);
         });
