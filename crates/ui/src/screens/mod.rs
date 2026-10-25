@@ -56,22 +56,31 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
             .fill(palette.overlay)
             .stroke(egui::Stroke::new(1.0, palette.outline))
             .corner_radius(10.0)
+            .shadow(egui::Shadow {
+                offset: [0, 4],
+                blur: 16,
+                spread: 0,
+                color: palette.shadow,
+            })
             .inner_margin(egui::Margin::symmetric(14, 9));
-        // Measure the toast first, then place it over the screen's
-        // bottom-left corner without touching the in-flow cursor.
-        let galley = ui.painter().layout_no_wrap(
+        // Measure the toast with the real wrap width first: a no-wrap
+        // galley made long messages overflow the fixed-height frame and get
+        // clipped. The same galley is painted back at the content origin so
+        // wrapping cannot reflow differently inside the frame.
+        let galley = ui.painter().layout(
             toast.clone(),
             egui::FontId::proportional(13.0),
             palette.text,
+            max_width - 28.0,
         );
-        let width = galley.size().x.min(max_width);
-        let size = egui::vec2(width + 28.0, galley.size().y + 18.0);
+        let size = egui::vec2(galley.size().x + 28.0, galley.size().y + 18.0);
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
         crate::widgets::overlay_at(ui, rect, |ui| {
-            frame.show(ui, |ui| {
-                ui.label(RichText::new(toast).color(palette.text).size(13.0));
-            });
+            let inner = frame
+                .show(ui, |ui| ui.allocate_exact_size(galley.size(), Sense::hover()))
+                .inner;
+            ui.painter().galley(inner.rect.min, galley, palette.text);
         });
         y -= 8.0;
     }
