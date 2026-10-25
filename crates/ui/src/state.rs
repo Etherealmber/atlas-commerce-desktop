@@ -835,7 +835,10 @@ impl AtlasApp {
             || self.category_editor.is_some()
             || self.unit_editor.is_some()
             || self.stock_dialog.is_some()
-            || self.quick_sale.is_some()
+            // The quick-sale draft is an inline screen form, not a modal:
+            // counting it here would block global shortcuts and hide the
+            // FAB for the whole Sales screen. Escape still clears it via
+            // dismiss_top_overlay's explicit handling below.
             || self.key_editor.is_some()
     }
 

@@ -310,12 +310,28 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 560.0));
+    let locale = app.locale;
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-editor-scrim")) {
-        app.product_editor = None;
+        // Same dirty-draft decision as the Cancel button and Escape: an
+        // incidental outside click must not silently lose unsaved input.
+        let dirty = app
+            .product_editor
+            .as_ref()
+            .is_some_and(ProductEditor::is_dirty);
+        if dirty {
+            app.confirm_dialog = Some(Confirm {
+                title: t!(locale, "Discard changes?").into_owned(),
+                body: t!(locale, "The product information has not been saved.").into_owned(),
+                confirm_label: t!(locale, "Discard").into_owned(),
+                danger: true,
+                action: ConfirmAction::DiscardEditor,
+            });
+        } else {
+            app.product_editor = None;
+        }
         return;
     }
 
-    let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
             ui.set_min_size(vec2(476.0, 0.0));
