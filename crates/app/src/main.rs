@@ -226,7 +226,12 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
         .with_app_id(app_id)
         .with_inner_size([1180.0, 760.0])
         .with_min_inner_size([960.0, 620.0])
-        .with_decorations(!custom_titlebar);
+        .with_decorations(!custom_titlebar)
+        // Born hidden: the OS would otherwise paint the default white
+        // window background for several frames before the first egui
+        // present (the "Windows 7" white flash). EframeShell flips this
+        // back on once the first fully styled frame has been rendered.
+        .with_visible(false);
     // Runtime window/taskbar icon (Linux window managers and any Windows
     // shell path that ignores the embedded resource). macOS takes its Dock
     // icon from the bundle, so setting one there would only flatten it.
