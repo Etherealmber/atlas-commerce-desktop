@@ -1019,6 +1019,11 @@ impl eframe::App for EframeShell {
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         if self.first_frame {
             self.first_frame = false;
+            // The viewport was born hidden (see native_options): reveal it
+            // only now that the first frame carries the real palette, fonts
+            // and screen, so no unstyled white window ever reaches the
+            // screen. The command applies after this frame presents.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             // macOS moves the status item onto the main window's AppKit loop.
             if let Some(tray) = self.held.tray.as_mut() {
                 tray.attach();
