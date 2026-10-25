@@ -63,8 +63,10 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     // A bottom-anchored toast must never grow past the window it lives in.
     let max_height = (screen.height() - 32.0).max(80.0);
     let mut y = screen.bottom() - 16.0;
+    // Matches the theme's 9 px scrollbar plus a pixel of breathing room.
+    const SCROLLBAR_RESERVE: f32 = 10.0;
     let toasts: Vec<String> = app.notices.clone();
-    for toast in toasts.iter().rev() {
+    for (index, toast) in toasts.iter().rev().enumerate() {
         let frame = egui::Frame::NONE
             .fill(palette.overlay)
             .stroke(egui::Stroke::new(1.0, palette.outline))
@@ -80,26 +82,38 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         // galley made long messages overflow the fixed-height frame and get
         // clipped. The same galley is painted back at the content origin so
         // wrapping cannot reflow differently inside the frame.
+        let wrap_width = max_width - 28.0;
         let galley = ui.painter().layout(
             toast.clone(),
             egui::FontId::proportional(13.0),
             palette.text,
-            max_width - 28.0,
+            wrap_width,
         );
         let inner_height = galley.size().y.min(max_height - 18.0);
         let scrolls = galley.size().y > inner_height + 0.5;
-        let size = egui::vec2(galley.size().x + 28.0, inner_height + 18.0);
+        // A scrolling toast spans the full allowed width; an ordinary one
+        // hugs its measured galley.
+        let frame_width = if scrolls {
+            wrap_width + 28.0
+        } else {
+            galley.size().x + 28.0
+        };
+        let size = egui::vec2(frame_width, inner_height + 18.0);
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
         crate::widgets::overlay_at(ui, rect, |ui| {
             frame.show(ui, |ui| {
                 if scrolls {
                     // Edge case: an unusually long notice stays reachable
-                    // inside a bounded, wheel-scrollable toast.
+                    // inside a bounded, wheel-scrollable toast. The salt
+                    // keeps sibling toasts from sharing scroll memory, and
+                    // the reserved width keeps text clear of the floating
+                    // scrollbar at the right edge.
                     egui::ScrollArea::vertical()
+                        .id_salt(egui::Id::new(("notice-scroll", index)))
                         .max_height(inner_height)
                         .show(ui, |ui| {
-                            ui.set_width(galley.size().x);
+                            ui.set_width(wrap_width - SCROLLBAR_RESERVE);
                             ui.label(RichText::new(toast).color(palette.text).size(13.0));
                         });
                 } else {
