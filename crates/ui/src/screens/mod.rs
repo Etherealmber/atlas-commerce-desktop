@@ -88,10 +88,11 @@ pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
         y -= size.y;
         let rect = egui::Rect::from_min_size(egui::pos2(screen.left() + 16.0, y), size);
         crate::widgets::overlay_at(ui, rect, |ui| {
-            let inner = frame
+            // The fork's allocate_exact_size returns (Rect, Response).
+            let (content_rect, _) = frame
                 .show(ui, |ui| ui.allocate_exact_size(galley.size(), Sense::hover()))
                 .inner;
-            ui.painter().galley(inner.rect.min, galley, palette.text);
+            ui.painter().galley(content_rect.min, galley, palette.text);
         });
         y -= 8.0;
     }
