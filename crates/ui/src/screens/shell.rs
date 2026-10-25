@@ -408,7 +408,7 @@ fn draw_profile_menu(
         .order(egui::Order::Foreground)
         .constrain(true)
         .show(ctx, |ui| {
-            widgets::card(palette)
+            widgets::pop_card(palette)
                 .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
                     ui.set_width(PROFILE_MENU_WIDTH - 20.0);

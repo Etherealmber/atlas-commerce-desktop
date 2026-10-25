@@ -118,6 +118,18 @@ pub fn card(palette: &Palette) -> egui::Frame {
         .inner_margin(egui::Margin::same(16))
 }
 
+/// A card that floats above the chrome (menus, popovers): same surface as
+/// [`card`] but with the short popup shadow that separates it from the
+/// content underneath.
+pub fn pop_card(palette: &Palette) -> egui::Frame {
+    card(palette).shadow(egui::Shadow {
+        offset: [0, 4],
+        blur: 16,
+        spread: 0,
+        color: palette.shadow,
+    })
+}
+
 /// A banner showing a verbatim worker error (or a local message).
 pub fn error_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palette) {
     egui::Frame::NONE
@@ -203,6 +215,12 @@ pub fn dialog_frame(palette: &Palette) -> egui::Frame {
         .fill(palette.overlay)
         .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(16.0)
+        .shadow(egui::Shadow {
+            offset: [0, 12],
+            blur: 40,
+            spread: 0,
+            color: palette.shadow,
+        })
         .inner_margin(egui::Margin::same(22))
 }
 
