@@ -990,6 +990,12 @@ impl EframeShell {
     pub fn new(lease: Lease<AtlasApp>, ctx: &Context) -> Self {
         // `take` attaches the shell waker to this context itself.
         let mut held = lease.take(ctx);
+        // Hiding to the tray destroys the eframe window while the app state
+        // survives; showing it again builds a brand-new egui Context with
+        // stock styles. The retained cache would otherwise match the
+        // palette and make the first frame skip theme::apply on that fresh
+        // context, so every new context starts with an empty cache.
+        held.applied_palette = None;
         crate::theme::install_fonts_and_icons(ctx);
         // Make egui's own preference follow the app setting before the first
         // palette read, so a forced Light/Dark mode resolves correctly even
