@@ -341,9 +341,7 @@ fn print_open_document(app: &mut AtlasApp) {
         app.open_client_situation(&client, true);
         return;
     }
-    app.notice(
-        t!(app.locale, "No document is open to print.").into_owned(),
-    );
+    app.notice(t!(app.locale, "No document is open to print.").into_owned());
 }
 
 /// Draws the centered palette overlay when open. Backdrop clicks cancel;

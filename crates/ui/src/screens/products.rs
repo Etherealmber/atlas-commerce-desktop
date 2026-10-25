@@ -310,9 +310,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 560.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("product-editor-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-editor-scrim")) {
         app.product_editor = None;
         return;
     }
@@ -513,9 +511,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(460.0, 360.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("stock-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("stock-scrim")) {
         app.stock_dialog = None;
         return;
     }

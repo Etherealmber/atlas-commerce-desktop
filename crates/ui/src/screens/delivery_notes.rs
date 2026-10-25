@@ -180,9 +180,7 @@ fn status_label(status: &str) -> &'static str {
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 420.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("delivery-note-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("delivery-note-scrim")) {
         app.delivery_note_editor = None;
         return;
     }

@@ -94,10 +94,7 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             let code_response = widgets::search_field(
                 ui,
                 &mut app.scan.code,
-                t!(
-                    app.locale,
-                    "Scan or type a barcode / SKU, then press Enter"
-                ),
+                t!(app.locale, "Scan or type a barcode / SKU, then press Enter"),
                 field_width,
             );
             if code_response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
@@ -209,9 +206,7 @@ fn draw_result(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 480.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("scan-quick-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("scan-quick-scrim")) {
         app.scan.quick = None;
         return;
     }

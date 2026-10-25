@@ -507,8 +507,10 @@ pub fn switch(
     // area so the toggle meets the minimum interactive-target rule.
     const TRACK_WIDTH: f32 = 42.0;
     const TRACK_HEIGHT: f32 = 24.0;
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(crate::theme::TARGET_MIN_HEIGHT, 44.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(crate::theme::TARGET_MIN_HEIGHT, 44.0),
+        Sense::click(),
+    );
     if response.clicked() {
         *value = !*value;
     }
@@ -525,8 +527,7 @@ pub fn switch(
     ui.painter()
         .rect_filled(track_rect, TRACK_HEIGHT / 2.0, track);
     let knob_radius = TRACK_HEIGHT / 2.0 - 3.0;
-    let x = track_rect.left() + knob_radius + 3.0
-        + t * (TRACK_WIDTH - 2.0 * (knob_radius + 3.0));
+    let x = track_rect.left() + knob_radius + 3.0 + t * (TRACK_WIDTH - 2.0 * (knob_radius + 3.0));
     let knob_center = egui::pos2(x, track_rect.center().y);
     ui.painter()
         .circle_filled(knob_center, knob_radius, egui::Color32::WHITE);

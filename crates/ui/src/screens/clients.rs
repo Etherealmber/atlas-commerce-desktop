@@ -389,9 +389,7 @@ fn detail_row(
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 620.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("client-editor-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
         app.client_editor = None;
         return;
     }
@@ -409,7 +407,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New client")
             };
-            ui.label(RichText::new(title).color(palette.text).font(crate::fonts::semibold(17.0)));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
 
             if let Some(editor) = app.client_editor.as_mut() {

@@ -373,16 +373,14 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        let reduced_motion = app.settings.reduced_motion;
         if switch_row(
             ui,
             palette,
             t!(app.locale, "Reduce animations"),
-            Some(&t!(
-                app.locale,
-                "Remove transition and entrance effects."
-            )),
+            Some(&t!(app.locale, "Remove transition and entrance effects.")),
             &mut app.settings.reduced_motion,
-            app.settings.reduced_motion,
+            reduced_motion,
         ) {
             app.save_settings();
         }
@@ -745,9 +743,7 @@ fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palet
     let width = 480.0;
     let height = 250.0;
     let rect = egui::Rect::from_center_size(screen.center(), egui::vec2(width, height));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("created-key-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("created-key-scrim")) {
         app.created_key = None;
         return;
     }

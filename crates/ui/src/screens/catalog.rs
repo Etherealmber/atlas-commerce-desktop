@@ -345,9 +345,7 @@ fn list_row(
 fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 380.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("category-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("category-scrim")) {
         app.category_editor = None;
         return;
     }
@@ -364,7 +362,11 @@ fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New category")
             };
-            ui.label(RichText::new(title).color(palette.text).font(crate::fonts::semibold(17.0)));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
             if let Some(editor) = app.category_editor.as_mut() {
                 labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
@@ -413,9 +415,7 @@ fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 360.0));
-    if widgets::scrim_clicked(
-        ui, screen, rect, egui::Id::new("unit-scrim")
-    ) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("unit-scrim")) {
         app.unit_editor = None;
         return;
     }
@@ -432,7 +432,11 @@ fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             } else {
                 t!(locale, "New unit")
             };
-            ui.label(RichText::new(title).color(palette.text).font(crate::fonts::semibold(17.0)));
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
             ui.add_space(10.0);
             if let Some(editor) = app.unit_editor.as_mut() {
                 labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);

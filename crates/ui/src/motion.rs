@@ -20,11 +20,7 @@ pub const PRESS_SCALE: f32 = 0.96;
 /// for reduced motion, mirroring the web reduced-motion media query.
 #[must_use]
 pub fn duration(seconds: f64, reduced_motion: bool) -> f32 {
-    if reduced_motion {
-        0.0
-    } else {
-        seconds as f32
-    }
+    if reduced_motion { 0.0 } else { seconds as f32 }
 }
 
 const X1: f32 = 0.2;

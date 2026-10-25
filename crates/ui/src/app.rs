@@ -1072,10 +1072,7 @@ impl eframe::App for EframeShell {
         // is selected, plain "Atlas Commerce" on the auth screens. Pushed
         // only when it changes, so no per-frame viewport commands.
         let window_title = match self.held.server_store.selected_url() {
-            Some(base) => format!(
-                "Atlas Commerce — {}",
-                atlas_core::servers::ServerStore::host(base)
-            ),
+            Some(base) => format!("Atlas Commerce — {}", atlas_core::ServerUrl::host(base)),
             None => "Atlas Commerce".to_owned(),
         };
         if self.held.applied_title.as_deref() != Some(window_title.as_str()) {
