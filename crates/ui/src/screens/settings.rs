@@ -991,16 +991,23 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             });
         } else if let Some(manifest) = app.update.last_manifest.clone() {
-            info_banner(
-                ui,
-                format!(
-                    "{} : v{} — {}",
-                    t!(app.locale, "Update available"),
-                    manifest.version,
-                    manifest.notes
-                ),
-                palette,
-            );
+            card(palette).inner_margin(egui::Margin::same(14)).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    icon(ui, Icon::Download, palette.accent, 18.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "{} v{}",
+                            t!(app.locale, "Update available"),
+                            manifest.version
+                        ))
+                        .color(palette.text)
+                        .strong()
+                        .size(13.5),
+                    );
+                });
+                ui.add_space(8.0);
+                crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
+            });
         } else if app.update.up_to_date_at.is_some() {
             ui.horizontal(|ui| {
                 icon(ui, Icon::CircleCheck, palette.accent, 18.0);

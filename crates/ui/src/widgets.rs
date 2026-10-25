@@ -206,6 +206,50 @@ pub fn dialog_frame(palette: &Palette) -> egui::Frame {
         .inner_margin(egui::Margin::same(22))
 }
 
+/// Renders in-app release notes line by line — bullets, headings and blank
+/// lines — inside a bounded scroll area, instead of one long wrapping label.
+pub fn release_notes(ui: &mut egui::Ui, notes: &str, palette: &Palette, max_height: f32) {
+    egui::ScrollArea::vertical()
+        .max_height(max_height)
+        .id_salt(("release-notes", notes.len()))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            for raw in notes.lines() {
+                let line = raw.trim();
+                if line.is_empty() {
+                    ui.add_space(6.0);
+                    continue;
+                }
+                if let Some(title) = line.strip_prefix('#') {
+                    ui.label(
+                        RichText::new(title.trim())
+                            .color(palette.text)
+                            .strong()
+                            .size(13.5),
+                    );
+                    continue;
+                }
+                if let Some(rest) = line
+                    .strip_prefix("- ")
+                    .or_else(|| line.strip_prefix("* "))
+                    .or_else(|| line.strip_prefix('•'))
+                {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.label(RichText::new("•").color(palette.accent));
+                        ui.label(
+                            RichText::new(rest.trim())
+                                .color(palette.secondary)
+                                .size(13.0),
+                        );
+                    });
+                } else {
+                    ui.label(RichText::new(line).color(palette.secondary).size(13.0));
+                }
+            }
+        });
+}
+
 /// An empty-state block (icon + title + hint).
 pub fn empty_state(
     ui: &mut egui::Ui,

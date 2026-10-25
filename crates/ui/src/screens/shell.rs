@@ -55,12 +55,22 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .resizable(false)
         .show_separator_line(false)
         .frame(
+            // Same lifted chrome as the rail, with a single hairline on the
+            // bottom edge so the title bar reads as one piece with the rail
+            // instead of blending into the content background.
             egui::Frame::NONE
-                .fill(palette.window)
+                .fill(palette.panel)
                 .inner_margin(egui::Margin::same(0)),
         )
         .show(ui, |ui| {
             draw_titlebar(app, ui, ctx, palette);
+            let bottom = ui.min_rect().bottom();
+            let left = egui::pos2(ui.min_rect().left(), bottom);
+            let right = egui::pos2(ui.max_rect().right(), bottom);
+            ui.painter().line_segment(
+                [left, right],
+                egui::Stroke::new(1.0, palette.outline),
+            );
         });
 
     let rail_frame = egui::Frame::NONE
@@ -85,6 +95,26 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .show(ui, |ui| {
             draw_content(app, ui, ctx, palette);
         });
+
+    // Global agent entry point, mirroring the web's floating Atlas Agent:
+    // one FAB on every shell screen except the agent itself (which carries
+    // its own new-conversation FAB). Hidden behind modal overlays.
+    if let Screen::Shell(route) = app.screen
+        && !matches!(route, Route::Agent)
+        && !app.modal_open()
+    {
+        let fab = widgets::fab(
+            ctx,
+            palette,
+            Icon::Bot,
+            "shell-agent-fab",
+            &t!(app.locale, "AI Agent"),
+        );
+        if fab.clicked() {
+            app.go(Route::Agent);
+            app.ensure_route_data(Route::Agent);
+        }
+    }
 
     // The palette sits above the panels but below a blocking confirmation,
     // which always owns the topmost layer.

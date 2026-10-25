@@ -35,15 +35,15 @@ pub struct Palette {
 
 impl Palette {
     /// The product default. Tokens mirror the web app's dark scheme:
-    /// `#111113` background, `#1c1c1f` paper, `#27272a` hover, `#2a2a2e`
-    /// lines, `#f4f4f5` ink, `#a1a1aa` muted and a white primary carrying
-    /// near-black (`#0a0a0a`) text.
+    /// `#111113` background, a subtly lifted `#17171a` chrome, `#1c1c1f`
+    /// paper, `#27272a` hover, `#2a2a2e` lines, `#f4f4f5` ink, `#a1a1aa`
+    /// muted and a white primary carrying near-black (`#0a0a0a`) text.
     #[must_use]
     pub fn dark() -> Self {
         Self {
             dark: true,
             window: hex(0x11, 0x11, 0x13),
-            panel: hex(0x11, 0x11, 0x13),
+            panel: hex(0x17, 0x17, 0x1a),
             surface: hex(0x1c, 0x1c, 0x1f),
             surface_hover: hex(0x27, 0x27, 0x2a),
             surface_active: hex(0x27, 0x27, 0x2a),
@@ -61,22 +61,22 @@ impl Palette {
         }
     }
 
-    /// The light counterpart, mirroring the web app's paper scheme:
-    /// `#f4f5f7` background, white paper, slate ink `#0f172a`, and the
+    /// The light counterpart, on the same neutral zinc scale as the dark
+    /// scheme: `#f4f4f5` background, white paper, zinc-900 ink, and the
     /// near-black `#0a0a0a` primary with `#fafafa` text.
     #[must_use]
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xf4, 0xf5, 0xf7),
+            window: hex(0xf4, 0xf4, 0xf5),
             panel: hex(0xff, 0xff, 0xff),
             surface: hex(0xff, 0xff, 0xff),
-            surface_hover: hex(0xf1, 0xf5, 0xf9),
-            surface_active: hex(0xf1, 0xf5, 0xf9),
-            outline: hex(0xe8, 0xea, 0xef),
-            text: hex(0x0f, 0x17, 0x2a),
-            secondary: hex(0x47, 0x55, 0x69),
-            dim: hex(0x64, 0x74, 0x8b),
+            surface_hover: hex(0xf4, 0xf4, 0xf5),
+            surface_active: hex(0xe4, 0xe4, 0xe7),
+            outline: hex(0xe4, 0xe4, 0xe7),
+            text: hex(0x18, 0x18, 0x1b),
+            secondary: hex(0x52, 0x52, 0x5b),
+            dim: hex(0x71, 0x71, 0x7a),
             accent: hex(0x0a, 0x0a, 0x0a),
             accent_hover: hex(0x17, 0x17, 0x17),
             on_accent: hex(0xfa, 0xfa, 0xfa),
@@ -216,6 +216,15 @@ fn apply_to_style(style: &mut Style, palette: &Palette) {
     style.spacing.item_spacing = egui::vec2(10.0, 10.0);
     style.spacing.button_padding = egui::vec2(14.0, 7.0);
     style.spacing.window_margin = egui::Margin::same(18);
+
+    // Native-style scrollbars: invisible until hovered, then a thin floating
+    // handle that expands under the cursor instead of a permanent gutter.
+    let scroll = &mut style.spacing.scroll;
+    scroll.floating = true;
+    scroll.bar_width = 9.0;
+    scroll.floating_width = 3.5;
+    scroll.floating_allocated_width = 0.0;
+    scroll.dormant_handle_opacity = 0.0;
 
     // Native-app behaviour: chrome text (buttons, labels, pills, menu rows,
     // table cells, headings) must never behave like selectable web page text
