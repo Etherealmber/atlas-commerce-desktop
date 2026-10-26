@@ -1,7 +1,22 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Atlas Commerce Desktop">
   <title>Atlas Commerce Desktop</title>
   <rect width="256" height="256" rx="56" fill="#0A0A0A"/>
-  <rect x="44" y="44" width="168" height="168" rx="38" fill="#FAFAFA"/>
-  <path d="M86 176 L128 76 L170 176 M100 146 H156" stroke="#0A0A0A" stroke-width="16"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#FAFAFA" stroke-width="8" stroke-linecap="round">
+    <line x1="188.05" y1="152.87" x2="225.93" y2="168.56"/>
+    <line x1="173.96" y1="173.96" x2="202.95" y2="202.95"/>
+    <line x1="152.87" y1="188.05" x2="168.56" y2="225.93"/>
+    <line x1="128.00" y1="193.00" x2="128.00" y2="234.00"/>
+    <line x1="103.13" y1="188.05" x2="87.44" y2="225.93"/>
+    <line x1="82.04" y1="173.96" x2="53.05" y2="202.95"/>
+    <line x1="67.95" y1="152.87" x2="30.07" y2="168.56"/>
+    <line x1="63.00" y1="128.00" x2="22.00" y2="128.00"/>
+    <line x1="67.95" y1="103.13" x2="30.07" y2="87.44"/>
+    <line x1="82.04" y1="82.04" x2="53.05" y2="53.05"/>
+    <line x1="103.13" y1="67.95" x2="87.44" y2="30.07"/>
+    <line x1="128.00" y1="63.00" x2="128.00" y2="22.00"/>
+    <line x1="152.87" y1="67.95" x2="168.56" y2="30.07"/>
+    <line x1="173.96" y1="82.04" x2="202.95" y2="53.05"/>
+    <line x1="188.05" y1="103.13" x2="225.93" y2="87.44"/>
+    <line x1="128.00" y1="128.00" x2="234.00" y2="128.00"/>
+  </g>
 </svg>

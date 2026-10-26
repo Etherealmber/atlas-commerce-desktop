@@ -10,9 +10,11 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 | Path | Purpose |
 |---|---|
 | `packaging/applications/atlas-commerce-desktop.desktop` | Freedesktop entry, registers the `atlascommerce://` MIME type and `StartupWMClass`. |
-| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon, the monochrome brand mark. |
+| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon: the white sunburst on the near-black rounded tile. |
 | `packaging/icons` + `packaging/macos/icon-1024.png` | Sources for the Windows `.ico` and the macOS `.icns`. |
-| `scripts/generate-icons.py` | Regenerates the SVG, 1024 px PNG and multi-size `.ico` from the shared monochrome design (Pillow). |
+| `crates/ui/assets/branding/*.mask` | In-app sunburst and wordmark coverage masks, tinted with the active theme. |
+| `packaging/branding/atlas-wordmark-{light,dark}.png` | Documentation wordmarks for the light and dark README themes. |
+| `scripts/generate-icons.py` | Regenerates the SVG, 1024 px PNG, multi-size `.ico` and wordmark PNGs from the committed coverage masks (Pillow). |
 | `packaging/windows/atlas-commerce-desktop.iss` | Universal Inno Setup per-user installer: one `setup.exe` carrying the x64 and ARM64 binaries, installs the matching one via `IsX64`/`IsARM64`, registers the URL protocol under `HKCU`. |
 | `packaging/windows/build-msi.py` | Pure WiX 5 per-architecture per-user MSI generator (no C custom actions); one `.msi` per architecture for managed deployments. |
 | `packaging/macos/Info.plist` | Bundle template with `__IDENTIFIER__`/`__EXECUTABLE__`/`__VERSION__`/`__BUILD__` placeholders and the `atlascommerce` URL scheme. |

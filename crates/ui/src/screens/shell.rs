@@ -185,23 +185,23 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 .session
                 .as_ref()
                 .map(|session| session.avatar_url.as_str());
+            // Fallback disk uses the primary accent so the initials stay
+            // readable in both themes: paper-white disk with near-black ink
+            // in dark mode, the inverse in light mode. The account menu the
+            // avatar opens already carries the Settings entry, so no
+            // separate gear button is shown here.
             let avatar = widgets::avatar(
                 ui,
                 avatar_url,
                 &initial,
                 crate::theme::TARGET_MIN_HEIGHT,
-                palette.surface_active,
+                palette.accent,
                 palette.on_accent,
                 palette.outline,
             );
             avatar_rect = avatar.rect;
             if avatar.clicked() {
                 app.profile_menu_open = !app.profile_menu_open;
-            }
-
-            if widgets::icon_circle_button(ui, palette, Icon::Settings, true).clicked() {
-                app.profile_menu_open = false;
-                app.go(Route::Settings);
             }
 
             let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
@@ -449,7 +449,7 @@ fn draw_profile_menu(
                                 Some(session.avatar_url.as_str()),
                                 &initial,
                                 34.0,
-                                palette.surface_active,
+                                palette.accent,
                                 palette.on_accent,
                                 palette.outline,
                             );
@@ -592,11 +592,25 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         _ => None,
     };
     // The Panel owns the fixed width and frame; contents just fill it.
-    ui.add_space(6.0);
+    // Brand lockup on top: the full sunburst + “Atlas” artwork while the
+    // rail is expanded, the square symbol alone when it collapses to 72 px.
+    if collapsed {
+        ui.vertical_centered(|ui| {
+            crate::branding::mark(ui, palette, 30.0);
+        });
+        ui.add_space(12.0);
+    } else {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add_space(6.0);
+            crate::branding::lockup(ui, palette, 22.0);
+        });
+        ui.add_space(16.0);
+    }
     for route in Route::ALL {
-        // The bell (notifications) and gear (settings) already live in the
-        // title bar; never duplicate them in the rail. The account card used
-        // to be pinned here as well — the avatar now owns that surface.
+        // Notifications live behind the title-bar bell, and Settings behind
+        // the avatar menu (with the account card the rail used to pin); the
+        // rail therefore carries content destinations only.
         if matches!(route, Route::Notifications | Route::Settings) {
             continue;
         }
@@ -726,7 +740,10 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
             crate::motion::standard,
         )
     };
-    egui::ScrollArea::both()
+    // Vertical-only scrolling: every screen wraps inside the viewport, so a
+    // horizontal scrollbar must never appear (content overflow would paint
+    // under the rail instead of reflowing).
+    egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.set_opacity(entrance);

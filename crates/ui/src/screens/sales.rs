@@ -75,11 +75,15 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal_top(|ui| {
         card(palette).show(ui, |ui| {
             ui.set_width((ui.available_width() * 0.55).max(300.0));
-            invoice_history(app, ui, palette);
+            ui.vertical(|ui| {
+                invoice_history(app, ui, palette);
+            });
         });
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            quick_sale_form(app, ui, palette);
+            ui.vertical(|ui| {
+                quick_sale_form(app, ui, palette);
+            });
         });
     });
 }

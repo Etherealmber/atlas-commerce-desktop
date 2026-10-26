@@ -119,69 +119,62 @@ pub fn window_icon() -> egui::IconData {
     }
 }
 
-/// Draws the monochrome brand mark: a rounded tile with the "A" carved out
-/// of its alpha channel. The tray framework repaints the shape white or
-/// black to match the panel (see fastframe-tray's `IconColour`), so only the
-/// silhouette matters — no brand colour lives in this icon.
+/// Draws the monochrome brand mark from its embedded coverage mask
+/// (`assets/branding/atlas-mark.mask`: `u32` width, `u32` height, then one
+/// coverage byte per pixel), area-averaged down to the requested size. The
+/// tray framework repaints the silhouette white or black to match the panel
+/// (see fastframe-tray's `IconColour`), so every pixel stays neutral
+/// `#fafafa` with only its alpha carrying the shape.
 #[must_use]
 pub fn draw_icon(size: usize) -> Vec<u8> {
+    let bytes = include_bytes!("../assets/branding/atlas-mark.mask");
+    let mask_width = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+    let mask_height = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+    let mask = &bytes[8..];
+    debug_assert_eq!(mask.len(), mask_width * mask_height);
+
     let mut rgba = vec![0u8; size * size * 4];
-    let scale = size as f32 / 256.0;
-    let half = 128.0 * scale;
-    let tile_radius = 40.0 * scale;
-    let stroke_half = 8.0 * scale;
-    // The A's three strokes, in 256-unit coordinates: two legs and the bar.
-    let strokes: [((f32, f32), (f32, f32)); 3] = [
-        ((86.0, 176.0), (128.0, 76.0)),
-        ((128.0, 76.0), (170.0, 176.0)),
-        ((100.0, 146.0), (156.0, 146.0)),
-    ];
     for y in 0..size {
+        // Map each destination pixel onto its source rectangle, so a 256 px
+        // mask stays anti-aliased at the tray's 32/36/64 px sizes.
+        let src_y0 = y * mask_height / size;
+        let src_y1 = ((y + 1) * mask_height / size).max(src_y0 + 1);
         for x in 0..size {
-            let px = x as f32 + 0.5;
-            let py = y as f32 + 0.5;
-            let dx = (px - half).abs();
-            let dy = (py - half).abs();
-            // Inside a rounded rectangle: inset the corner radius.
-            let corner = (dx - (half - tile_radius)).max(0.0);
-            let inside_tile = dx <= half
-                && dy <= half
-                && corner * corner + (dy - (half - tile_radius)).max(0.0).powi(2)
-                    <= tile_radius * tile_radius;
-            if !inside_tile {
-                continue;
+            let src_x0 = x * mask_width / size;
+            let src_x1 = ((x + 1) * mask_width / size).max(src_x0 + 1);
+            let mut total = 0u32;
+            let mut count = 0u32;
+            for src_y in src_y0..src_y1 {
+                let row = src_y * mask_width;
+                for src_x in src_x0..src_x1 {
+                    total += u32::from(mask[row + src_x]);
+                    count += 1;
+                }
             }
-            // Carve the A where the pixel sits on one of the strokes.
-            let carved = strokes.iter().any(|(start, end)| {
-                let start = (start.0 * scale, start.1 * scale);
-                let end = (end.0 * scale, end.1 * scale);
-                distance_to_segment(px, py, start, end) <= stroke_half
-            });
-            if !carved {
-                let index = (y * size + x) * 4;
-                // Neutral white: IconColour::White keeps it, Black inverts it.
-                rgba[index] = 0xfa;
-                rgba[index + 1] = 0xfa;
-                rgba[index + 2] = 0xfa;
-                rgba[index + 3] = 255;
-            }
+            let index = (y * size + x) * 4;
+            // Neutral white: IconColour::White keeps it, Black inverts it.
+            rgba[index] = 0xfa;
+            rgba[index + 1] = 0xfa;
+            rgba[index + 2] = 0xfa;
+            rgba[index + 3] = (total / count) as u8;
         }
     }
     rgba
 }
 
-/// Shortest distance from point (`px`, `py`) to the segment joining `start`
-/// and `end`.
-fn distance_to_segment(px: f32, py: f32, start: (f32, f32), end: (f32, f32)) -> f32 {
-    let vx = end.0 - start.0;
-    let vy = end.1 - start.1;
-    let length_sq = vx * vx + vy * vy;
-    let t = if length_sq == 0.0 {
-        0.0
-    } else {
-        (((px - start.0) * vx + (py - start.1) * vy) / length_sq).clamp(0.0, 1.0)
-    };
-    let closest_x = start.0 + t * vx;
-    let closest_y = start.1 + t * vy;
-    ((px - closest_x).powi(2) + (py - closest_y).powi(2)).sqrt()
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn draw_icon_keeps_the_tile_silhouette_only() {
+        let size = 64_usize;
+        let rgba = super::draw_icon(size);
+        assert_eq!(rgba.len(), size * size * 4);
+        // Outside the rounded tile the mask is fully transparent.
+        assert_eq!(rgba[3], 0);
+        // The sunburst carries opaque, neutral-white pixels, and every red
+        // channel is either the paper white or the zeroed transparent fill.
+        let pixels = rgba.as_chunks::<4>().0;
+        assert!(pixels.iter().any(|pixel| pixel[3] > 200));
+        assert!(pixels.iter().all(|pixel| pixel[0] == 0xfa || pixel[0] == 0));
+    }
 }
