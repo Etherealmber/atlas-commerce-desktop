@@ -11,7 +11,9 @@
 //! masks are embedded with `include_bytes!` and uploaded to the GPU once per
 //! egui context, cached in context temp memory.
 
-use egui::{Color32, ColorImage, Pos2, Rect, Sense, Shape, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{
+    Color32, ColorImage, Pos2, Rect, Sense, Shape, TextureHandle, TextureOptions, Ui, Vec2,
+};
 
 use crate::theme::Palette;
 
@@ -56,7 +58,11 @@ fn coverage_image(bytes: &[u8]) -> ColorImage {
 /// uploading it on first use.
 fn texture(ui: &Ui, wordmark: bool) -> TextureHandle {
     let bytes = if wordmark { WORDMARK_MASK } else { MARK_MASK };
-    let name = if wordmark { "atlas-wordmark" } else { "atlas-mark" };
+    let name = if wordmark {
+        "atlas-wordmark"
+    } else {
+        "atlas-mark"
+    };
     ui.ctx().data_mut(|data| {
         let cache = data.get_temp_mut_or_default::<BrandTextures>(egui::Id::new(CACHE_ID));
         let slot = which(cache, wordmark);
@@ -137,9 +143,12 @@ mod tests {
         assert!(opaque_pixels(&mark) < mark.size[0] * mark.size[1] / 2);
         assert!(opaque_pixels(&wordmark) > 1_000);
         // The sunburst is an open ring: its exact centre stays transparent.
-        assert_eq!(mark.pixels[128 * 256 + 128].a(), 0);
-        // Decoded pixels are white, tinted only at paint time.
-        let sample = mark.pixels.iter().find(|pixel| pixel.a() > 200).unwrap();
-        assert_eq!((sample.r(), sample.g(), sample.b()), (255, 255, 255));
+        let centre = mark.pixels[128 * 256 + 128];
+        assert_eq!(centre.to_tuple(), (0, 0, 0, 0));
+        // A fully opaque texel keeps its white source colour; the tint is
+        // applied later through the mesh vertex colour. Anti-aliased texels
+        // are premultiplied by Color32, so only the alpha-255 case is exact.
+        let opaque = mark.pixels.iter().find(|pixel| pixel.a() == 255).unwrap();
+        assert_eq!((opaque.r(), opaque.g(), opaque.b()), (255, 255, 255));
     }
 }

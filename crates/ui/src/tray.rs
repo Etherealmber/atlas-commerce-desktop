@@ -173,7 +173,8 @@ mod tests {
         assert_eq!(rgba[3], 0);
         // The sunburst carries opaque, neutral-white pixels, and every red
         // channel is either the paper white or the zeroed transparent fill.
-        assert!(rgba.chunks_exact(4).any(|pixel| pixel[3] > 200));
-        assert!(rgba.chunks_exact(4).all(|pixel| pixel[0] == 0xfa || pixel[0] == 0));
+        let pixels = rgba.as_chunks::<4>().0;
+        assert!(pixels.iter().any(|pixel| pixel[3] > 200));
+        assert!(pixels.iter().all(|pixel| pixel[0] == 0xfa || pixel[0] == 0));
     }
 }
