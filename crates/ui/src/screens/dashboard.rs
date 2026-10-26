@@ -58,18 +58,27 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_min_height(180.0);
         card(palette).show(ui, |ui| {
             ui.set_width((ui.available_width() * 0.58).max(280.0));
-            unpaid_card(app, ui, palette, &data);
+            // A frame inherits the parent row's horizontal layout; an
+            // explicit vertical child restores top-down stacking so labels
+            // and values never share the same row.
+            ui.vertical(|ui| {
+                unpaid_card(app, ui, palette, &data);
+            });
         });
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            monthly_card(app, ui, palette, &data);
+            ui.vertical(|ui| {
+                monthly_card(app, ui, palette, &data);
+            });
         });
     });
 
     ui.add_space(14.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        recent_invoices(app, ui, palette, &data);
+        ui.vertical(|ui| {
+            recent_invoices(app, ui, palette, &data);
+        });
     });
 }
 
@@ -135,33 +144,35 @@ fn metric_card(
     card(palette).show(ui, |ui| {
         ui.set_width(width);
         ui.set_min_height(92.0);
-        ui.horizontal(|ui| {
-            icon(
-                ui,
-                which,
-                if warn {
-                    palette.finance_warning
-                } else {
-                    palette.accent
-                },
-                20.0,
-            );
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                icon(
+                    ui,
+                    which,
+                    if warn {
+                        palette.finance_warning
+                    } else {
+                        palette.accent
+                    },
+                    20.0,
+                );
+                ui.label(
+                    RichText::new(label)
+                        .color(palette.secondary)
+                        .font(crate::fonts::medium(12.0)),
+                );
+            });
+            ui.add_space(8.0);
             ui.label(
-                RichText::new(label)
-                    .color(palette.secondary)
-                    .font(crate::fonts::medium(12.0)),
+                RichText::new(value)
+                    .color(if warn {
+                        palette.finance_warning
+                    } else {
+                        palette.text
+                    })
+                    .font(crate::fonts::mono_semibold(22.0)),
             );
         });
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new(value)
-                .color(if warn {
-                    palette.finance_warning
-                } else {
-                    palette.text
-                })
-                .font(crate::fonts::mono_semibold(22.0)),
-        );
     });
 }
 
