@@ -43,7 +43,11 @@ MARK_INSET = 22
 CENTER = (128.0, 128.0)
 OUTER_RADIUS = 106.0
 INNER_RADIUS = 65.0
-DASH_INNER_RADIUS = 17.0
+# The supplied artwork's 3 o'clock dash reaches the centre: its rounded cap
+# extends to about r = -4 (measured on the 252 px source). A line starting at
+# r = 0 with the 4 px half-stroke cap reproduces that, so the SVG matches the
+# committed coverage mask pixel-for-pixel at the centre.
+DASH_INNER_RADIUS = 0.0
 STROKE_WIDTH = 8
 BRAND = "#0A0A0A"
 PAPER = "#FAFAFA"
