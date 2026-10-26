@@ -142,9 +142,11 @@ mod tests {
         assert!(opaque_pixels(&mark) > 1_000);
         assert!(opaque_pixels(&mark) < mark.size[0] * mark.size[1] / 2);
         assert!(opaque_pixels(&wordmark) > 1_000);
-        // The sunburst is an open ring: its exact centre stays transparent.
-        let centre = mark.pixels[128 * 256 + 128];
-        assert_eq!(centre.to_tuple(), (0, 0, 0, 0));
+        // The sunburst is an open ring: a point well inside its inner
+        // radius stays transparent. The exact centre is not asserted: the
+        // 3 o'clock dash's rounded cap reaches close to it in the artwork.
+        let interior = mark.pixels[128 * 256 + 114];
+        assert_eq!(interior.to_tuple(), (0, 0, 0, 0));
         // A fully opaque texel keeps its white source colour; the tint is
         // applied later through the mesh vertex colour. Anti-aliased texels
         // are premultiplied by Color32, so only the alpha-255 case is exact.
