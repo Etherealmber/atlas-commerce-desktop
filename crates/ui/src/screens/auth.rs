@@ -973,7 +973,6 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
     let width = code.width();
     // Four quiet-zone modules are required around the code for scanners.
     let size = 176.0_f32;
-    let module = size / (width + 8) as f32;
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 10.0, Color32::WHITE);
@@ -981,16 +980,22 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
         if matches!(color, qrcode::Color::Dark) {
             let column = index % width;
             let row = index / width;
-            let module_rect = egui::Rect::from_min_size(
-                egui::pos2(
-                    rect.min.x + (column + 4) as f32 * module,
-                    rect.min.y + (row + 4) as f32 * module,
-                ),
-                egui::vec2(module, module),
-            );
+            let module_rect = qr_module_rect(rect, width, column, row);
             painter.rect_filled(module_rect, 0.0, Color32::BLACK);
         }
     }
+}
+
+/// Positions each module with the QR-standard four-module quiet zone.
+fn qr_module_rect(rect: egui::Rect, width: usize, column: usize, row: usize) -> egui::Rect {
+    let module = rect.width() / (width + 8) as f32;
+    egui::Rect::from_min_size(
+        egui::pos2(
+            rect.min.x + (column + 4) as f32 * module,
+            rect.min.y + (row + 4) as f32 * module,
+        ),
+        egui::vec2(module, module),
+    )
 }
 
 // ── Job starters ────────────────────────────────────────────────────────────
@@ -1309,5 +1314,21 @@ mod server_verification_tests {
         assert!(!probe_matches_current_url("https://other.example", &report));
         report.ok = false;
         assert!(!probe_matches_current_url("stock.afmarbre.com", &report));
+    }
+}
+
+#[cfg(test)]
+mod qr_rendering_tests {
+    use super::qr_module_rect;
+
+    #[test]
+    fn qr_preserves_four_modules_of_quiet_zone() {
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(290.0, 290.0));
+        let first = qr_module_rect(rect, 21, 0, 0);
+        let last = qr_module_rect(rect, 21, 20, 20);
+        assert_eq!(first.left() - rect.left(), 40.0);
+        assert_eq!(first.top() - rect.top(), 40.0);
+        assert_eq!(rect.right() - last.right(), 40.0);
+        assert_eq!(rect.bottom() - last.bottom(), 40.0);
     }
 }
