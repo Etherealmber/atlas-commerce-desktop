@@ -173,9 +173,7 @@ fn main() -> eframe::Result<()> {
     // Existing sessions are deliberately not restored into an unlocked UI.
     // The guard survives a tray close or crash even if token cleanup is late.
     let require_password = session.is_some() || paths.auth_guard_file().exists();
-    if require_password
-        && let Err(error) = std::fs::write(paths.auth_guard_file(), b"1")
-    {
+    if require_password && let Err(error) = std::fs::write(paths.auth_guard_file(), b"1") {
         log::warn!("could not persist authentication guard: {error}");
     }
     let mut app = AtlasApp::new(

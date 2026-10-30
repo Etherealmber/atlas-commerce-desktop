@@ -273,7 +273,10 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                     if primary_button(
                                                         ui,
                                                         if selected
-                                                            && app.server_form.verified_selected.as_deref()
+                                                            && app
+                                                                .server_form
+                                                                .verified_selected
+                                                                .as_deref()
                                                                 == Some(entry.url.as_str())
                                                         {
                                                             t!(app.locale, "Selected")
