@@ -15,10 +15,10 @@ use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
-/// Native focus metadata can be unknown during window creation; only an
-/// explicit loss of focus, minimization, or close is a lock event.
-fn should_lock(focused: Option<bool>, minimized: Option<bool>, closing: bool) -> bool {
-    focused == Some(false) || minimized == Some(true) || closing
+/// Fall back to egui's raw input focus when the native viewport does not
+/// report its focus state. Unknown minimized state must not mask focus loss.
+fn should_lock(focused: bool, minimized: Option<bool>, closing: bool) -> bool {
+    !focused || minimized == Some(true) || closing
 }
 
 impl AtlasApp {
@@ -1115,7 +1115,7 @@ impl eframe::App for EframeShell {
         let lock = ctx.input(|input| {
             let viewport = input.viewport();
             should_lock(
-                viewport.focused,
+                viewport.focused.unwrap_or(input.focused),
                 viewport.minimized,
                 viewport.close_requested(),
             )
@@ -1168,10 +1168,10 @@ mod security_tests {
 
     #[test]
     fn explicit_focus_loss_minimize_and_close_lock_the_session() {
-        assert!(should_lock(Some(false), Some(false), false));
-        assert!(should_lock(Some(true), Some(true), false));
-        assert!(should_lock(Some(true), Some(false), true));
-        assert!(!should_lock(Some(true), Some(false), false));
-        assert!(!should_lock(None, None, false));
+        assert!(should_lock(false, Some(false), false));
+        assert!(should_lock(true, Some(true), false));
+        assert!(should_lock(true, Some(false), true));
+        assert!(!should_lock(true, Some(false), false));
+        assert!(should_lock(false, None, false));
     }
 }
