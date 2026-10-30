@@ -65,6 +65,11 @@ impl AtlasApp {
             avatar_url,
             token,
         };
+        // A password login and a QR approval can race. Once either succeeds,
+        // discard all other pending authentication jobs and their secrets so
+        // a late completion cannot replace the active account.
+        self.login = Default::default();
+        self.qr = Default::default();
         self.session = Some(record.clone());
         self.account_store.upsert(&record);
         self.save_session();
