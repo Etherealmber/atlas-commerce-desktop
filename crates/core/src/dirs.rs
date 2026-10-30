@@ -85,6 +85,13 @@ impl AppPaths {
         self.dirs.state.join("device.json")
     }
 
+    /// Durable indication that this installation has held an authenticated
+    /// session. It prevents an old token from bypassing the next login.
+    #[must_use]
+    pub fn auth_guard_file(&self) -> PathBuf {
+        self.dirs.state.join("auth-required")
+    }
+
     #[must_use]
     pub fn session_file(&self) -> PathBuf {
         self.dirs.state.join("session.json")

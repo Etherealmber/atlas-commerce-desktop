@@ -1105,3 +1105,36 @@ msgstr "Ouvrir le journal de la session précédente"
 
 msgid "The new release is still being published on GitHub. Try again in a few minutes."
 msgstr "La nouvelle version est encore en cours de publication sur GitHub. Réessayez dans quelques minutes."
+
+msgid "Overview"
+msgstr "Vue d'ensemble"
+
+msgid "Customer relations"
+msgstr "Relation client"
+
+msgid "Team"
+msgstr "Équipe"
+
+msgid "Purchases"
+msgstr "Achats"
+
+msgid "Finance"
+msgstr "Finance"
+
+msgid "Assistant"
+msgstr "Assistant"
+
+msgid "Could not secure the session on this device."
+msgstr "Impossible de sécuriser la session sur cet appareil."
+
+msgid "Enter your password to unlock this workspace."
+msgstr "Saisissez votre mot de passe pour déverrouiller cet espace de travail."
+
+msgid "Sign in with a QR code"
+msgstr "Connexion avec un QR"
+
+msgid "Could not create a QR code. Try again."
+msgstr "Impossible de créer le code QR. Réessayez."
+
+msgid "Hide password"
+msgstr "Masquer le mot de passe"
