@@ -1135,3 +1135,6 @@ msgstr "Connexion avec un QR"
 
 msgid "Could not create a QR code. Try again."
 msgstr "Impossible de créer le code QR. Réessayez."
+
+msgid "Hide password"
+msgstr "Masquer le mot de passe"

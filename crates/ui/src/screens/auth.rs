@@ -774,34 +774,41 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .color(palette.secondary)
                     .size(12.5),
             );
-            ui.horizontal(|ui| {
-                let edit = egui::TextEdit::singleline(&mut app.login.password)
-                    .password(!app.login.show_password)
-                    .margin(egui::Margin::symmetric(14, 8))
-                    .clip_text(true);
-                ui.add_sized(
-                    [
-                        ui.available_width() - crate::theme::TARGET_MIN_HEIGHT - 8.0,
-                        crate::theme::TARGET_MIN_HEIGHT,
-                    ],
-                    edit,
-                );
-                let eye = if app.login.show_password {
-                    Icon::EyeOff
-                } else {
-                    Icon::Eye
-                };
+            let edit = egui::TextEdit::singleline(&mut app.login.password)
+                .password(!app.login.show_password)
+                .margin(egui::Margin {
+                    left: 14,
+                    right: 54,
+                    top: 8,
+                    bottom: 8,
+                })
+                .clip_text(true);
+            let response = ui.add_sized(
+                [ui.available_width(), crate::theme::TARGET_MIN_HEIGHT],
+                edit,
+            );
+            let eye = if app.login.show_password {
+                Icon::EyeOff
+            } else {
+                Icon::Eye
+            };
+            let toggle = egui::Rect::from_min_size(
+                egui::pos2(response.rect.right() - TARGET, response.rect.top()),
+                egui::vec2(TARGET, TARGET),
+            );
+            crate::widgets::overlay_at(ui, toggle, |ui| {
                 if ui
-                    .add(
+                    .add_sized(
+                        [TARGET, TARGET],
                         egui::Button::new(eye.image(palette.secondary, 17.0))
-                            .fill(palette.surface)
-                            .min_size(egui::vec2(
-                                crate::theme::TARGET_MIN_HEIGHT,
-                                crate::theme::TARGET_MIN_HEIGHT,
-                            ))
-                            .corner_radius(RADIUS),
+                            .fill(Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::NONE),
                     )
-                    .on_hover_text(t!(app.locale, "Show password"))
+                    .on_hover_text(if app.login.show_password {
+                        t!(app.locale, "Hide password")
+                    } else {
+                        t!(app.locale, "Show password")
+                    })
                     .clicked()
                 {
                     app.login.show_password = !app.login.show_password;
