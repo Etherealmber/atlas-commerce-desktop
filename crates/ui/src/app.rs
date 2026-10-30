@@ -15,6 +15,12 @@ use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
+/// Native focus metadata can be unknown during window creation; only an
+/// explicit loss of focus, minimization, or close is a lock event.
+fn should_lock(focused: Option<bool>, minimized: Option<bool>, closing: bool) -> bool {
+    focused == Some(false) || minimized == Some(true) || closing
+}
+
 impl AtlasApp {
     /// Opens a session: persist it, remember the account, rebuild the
     /// authenticated client and load the first shell data.
@@ -26,6 +32,18 @@ impl AtlasApp {
         display_name: String,
         avatar_url: String,
     ) {
+        // Fail closed if the next launch cannot be made to require a fresh
+        // password. This marker contains no credentials or session data.
+        if let Err(error) = std::fs::write(self.paths.auth_guard_file(), b"1") {
+            log::warn!("could not persist authentication guard: {error}");
+            self.login.error = Some(
+                t!(self.locale, "Could not secure the session on this device.").into_owned(),
+            );
+            self.login.password.clear();
+            return;
+        }
+        self.requires_password = false;
+        self.login.password.clear();
         let server_url = self
             .server_store
             .selected_url()
@@ -55,6 +73,15 @@ impl AtlasApp {
         self.rebuild_client();
         self.screen = Screen::Shell(Route::Dashboard);
         self.bootstrap_shell();
+    }
+
+    /// Drop the active session and all session-scoped caches on focus loss.
+    /// Re-authentication uses the server password flow, not the saved token.
+    fn lock_for_inactivity(&mut self) {
+        if self.session.is_some() {
+            self.sign_out();
+            self.requires_password = true;
+        }
     }
 
     /// First loads after entering the shell or restoring a session.
@@ -616,12 +643,14 @@ impl AtlasApp {
             }
             if let Some(link) = atlas_core::VerifyLink::parse(&raw)
                 && self.session.is_none()
+                && !self.requires_password
             {
                 // A verify link only makes sense on the login screen.
                 self.login.pending_link = Some(link);
                 self.screen = Screen::Login;
             } else if let Some(token) = atlas_core::QrTokenParser::extract(&raw)
                 && self.session.is_none()
+                && !self.requires_password
             {
                 self.qr.active = true;
                 self.qr.token = token;
@@ -881,6 +910,7 @@ impl AtlasApp {
 
     /// Called by the binary when the system is about to sleep.
     pub fn handle_suspending(&mut self) {
+        self.lock_for_inactivity();
         self.power_paused = true;
     }
 
@@ -938,11 +968,13 @@ impl Resident for AtlasApp {
     }
 
     fn window_gone(&mut self) {
+        self.lock_for_inactivity();
         self.show_requested = false;
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
         self.poll_background(ctx);
+        self.lock_for_inactivity();
         if self.wants_quit {
             return Headless::Quit;
         }
@@ -1081,6 +1113,17 @@ impl eframe::App for EframeShell {
         }
 
         self.held.poll_background(ctx);
+        let lock = ctx.input(|input| {
+            let viewport = input.viewport();
+            should_lock(
+                viewport.focused,
+                viewport.minimized,
+                viewport.close_requested(),
+            )
+        });
+        if lock {
+            self.held.lock_for_inactivity();
+        }
 
         // Keep repainting while any job runs, so spinners and poll results
         // appear without user input.
@@ -1091,7 +1134,12 @@ impl eframe::App for EframeShell {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let palette = self.held.palette(&ctx);
+        let mut palette = self.held.palette(&ctx);
+        if palette.dark && matches!(self.held.screen, Screen::Login | Screen::ServerSetup) {
+            // SOURCED-FROM: supplied authentication layout specification.
+            palette.window = egui::Color32::from_rgb(0x12, 0x13, 0x16);
+            palette.surface = egui::Color32::from_rgb(0x1e, 0x20, 0x25);
+        }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it
             // in another CentralPanel would nest panels and fight for the
@@ -1112,5 +1160,19 @@ impl eframe::App for EframeShell {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.held.save_settings();
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::should_lock;
+
+    #[test]
+    fn explicit_focus_loss_minimize_and_close_lock_the_session() {
+        assert!(should_lock(Some(false), Some(false), false));
+        assert!(should_lock(Some(true), Some(true), false));
+        assert!(should_lock(Some(true), Some(false), true));
+        assert!(!should_lock(Some(true), Some(false), false));
+        assert!(!should_lock(None, None, false));
     }
 }

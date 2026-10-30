@@ -363,6 +363,8 @@ pub struct AtlasApp {
 
     // ── auth ──
     pub server_form: ServerSetupForm,
+    /// Password authentication is required after a lock or a previous run.
+    pub requires_password: bool,
     pub login: LoginState,
     pub qr: QrPairing,
     pub devices: Cache<Vec<TrustedDevice>>,
@@ -502,6 +504,7 @@ impl AtlasApp {
             avatar_evict: None,
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
+            requires_password: false,
             login: LoginState::default(),
             qr: QrPairing::default(),
             devices: Cache::default(),
@@ -1016,6 +1019,8 @@ impl AtlasApp {
         self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
+        // The login endpoints need an unauthenticated client for this server.
+        self.rebuild_client();
     }
 
     pub fn notice(&mut self, message: impl Into<String>) {
