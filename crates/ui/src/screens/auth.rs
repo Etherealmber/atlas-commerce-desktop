@@ -499,8 +499,10 @@ enum LoginTab {
 
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
+    if !matches!(app.screen, Screen::Login) {
+        return;
+    }
 
-    // A one-tap e-mail link arrived through the protocol handler.
     if !app.requires_password
         && let Some(link) = app.login.pending_link.clone()
     {
@@ -508,173 +510,57 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         start_verify_link(app, link);
     }
 
-    // Reserve the action before laying out the scrollable form, so it stays
-    // reachable even when the viewport is shorter than the credentials/OTP.
-    if !app.qr.active || app.requires_password || ui.available_width() >= 748.0 {
-        egui::Panel::bottom(egui::Id::new("login-submit"))
-            .exact_size(84.0)
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(egui::Frame::NONE.fill(palette.window))
-            .show(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    let width = (ui.available_width() - 68.0).clamp(220.0, 394.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| draw_password_submit(app, ui, palette),
-                    );
-                });
-            });
+    let width = (ui.available_width() - 48.0).clamp(220.0, 820.0);
+    let split = width >= 680.0;
+    // The desktop QR is a real one-time pairing session, never a decorative
+    // code. Do not initiate it while the password-only lock is active.
+    if split && !app.requires_password && !app.qr.active && app.client.is_some() {
+        start_qr_session(app);
     }
 
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
-                ui.add_space(ui.available_height() * 0.05);
-
-                // Compact brand lockup above the card.
-                crate::branding::mark(ui, palette, 46.0);
-                ui.add_space(12.0);
-                ui.label(
-                    RichText::new("Atlas Commerce")
-                        .color(palette.text)
-                        .strong()
-                        .size(20.0),
-                );
-                ui.add_space(18.0);
-
-                // One elevated, centered card, mirroring the web login's
-                // dark panel: heading, server pill, tab switch and the form
-                // all live on the same surface.
-                let max_width = if app.requires_password { 440.0 } else { 820.0 };
-                let card_width = (ui.available_width() - 68.0).clamp(220.0, max_width);
-                let split = card_width >= 680.0;
+                ui.add_space(32.0);
                 card(palette)
-                    .corner_radius(14.0)
-                    .inner_margin(egui::Margin::same(22))
+                    .corner_radius(18.0)
+                    .inner_margin(egui::Margin::same(0))
                     .show(ui, |ui| {
-                        ui.set_width(card_width);
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                RichText::new(t!(app.locale, "Welcome back"))
-                                    .color(palette.text)
-                                    .strong()
-                                    .size(18.0),
+                        ui.set_width(width);
+                        ui.horizontal_top(|ui| {
+                            let left_width = if split { width * 0.69 } else { width };
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(left_width, 520.0),
+                                egui::Layout::top_down(egui::Align::Center),
+                                |ui| draw_login_form_panel(app, ui, palette, split),
                             );
-                            ui.add_space(2.0);
-                            ui.label(
-                                RichText::new(t!(
-                                    app.locale,
-                                    "Sign in to continue to your workspace."
-                                ))
-                                .color(palette.dim)
-                                .size(12.5),
-                            );
-                            ui.add_space(14.0);
-
-                            // The server this session talks to, one tap away.
-                            let host = app
-                                .server_store
-                                .selected_url()
-                                .map(ServerUrl::host)
-                                .unwrap_or_else(|| "—".to_owned());
-                            let host = if host.chars().count() > 30 {
-                                format!("{}…", host.chars().take(29).collect::<String>())
-                            } else {
-                                host
-                            };
-                            ui.horizontal(|ui| {
-                                icon(ui, Icon::Server, palette.secondary, 14.0);
-                                ui.add_space(2.0);
-                                pill(ui, &host, palette.window, palette.secondary);
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new(t!(app.locale, "Change server"))
-                                                .color(palette.secondary)
-                                                .size(12.5),
-                                        )
-                                        .wrap_mode(egui::TextWrapMode::Extend)
-                                        .fill(Color32::TRANSPARENT)
-                                        .stroke(egui::Stroke::NONE)
-                                        .min_size(egui::vec2(0.0, TARGET)),
-                                    )
-                                    .clicked()
-                                {
-                                    app.server_form.verified_selected = None;
-                                    app.screen = Screen::ServerSetup;
-                                }
-                            });
-                            ui.add_space(16.0);
-
-                            if app.requires_password {
-                                ui.label(
-                                    RichText::new(t!(
-                                        app.locale,
-                                        "Enter your password to unlock this workspace."
-                                    ))
-                                    .color(palette.secondary),
+                            if split {
+                                ui.separator();
+                                let right_width = ui.available_width();
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(right_width, 520.0),
+                                    egui::Layout::top_down(egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(80.0);
+                                        if app.requires_password {
+                                            icon(ui, Icon::Lock, palette.secondary, 32.0);
+                                            ui.add_space(16.0);
+                                            ui.label(
+                                                RichText::new(t!(
+                                                    app.locale,
+                                                    "Enter your password to unlock this workspace."
+                                                ))
+                                                .color(palette.secondary),
+                                            );
+                                        } else {
+                                            draw_qr(app, ui, palette);
+                                        }
+                                    },
                                 );
-                                ui.add_space(12.0);
-                                draw_password(app, ui, palette);
-                            } else if split {
-                                ui.horizontal_top(|ui| {
-                                    let column_width = (card_width - 32.0) / 2.0;
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(column_width, 0.0),
-                                        egui::Layout::top_down(egui::Align::Min),
-                                        |ui| draw_password(app, ui, palette),
-                                    );
-                                    ui.add_space(24.0);
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(column_width, 0.0),
-                                        egui::Layout::top_down(egui::Align::Center),
-                                        |ui| {
-                                            if app.qr.active {
-                                                draw_qr(app, ui, palette);
-                                            } else {
-                                                ui.label(
-                                                    RichText::new(t!(
-                                                        app.locale,
-                                                        "Scan with your phone"
-                                                    ))
-                                                    .strong()
-                                                    .color(palette.text),
-                                                );
-                                                ui.add_space(8.0);
-                                                ui.label(
-                                                    RichText::new(t!(
-                                                        app.locale,
-                                                        "Open Atlas Commerce on your phone and scan this code to approve the computer."
-                                                    ))
-                                                    .color(palette.dim),
-                                                );
-                                                ui.add_space(12.0);
-                                                if secondary_button(
-                                                    ui,
-                                                    t!(app.locale, "Phone QR"),
-                                                    palette,
-                                                ) {
-                                                    start_qr_session(app);
-                                                }
-                                            }
-                                        },
-                                    );
-                                });
-                            } else {
-                                segmented_tabs(app, ui, palette);
-                                ui.add_space(14.0);
-                                if app.qr.active {
-                                    draw_qr(app, ui, palette);
-                                } else {
-                                    draw_password(app, ui, palette);
-                                }
                             }
                         });
                     });
-
                 ui.add_space(14.0);
                 ui.label(
                     RichText::new(format!(
@@ -687,6 +573,113 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             });
         });
+}
+
+/// Left half of the login card. Reserve the action before scrolling the form,
+/// so errors and OTP prompts cannot push it out of the card.
+fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, split: bool) {
+    let show_form = split || app.requires_password || !app.qr.active;
+    if show_form {
+        egui::Panel::bottom(egui::Id::new("login-submit"))
+            .exact_size(80.0)
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(egui::Frame::NONE.fill(palette.surface))
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| draw_password_submit(app, ui, palette),
+                    );
+                });
+            });
+    }
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(32.0);
+            crate::branding::lockup(ui, palette, 44.0);
+            ui.add_space(16.0);
+            ui.label(
+                RichText::new(t!(app.locale, "Welcome back"))
+                    .color(palette.text)
+                    .strong()
+                    .size(20.0),
+            );
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(t!(app.locale, "Sign in to continue to your workspace."))
+                    .color(palette.secondary)
+                    .size(12.5),
+            );
+            ui.add_space(12.0);
+            let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    draw_login_server(app, ui, palette);
+                    ui.add_space(8.0);
+                    if !split && !app.requires_password {
+                        segmented_tabs(app, ui, palette);
+                        ui.add_space(8.0);
+                    }
+                    if show_form {
+                        if app.requires_password {
+                            ui.label(
+                                RichText::new(t!(
+                                    app.locale,
+                                    "Enter your password to unlock this workspace."
+                                ))
+                                .color(palette.secondary),
+                            );
+                            ui.add_space(8.0);
+                        }
+                        draw_password(app, ui, palette);
+                    } else {
+                        draw_qr(app, ui, palette);
+                    }
+                },
+            );
+        });
+    });
+}
+
+fn draw_login_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let host = app
+        .server_store
+        .selected_url()
+        .map(ServerUrl::host)
+        .unwrap_or_else(|| "—".to_owned());
+    let host = if host.chars().count() > 22 {
+        format!("{}…", host.chars().take(21).collect::<String>())
+    } else {
+        host
+    };
+    ui.horizontal_wrapped(|ui| {
+        icon(ui, Icon::Server, palette.secondary, 14.0);
+        pill(ui, &host, palette.window, palette.secondary);
+        if ui
+            .add(
+                egui::Button::new(
+                    RichText::new(t!(app.locale, "Change server"))
+                        .color(palette.secondary)
+                        .size(12.5),
+                )
+                .fill(Color32::TRANSPARENT)
+                .stroke(egui::Stroke::NONE)
+                .min_size(egui::vec2(0.0, TARGET)),
+            )
+            .clicked()
+        {
+            // In-flight password and QR jobs belong to the old server.
+            app.login = Default::default();
+            app.qr = Default::default();
+            app.server_form.verified_selected = None;
+            app.screen = Screen::ServerSetup;
+        }
+    });
 }
 
 /// The password / phone-QR switch, drawn as one segmented control.
@@ -880,44 +873,55 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Status polling, at most every 1.5 s. It stops as soon as the one-time
     // completion exchange is in flight so a repeated "approved" poll cannot
     // spawn it twice.
-    if app.qr.active && app.qr.job_status.is_none() && app.qr.job_complete.is_none() {
+    if app.qr.active
+        && !app.qr.expired
+        && app.qr.job_status.is_none()
+        && app.qr.job_complete.is_none()
+    {
         let due = app
             .qr
             .next_poll
             .is_none_or(|at| std::time::Instant::now() >= at);
-        if due && !app.qr.token.is_empty() {
-            start_qr_poll(app);
+        if !app.qr.token.is_empty() {
+            if due {
+                start_qr_poll(app);
+            } else {
+                ui.ctx().request_repaint_after(Duration::from_millis(1500));
+            }
         }
     }
 
     // The login card already provides the surface; no nested card frame.
     ui.vertical_centered(|ui| {
-        icon(ui, Icon::Smartphone, palette.accent, 22.0);
-        ui.add_space(8.0);
+        if app.qr.qr_url.is_empty() {
+            if app.qr.status != "error" {
+                crate::screens::centered_spinner(ui, palette);
+            }
+        } else {
+            qr_image(ui, &app.qr.qr_url, palette);
+        }
+        ui.add_space(16.0);
         ui.label(
-            RichText::new(t!(app.locale, "Scan with your phone"))
+            RichText::new(t!(app.locale, "Sign in with a QR code"))
                 .strong()
                 .color(palette.text),
         );
-        ui.add_space(4.0);
+        ui.add_space(6.0);
         ui.label(
             RichText::new(t!(
                 app.locale,
                 "Open Atlas Commerce on your phone and scan this code to approve the computer."
             ))
-            .color(palette.dim)
+            .color(palette.secondary)
             .size(12.5),
         );
         ui.add_space(12.0);
 
-        if app.qr.qr_url.is_empty() {
-            crate::screens::centered_spinner(ui, palette);
-        } else {
-            qr_image(ui, &app.qr.qr_url, palette);
-        }
-        ui.add_space(12.0);
-
         let (text, color) = match app.qr.status.as_str() {
+            "error" => (
+                t!(app.locale, "Could not create a QR code. Try again.").into_owned(),
+                palette.danger,
+            ),
             "approved" => (
                 t!(app.locale, "Phone approved — finalizing…").into_owned(),
                 palette.accent,
@@ -960,8 +964,9 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
     };
     let modules = code.to_colors();
     let width = code.width();
-    let size = 210.0_f32;
-    let module = size / width as f32;
+    // Four quiet-zone modules are required around the code for scanners.
+    let size = 176.0_f32;
+    let module = size / (width + 8) as f32;
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 10.0, Color32::WHITE);
@@ -971,8 +976,8 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
             let row = index / width;
             let module_rect = egui::Rect::from_min_size(
                 egui::pos2(
-                    rect.min.x + column as f32 * module,
-                    rect.min.y + row as f32 * module,
+                    rect.min.x + (column + 4) as f32 * module,
+                    rect.min.y + (row + 4) as f32 * module,
                 ),
                 egui::vec2(module, module),
             );
@@ -1044,6 +1049,10 @@ fn start_qr_session(app: &mut AtlasApp) {
     app.qr.active = true;
     app.qr.status = "pending".to_owned();
     app.qr.expired = false;
+    app.qr.account.clear();
+    app.qr.job_status = None;
+    app.qr.job_complete = None;
+    app.qr.next_poll = None;
     app.qr.qr_url = String::new();
     app.qr.token = String::new();
     app.qr.job_create = Some(
@@ -1106,7 +1115,10 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                 app.qr.qr_url = session.qr_url;
                 app.qr.next_poll = None;
             }
-            Err(error) => app.notice(error.message),
+            Err(error) => {
+                app.qr.status = "error".to_owned();
+                app.notice(error.message);
+            }
         }
     }
     // QR status.
@@ -1120,7 +1132,7 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
                 if let Some(name) = status.display_name.or(status.username) {
                     app.qr.account = name;
                 }
-                if matches!(status.status.as_str(), "expired" | "denied") {
+                if matches!(status.status.as_str(), "expired" | "denied" | "consumed") {
                     app.qr.expired = true;
                 }
                 if status.status == "approved"

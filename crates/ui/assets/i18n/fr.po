@@ -1129,3 +1129,9 @@ msgstr "Impossible de sécuriser la session sur cet appareil."
 
 msgid "Enter your password to unlock this workspace."
 msgstr "Saisissez votre mot de passe pour déverrouiller cet espace de travail."
+
+msgid "Sign in with a QR code"
+msgstr "Connexion avec un QR"
+
+msgid "Could not create a QR code. Try again."
+msgstr "Impossible de créer le code QR. Réessayez."
