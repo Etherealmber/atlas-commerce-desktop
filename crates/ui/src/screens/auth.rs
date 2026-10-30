@@ -173,8 +173,14 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
     if let Some(job) = &app.server_form.probe_job
         && let Some(report) = job.poll()
     {
-        app.server_form.probe_report = Some(report);
         app.server_form.probe_job = None;
+        if let Some(url) = app.server_form.probing_saved.take()
+            && probe_matches_current_url(&url, &report)
+        {
+            select_server(app, url.clone());
+            app.server_form.verified_selected = Some(url);
+        }
+        app.server_form.probe_report = Some(report);
     }
 
     egui::ScrollArea::vertical()
@@ -266,16 +272,19 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                                     }
                                                     if primary_button(
                                                         ui,
-                                                        if selected {
+                                                        if selected
+                                                            && app.server_form.verified_selected.as_deref()
+                                                                == Some(entry.url.as_str())
+                                                        {
                                                             t!(app.locale, "Selected")
                                                         } else {
                                                             t!(app.locale, "Use")
                                                         }
                                                         .as_ref(),
                                                         palette,
-                                                        !selected,
+                                                        app.server_form.probe_job.is_none(),
                                                     ) {
-                                                        select_server(app, entry.url.clone());
+                                                        start_saved_probe(app, entry.url.clone());
                                                     }
                                                 },
                                             );
@@ -330,12 +339,12 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 }
                                 // A successful probe is valid only for the exact
                                 // normalized address currently in the field.
-                                let verified = app
-                                    .server_form
-                                    .probe_report
-                                    .as_ref()
-                                    .is_some_and(|report| {
-                                        probe_matches_current_url(&app.server_form.custom_url, report)
+                                let verified =
+                                    app.server_form.probe_report.as_ref().is_some_and(|report| {
+                                        probe_matches_current_url(
+                                            &app.server_form.custom_url,
+                                            report,
+                                        )
                                     });
                                 if verified
                                     && secondary_button(
@@ -347,7 +356,8 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                     let url = app.server_form.custom_url.clone();
                                     let label = app.server_form.custom_label.clone();
                                     match app.server_store.select(&url, &label) {
-                                        Ok(_) => {
+                                        Ok(url) => {
+                                            app.server_form.verified_selected = Some(url);
                                             app.server_form.saved_error = None;
                                             app.server_form.custom_url = String::new();
                                             app.server_form.custom_label = String::new();
@@ -413,8 +423,10 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
 
                         ui.add_space(16.0);
                         dialog_actions(ui, |ui| {
-                            let valid = app.server_store.selected_url().is_some()
-                                && app.server_form.custom_url.trim().is_empty();
+                            let valid = app.server_store.selected_url().is_some_and(|url| {
+                                app.server_form.verified_selected.as_deref() == Some(url)
+                            }) && app.server_form.custom_url.trim().is_empty()
+                                && app.server_form.probe_job.is_none();
                             if primary_button(
                                 ui,
                                 t!(app.locale, "Save and continue"),
@@ -437,8 +449,18 @@ fn probe_matches_current_url(raw: &str, report: &probe::ProbeReport) -> bool {
     report.ok && ServerUrl::normalize(raw).as_deref() == Some(report.base_url.as_str())
 }
 
+fn start_saved_probe(app: &mut AtlasApp, url: String) {
+    app.server_form.probing_saved = Some(url.clone());
+    spawn_probe(app, url);
+}
+
 fn start_probe(app: &mut AtlasApp) {
+    app.server_form.probing_saved = None;
     let url = app.server_form.custom_url.clone();
+    spawn_probe(app, url);
+}
+
+fn spawn_probe(app: &mut AtlasApp, url: String) {
     let fingerprint = app.identity.fingerprint().to_owned();
     let ua = atlas_core::DeviceIdentity::user_agent();
     let job = app
@@ -460,6 +482,8 @@ fn select_server(app: &mut AtlasApp, url: String) {
     app.server_form.custom_label.clear();
     app.server_form.probe_report = None;
     app.server_form.probe_job = None;
+    app.server_form.probing_saved = None;
+    app.server_form.verified_selected = None;
 }
 
 // ── Login ──────────────────────────────────────────────────────────────────
@@ -576,6 +600,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     )
                                     .clicked()
                                 {
+                                    app.server_form.verified_selected = None;
                                     app.screen = Screen::ServerSetup;
                                 }
                             });
@@ -797,15 +822,17 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 palette,
                 false,
             );
-            ui.add_space(6.0);
-            ui.label(
-                RichText::new(t!(
-                    app.locale,
-                    "Tip: open the link in the e-mail — this app verifies it without typing."
-                ))
-                .color(palette.dim)
-                .size(11.5),
-            );
+            if !app.requires_password {
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new(t!(
+                        app.locale,
+                        "Tip: open the link in the e-mail — this app verifies it without typing."
+                    ))
+                    .color(palette.dim)
+                    .size(11.5),
+                );
+            }
         }
     });
 }

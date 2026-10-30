@@ -470,8 +470,8 @@ fn draw_profile_menu(
                                         session.role,
                                         atlas_core::ServerUrl::host(&session.server_url)
                                     ))
-                                        .color(palette.dim)
-                                        .size(11.5),
+                                    .color(palette.dim)
+                                    .size(11.5),
                                 );
                             });
                         });
@@ -622,11 +622,17 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
     // placeholder routes or unverified worker endpoints are introduced.
     let groups: [(std::borrow::Cow<'_, str>, &[Route]); 7] = [
         (t!(app.locale, "Overview"), &[Route::Dashboard]),
-        (t!(app.locale, "Catalog"), &[Route::Products, Route::Catalog]),
+        (
+            t!(app.locale, "Catalog"),
+            &[Route::Products, Route::Catalog],
+        ),
         (t!(app.locale, "Customer relations"), &[Route::Clients]),
         (t!(app.locale, "Team"), &[Route::Sales]),
         (t!(app.locale, "Purchases"), &[Route::Vendors]),
-        (t!(app.locale, "Finance"), &[Route::Expenses, Route::DeliveryNotes]),
+        (
+            t!(app.locale, "Finance"),
+            &[Route::Expenses, Route::DeliveryNotes],
+        ),
         (t!(app.locale, "Assistant"), &[Route::Agent]),
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -641,7 +647,8 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
             }
             for &route in routes {
                 let (which, label) = route_meta(app.locale, route);
-                let response = rail_row(ui, palette, which, &label, active == Some(route), collapsed);
+                let response =
+                    rail_row(ui, palette, which, &label, active == Some(route), collapsed);
                 if response.clicked() {
                     app.go(route);
                 }

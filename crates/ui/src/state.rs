@@ -156,6 +156,10 @@ pub struct ServerSetupForm {
     pub custom_label: String,
     pub probe_report: Option<atlas_api::probe::ProbeReport>,
     pub probe_job: Option<Job<atlas_api::probe::ProbeReport>>,
+    /// The saved server being tested, if this probe came from its Use button.
+    pub probing_saved: Option<String>,
+    /// The selected server that has passed a probe in this setup flow.
+    pub verified_selected: Option<String>,
     pub saved_error: Option<String>,
 }
 
@@ -978,6 +982,16 @@ impl AtlasApp {
         self.qr = QrPairing::default();
         self.dashboard = Cache::default();
         self.products = Cache::default();
+        self.product_search.clear();
+        self.top_search.clear();
+        self.product_editor = None;
+        self.stock_dialog = None;
+        self.quick_sale = None;
+        self.confirm_dialog = None;
+        self.palette_open = false;
+        self.palette_query.clear();
+        self.notices.clear();
+        self.notices_expire_at = None;
         self.clients = Cache::default();
         self.client_search = String::new();
         self.selected_client = None;

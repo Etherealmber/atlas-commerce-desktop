@@ -36,9 +36,8 @@ impl AtlasApp {
         // password. This marker contains no credentials or session data.
         if let Err(error) = std::fs::write(self.paths.auth_guard_file(), b"1") {
             log::warn!("could not persist authentication guard: {error}");
-            self.login.error = Some(
-                t!(self.locale, "Could not secure the session on this device.").into_owned(),
-            );
+            self.login.error =
+                Some(t!(self.locale, "Could not secure the session on this device.").into_owned());
             self.login.password.clear();
             return;
         }
