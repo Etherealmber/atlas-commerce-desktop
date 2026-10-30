@@ -85,6 +85,19 @@ est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
   assistant et la restauration automatique en cas d'échec sont gérés par
   `fastframe-update`.
 
+## Session et verrouillage
+
+La perte de focus, la réduction et la fermeture dans la zone de notification
+mettent fin à la session locale et demandent une authentification par mot de
+passe à la réouverture. Les sessions enregistrées ne sont pas restaurées
+sans authentification au lancement. Aucun mot de passe n'est conservé. Une
+connexion peut aussi demander le code de vérification du serveur.
+
+Le QR reste disponible pour une première connexion. Le client natif ne
+présente pas de défi Turnstile : le contrat actuel du Worker dispense les
+requêtes natives de ce défi. Les passkeys et une durée de session choisie par
+l'utilisateur ne sont pas prises en charge par ce client.
+
 ## Compilation depuis les sources
 
 Prérequis : Rust 1.98 ou supérieur (le dépôt épingle la version exacte dans

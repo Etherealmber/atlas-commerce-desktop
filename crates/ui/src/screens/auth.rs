@@ -182,7 +182,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(if embedded { 12.0 } else { 40.0 });
-                icon(ui, Icon::Server, palette.accent, 30.0);
+                crate::branding::mark(ui, palette, 46.0);
                 ui.add_space(10.0);
                 page_title(ui, t!(app.locale, "Choose your server"), palette);
                 ui.add_space(4.0);
@@ -328,10 +328,16 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 {
                                     start_probe(app);
                                 }
-                                // The probe only reports health: this action is
-                                // what actually validates, persists and selects
-                                // the custom server so "Save and continue" works.
-                                if !app.server_form.custom_url.trim().is_empty()
+                                // A successful probe is valid only for the exact
+                                // normalized address currently in the field.
+                                let verified = app
+                                    .server_form
+                                    .probe_report
+                                    .as_ref()
+                                    .is_some_and(|report| {
+                                        probe_matches_current_url(&app.server_form.custom_url, report)
+                                    });
+                                if verified
                                     && secondary_button(
                                         ui,
                                         t!(app.locale, "Add this server"),
@@ -407,7 +413,8 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
 
                         ui.add_space(16.0);
                         dialog_actions(ui, |ui| {
-                            let valid = app.server_store.selected_url().is_some();
+                            let valid = app.server_store.selected_url().is_some()
+                                && app.server_form.custom_url.trim().is_empty();
                             if primary_button(
                                 ui,
                                 t!(app.locale, "Save and continue"),
@@ -424,6 +431,10 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 );
             });
         });
+}
+
+fn probe_matches_current_url(raw: &str, report: &probe::ProbeReport) -> bool {
+    report.ok && ServerUrl::normalize(raw).as_deref() == Some(report.base_url.as_str())
 }
 
 fn start_probe(app: &mut AtlasApp) {
@@ -445,7 +456,10 @@ fn select_server(app: &mut AtlasApp, url: String) {
     app.server_store.selected = Some(url);
     app.save_servers();
     app.rebuild_client();
+    app.server_form.custom_url.clear();
+    app.server_form.custom_label.clear();
     app.server_form.probe_report = None;
+    app.server_form.probe_job = None;
 }
 
 // ── Login ──────────────────────────────────────────────────────────────────
@@ -460,9 +474,31 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
 
     // A one-tap e-mail link arrived through the protocol handler.
-    if let Some(link) = app.login.pending_link.clone() {
+    if !app.requires_password
+        && let Some(link) = app.login.pending_link.clone()
+    {
         app.login.pending_link = None;
         start_verify_link(app, link);
+    }
+
+    // Reserve the action before laying out the scrollable form, so it stays
+    // reachable even when the viewport is shorter than the credentials/OTP.
+    if !app.qr.active || app.requires_password || ui.available_width() >= 748.0 {
+        egui::Panel::bottom(egui::Id::new("login-submit"))
+            .exact_size(84.0)
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(egui::Frame::NONE.fill(palette.window))
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    let width = (ui.available_width() - 68.0).clamp(220.0, 394.0);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| draw_password_submit(app, ui, palette),
+                    );
+                });
+            });
     }
 
     egui::ScrollArea::vertical()
@@ -485,7 +521,9 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 // One elevated, centered card, mirroring the web login's
                 // dark panel: heading, server pill, tab switch and the form
                 // all live on the same surface.
-                let card_width = 440.0_f32;
+                let max_width = if app.requires_password { 440.0 } else { 820.0 };
+                let card_width = (ui.available_width() - 68.0).clamp(220.0, max_width);
+                let split = card_width >= 680.0;
                 card(palette)
                     .corner_radius(14.0)
                     .inner_margin(egui::Margin::same(22))
@@ -543,13 +581,68 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             });
                             ui.add_space(16.0);
 
-                            segmented_tabs(app, ui, palette);
-                            ui.add_space(14.0);
-
-                            if app.qr.active {
-                                draw_qr(app, ui, palette);
-                            } else {
+                            if app.requires_password {
+                                ui.label(
+                                    RichText::new(t!(
+                                        app.locale,
+                                        "Enter your password to unlock this workspace."
+                                    ))
+                                    .color(palette.secondary),
+                                );
+                                ui.add_space(12.0);
                                 draw_password(app, ui, palette);
+                            } else if split {
+                                ui.horizontal_top(|ui| {
+                                    let column_width = (card_width - 32.0) / 2.0;
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(column_width, 0.0),
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        |ui| draw_password(app, ui, palette),
+                                    );
+                                    ui.add_space(24.0);
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(column_width, 0.0),
+                                        egui::Layout::top_down(egui::Align::Center),
+                                        |ui| {
+                                            if app.qr.active {
+                                                draw_qr(app, ui, palette);
+                                            } else {
+                                                ui.label(
+                                                    RichText::new(t!(
+                                                        app.locale,
+                                                        "Scan with your phone"
+                                                    ))
+                                                    .strong()
+                                                    .color(palette.text),
+                                                );
+                                                ui.add_space(8.0);
+                                                ui.label(
+                                                    RichText::new(t!(
+                                                        app.locale,
+                                                        "Open Atlas Commerce on your phone and scan this code to approve the computer."
+                                                    ))
+                                                    .color(palette.dim),
+                                                );
+                                                ui.add_space(12.0);
+                                                if secondary_button(
+                                                    ui,
+                                                    t!(app.locale, "Phone QR"),
+                                                    palette,
+                                                ) {
+                                                    start_qr_session(app);
+                                                }
+                                            }
+                                        },
+                                    );
+                                });
+                            } else {
+                                segmented_tabs(app, ui, palette);
+                                ui.add_space(14.0);
+                                if app.qr.active {
+                                    draw_qr(app, ui, palette);
+                                } else {
+                                    draw_password(app, ui, palette);
+                                }
                             }
                         });
                     });
@@ -714,40 +807,43 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .size(11.5),
             );
         }
-
-        ui.add_space(16.0);
-        let busy = app.login.busy;
-        let label = if app.login.needs_otp {
-            t!(app.locale, "Verify")
-        } else {
-            t!(app.locale, "Sign in")
-        };
-        let clicked = ui
-            .add_sized(
-                [ui.available_width(), crate::theme::PRIMARY_BUTTON_HEIGHT],
-                egui::Button::new(
-                    RichText::new(label.as_ref())
-                        .color(palette.on_accent)
-                        .strong()
-                        .size(14.0),
-                )
-                .wrap_mode(egui::TextWrapMode::Extend)
-                .fill(if !busy {
-                    palette.accent
-                } else {
-                    palette.surface_active
-                })
-                .corner_radius(RADIUS),
-            )
-            .clicked();
-        if clicked && !busy {
-            if app.login.needs_otp {
-                start_otp(app);
-            } else {
-                start_login(app);
-            }
-        }
     });
+}
+
+/// Persistent login action, outside the scrolling credentials content.
+fn draw_password_submit(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    ui.add_space(16.0);
+    let busy = app.login.busy;
+    let label = if app.login.needs_otp {
+        t!(app.locale, "Verify")
+    } else {
+        t!(app.locale, "Sign in")
+    };
+    let clicked = ui
+        .add_sized(
+            [ui.available_width(), crate::theme::PRIMARY_BUTTON_HEIGHT],
+            egui::Button::new(
+                RichText::new(label.as_ref())
+                    .color(palette.on_accent)
+                    .strong()
+                    .size(14.0),
+            )
+            .wrap_mode(egui::TextWrapMode::Extend)
+            .fill(if !busy {
+                palette.accent
+            } else {
+                palette.surface_active
+            })
+            .corner_radius(RADIUS),
+        )
+        .clicked();
+    if clicked && !busy {
+        if app.login.needs_otp {
+            start_otp(app);
+        } else {
+            start_login(app);
+        }
+    }
 }
 
 fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -1143,4 +1239,26 @@ pub fn draw_update_gate(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
             );
         }
     });
+}
+
+#[cfg(test)]
+mod server_verification_tests {
+    use super::{probe, probe_matches_current_url};
+
+    #[test]
+    fn probe_is_only_valid_for_its_successful_address() {
+        let mut report = probe::ProbeReport {
+            ok: true,
+            base_url: "https://stock.afmarbre.com".to_owned(),
+            latency_ms: 1,
+            environment: None,
+            database: true,
+            storage: true,
+            message: String::new(),
+        };
+        assert!(probe_matches_current_url("stock.afmarbre.com/", &report));
+        assert!(!probe_matches_current_url("https://other.example", &report));
+        report.ok = false;
+        assert!(!probe_matches_current_url("stock.afmarbre.com", &report));
+    }
 }

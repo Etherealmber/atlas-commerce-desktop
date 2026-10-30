@@ -465,7 +465,11 @@ fn draw_profile_menu(
                                     .size(13.5),
                                 );
                                 ui.label(
-                                    RichText::new(session.username.clone())
+                                    RichText::new(format!(
+                                        "{} · {}",
+                                        session.role,
+                                        atlas_core::ServerUrl::host(&session.server_url)
+                                    ))
                                         .color(palette.dim)
                                         .size(11.5),
                                 );
@@ -485,6 +489,13 @@ fn draw_profile_menu(
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::General;
                         app.go(Route::Settings);
+                    }
+                    if menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
+                        .clicked()
+                    {
+                        app.profile_menu_open = false;
+                        app.sign_out();
+                        app.screen = Screen::ServerSetup;
                     }
                     // Web parity (profile dropdown): release notes open on
                     // GitHub in the browser, About jumps to the settings
@@ -607,22 +618,36 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         });
         ui.add_space(16.0);
     }
-    for route in Route::ALL {
-        // Notifications live behind the title-bar bell, and Settings behind
-        // the avatar menu (with the account card the rail used to pin); the
-        // rail therefore carries content destinations only.
-        if matches!(route, Route::Notifications | Route::Settings) {
-            continue;
+    // Only destinations implemented by the native client are listed; no
+    // placeholder routes or unverified worker endpoints are introduced.
+    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 7] = [
+        (t!(app.locale, "Overview"), &[Route::Dashboard]),
+        (t!(app.locale, "Catalog"), &[Route::Products, Route::Catalog]),
+        (t!(app.locale, "Customer relations"), &[Route::Clients]),
+        (t!(app.locale, "Team"), &[Route::Sales]),
+        (t!(app.locale, "Purchases"), &[Route::Vendors]),
+        (t!(app.locale, "Finance"), &[Route::Expenses, Route::DeliveryNotes]),
+        (t!(app.locale, "Assistant"), &[Route::Agent]),
+    ];
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        for (heading, routes) in groups {
+            if !collapsed {
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(heading.to_uppercase())
+                        .color(palette.dim)
+                        .size(10.5),
+                );
+            }
+            for &route in routes {
+                let (which, label) = route_meta(app.locale, route);
+                let response = rail_row(ui, palette, which, &label, active == Some(route), collapsed);
+                if response.clicked() {
+                    app.go(route);
+                }
+            }
         }
-        let (which, label) = route_meta(app.locale, route);
-        let is_active = active == Some(route);
-        let response = rail_row(ui, palette, which, &label, is_active, collapsed);
-        if response.clicked() {
-            // go() centralises the first-visit data loading for every
-            // navigation entry point.
-            app.go(route);
-        }
-    }
+    });
 }
 
 fn rail_row(
