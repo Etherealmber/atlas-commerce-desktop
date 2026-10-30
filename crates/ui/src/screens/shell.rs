@@ -495,6 +495,7 @@ fn draw_profile_menu(
                     {
                         app.profile_menu_open = false;
                         app.sign_out();
+                        app.server_form.verified_selected = None;
                         app.screen = Screen::ServerSetup;
                     }
                     // Web parity (profile dropdown): release notes open on
