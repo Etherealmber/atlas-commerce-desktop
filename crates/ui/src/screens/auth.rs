@@ -166,9 +166,18 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             .show(ui, |ui| {
                 ui.set_width((left_width - 56.0).max(120.0));
                 ui.set_min_height((size.y - 56.0).max(400.0));
-                ui.label(RichText::new("ATLAS COMMERCE").color(palette.secondary).size(12.0));
+                ui.label(
+                    RichText::new("ATLAS COMMERCE")
+                        .color(palette.secondary)
+                        .size(12.0),
+                );
                 ui.add_space(18.0);
-                ui.label(RichText::new(titles[step].as_ref()).strong().size(24.0).color(palette.text));
+                ui.label(
+                    RichText::new(titles[step].as_ref())
+                        .strong()
+                        .size(24.0)
+                        .color(palette.text),
+                );
                 ui.add_space(8.0);
                 ui.label(RichText::new(subtitles[step].as_ref()).color(palette.secondary));
                 let phase = if app.settings.reduced_motion {
@@ -188,7 +197,11 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                             ui.vertical_centered(|ui| {
                                 icon(ui, icons[step], palette.accent, 42.0);
                                 ui.add_space(20.0);
-                                ui.label(RichText::new(titles[step].as_ref()).strong().color(palette.text));
+                                ui.label(
+                                    RichText::new(titles[step].as_ref())
+                                        .strong()
+                                        .color(palette.text),
+                                );
                                 ui.add_space(16.0);
                                 match step {
                                     0 => {
@@ -204,8 +217,13 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                                         ui.horizontal_centered(|ui| {
                                             for initial in ["A", "B", "C"] {
                                                 let _ = crate::widgets::avatar(
-                                                    ui, None, initial, 44.0, palette.accent,
-                                                    palette.on_accent, palette.outline,
+                                                    ui,
+                                                    None,
+                                                    initial,
+                                                    44.0,
+                                                    palette.accent,
+                                                    palette.on_accent,
+                                                    palette.outline,
                                                 );
                                             }
                                         });
@@ -214,7 +232,11 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                                         for row in 0..2 {
                                             ui.horizontal_centered(|ui| {
                                                 for column in 0..2 {
-                                                    let which = if row == column { Icon::Dashboard } else { Icon::Boxes };
+                                                    let which = if row == column {
+                                                        Icon::Dashboard
+                                                    } else {
+                                                        Icon::Boxes
+                                                    };
                                                     showcase_tile(ui, palette, which, 64.0);
                                                 }
                                             });
@@ -235,20 +257,31 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 });
                 ui.add_space(36.0);
                 ui.horizontal_centered(|ui| {
-                    for index in 0..4 {
+                    for (index, title) in titles.iter().enumerate() {
                         let button = egui::Button::new(
-                            RichText::new(format!("{:02}", index + 1))
-                                .color(if index == step { palette.on_accent } else { palette.secondary }),
+                            RichText::new(format!("{:02}", index + 1)).color(if index == step {
+                                palette.on_accent
+                            } else {
+                                palette.secondary
+                            }),
                         )
-                        .fill(if index == step { palette.accent } else { palette.surface_hover })
+                        .fill(if index == step {
+                            palette.accent
+                        } else {
+                            palette.surface_hover
+                        })
                         .corner_radius(12.0)
                         .min_size(egui::vec2(48.0, TARGET));
-                        let response = ui.add(button).on_hover_text(titles[index].as_ref());
+                        let response = ui.add(button).on_hover_text(title.as_ref());
                         if index == step && !app.settings.reduced_motion {
                             let progress = (app.onboarding_started_at.elapsed().as_secs_f32()
-                                / CYCLE.as_secs_f32()).clamp(0.0, 1.0);
+                                / CYCLE.as_secs_f32())
+                            .clamp(0.0, 1.0);
                             let bar = egui::Rect::from_min_size(
-                                egui::pos2(response.rect.left() + 5.0, response.rect.bottom() - 5.0),
+                                egui::pos2(
+                                    response.rect.left() + 5.0,
+                                    response.rect.bottom() - 5.0,
+                                ),
                                 egui::vec2((response.rect.width() - 10.0) * progress, 2.0),
                             );
                             ui.painter().rect_filled(bar, 1.0, palette.on_accent);
@@ -282,9 +315,12 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 );
                 ui.add_space(12.0);
                 ui.label(
-                    RichText::new(t!(app.locale, "Manage stock, cash registers, and invoicing in real time."))
-                        .color(palette.secondary)
-                        .size(16.0),
+                    RichText::new(t!(
+                        app.locale,
+                        "Manage stock, cash registers, and invoicing in real time."
+                    ))
+                    .color(palette.secondary)
+                    .size(16.0),
                 );
                 ui.add_space(32.0);
                 let primary = egui::Button::new(
@@ -294,7 +330,10 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 )
                 .fill(palette.accent)
                 .corner_radius(RADIUS);
-                if ui.add_sized([ui.available_width().min(360.0), 48.0], primary).clicked() {
+                if ui
+                    .add_sized([ui.available_width().min(360.0), 48.0], primary)
+                    .clicked()
+                {
                     app.onboarding_transition_at = Some(std::time::Instant::now());
                     app.screen = if app.server_store.selected_url().is_some() {
                         Screen::Login
@@ -308,7 +347,10 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     app.screen = Screen::ServerSetup;
                 }
                 ui.add_space(36.0);
-                ui.label(RichText::new(format!("Atlas Commerce · v{}", env!("CARGO_PKG_VERSION"))).color(palette.dim));
+                ui.label(
+                    RichText::new(format!("Atlas Commerce · v{}", env!("CARGO_PKG_VERSION")))
+                        .color(palette.dim),
+                );
                 if ui.link(t!(app.locale, "Documentation and help")).clicked()
                     && let Err(error) = open::that(crate::screens::settings::REPOSITORY_URL)
                 {
@@ -1059,8 +1101,6 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 }
             });
         });
-
-
     });
 }
 

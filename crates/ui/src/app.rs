@@ -1139,7 +1139,12 @@ impl eframe::App for EframeShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let mut palette = self.held.palette(&ctx);
-        if palette.dark && matches!(self.held.screen, Screen::Login | Screen::ServerSetup | Screen::Onboarding) {
+        if palette.dark
+            && matches!(
+                self.held.screen,
+                Screen::Login | Screen::ServerSetup | Screen::Onboarding
+            )
+        {
             // SOURCED-FROM: supplied authentication layout specification.
             palette.window = egui::Color32::from_rgb(0x12, 0x13, 0x16);
             palette.surface = egui::Color32::from_rgb(0x1e, 0x20, 0x25);
@@ -1177,9 +1182,12 @@ impl eframe::App for EframeShell {
                             egui::vec2(footprint.right.max(120.0), 48.0),
                         ),
                         |ui| {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                fastframe_titlebar::controls(ui, &style, &labels);
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    fastframe_titlebar::controls(ui, &style, &labels);
+                                },
+                            );
                         },
                     );
                 });
