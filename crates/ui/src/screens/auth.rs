@@ -127,43 +127,250 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── Onboarding ─────────────────────────────────────────────────────────────
 
 pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    ui.vertical_centered(|ui| {
-        ui.add_space(ui.available_height() * 0.2);
-        crate::branding::mark(ui, palette, 48.0);
-        ui.add_space(20.0);
-        page_title(ui, t!(app.locale, "Welcome to Atlas Commerce"), palette);
-        ui.add_space(10.0);
-        ui.label(
-            RichText::new(t!(
-                app.locale,
-                "Your stock, sales and AI assistant in one native application."
-            ))
-            .color(palette.secondary)
-            .size(14.0),
-        );
-        ui.add_space(30.0);
-        let button = egui::Button::new(
-            RichText::new(t!(app.locale, "Get started"))
-                .color(palette.on_accent)
-                .strong(),
-        )
-        .wrap_mode(egui::TextWrapMode::Extend)
-        .fill(palette.accent)
-        .corner_radius(RADIUS)
-        .min_size(egui::vec2(240.0, crate::theme::PRIMARY_BUTTON_HEIGHT));
-        if ui.add(button).clicked() {
-            app.screen = Screen::ServerSetup;
+    const CYCLE: Duration = Duration::from_secs(5);
+    if !app.settings.reduced_motion {
+        if app.onboarding_started_at.elapsed() >= CYCLE {
+            app.onboarding_step = (app.onboarding_step + 1) % 4;
+            app.onboarding_started_at = std::time::Instant::now();
         }
-        ui.add_space(12.0);
-        ui.label(
-            RichText::new(t!(
-                app.locale,
-                "No account yet? Ask your shop's Atlas administrator."
-            ))
-            .color(palette.dim)
-            .size(12.5),
+        ui.ctx().request_repaint_after(Duration::from_millis(33));
+    }
+    let titles = [
+        t!(app.locale, "Realtime workspace sync"),
+        t!(app.locale, "Team presence and roles"),
+        t!(app.locale, "Customizable dashboard layouts"),
+        t!(app.locale, "Automated daily recaps"),
+    ];
+    let subtitles = [
+        t!(app.locale, "Keep your workspace in sync."),
+        t!(app.locale, "Keep your team connected."),
+        t!(app.locale, "See the information that matters."),
+        t!(app.locale, "Start each day with a clear overview."),
+    ];
+    let icons = [Icon::Dashboard, Icon::Users, Icon::Boxes, Icon::Receipt];
+    let step = app.onboarding_step.min(3);
+    let size = ui.available_size();
+    let gap = 24.0;
+    let left_width = ((size.x - gap) * 0.55).max(200.0);
+    let right_width = (size.x - left_width - gap).max(200.0);
+    ui.horizontal_top(|ui| {
+        egui::Frame::NONE
+            // SOURCED-FROM: supplied onboarding design specification.
+            .fill(if palette.dark {
+                Color32::from_rgb(0x1e, 0x20, 0x25)
+            } else {
+                palette.surface
+            })
+            .corner_radius(16.0)
+            .inner_margin(egui::Margin::same(28))
+            .show(ui, |ui| {
+                ui.set_width((left_width - 56.0).max(120.0));
+                ui.set_min_height((size.y - 56.0).max(400.0));
+                ui.label(
+                    RichText::new("ATLAS COMMERCE")
+                        .color(palette.secondary)
+                        .size(12.0),
+                );
+                ui.add_space(18.0);
+                ui.label(
+                    RichText::new(titles[step].as_ref())
+                        .strong()
+                        .size(24.0)
+                        .color(palette.text),
+                );
+                ui.add_space(8.0);
+                ui.label(RichText::new(subtitles[step].as_ref()).color(palette.secondary));
+                let phase = if app.settings.reduced_motion {
+                    0.0
+                } else {
+                    (app.onboarding_started_at.elapsed().as_secs_f32() * 1.2).sin() * 6.0
+                };
+                ui.add_space((38.0 + phase).max(0.0));
+                ui.vertical_centered(|ui| {
+                    egui::Frame::NONE
+                        .fill(palette.window)
+                        .stroke(egui::Stroke::new(1.0, palette.outline))
+                        .corner_radius(16.0)
+                        .inner_margin(egui::Margin::same(24))
+                        .show(ui, |ui| {
+                            ui.set_width((left_width * 0.65).clamp(160.0, 360.0));
+                            ui.vertical_centered(|ui| {
+                                icon(ui, icons[step], palette.accent, 42.0);
+                                ui.add_space(20.0);
+                                ui.label(
+                                    RichText::new(titles[step].as_ref())
+                                        .strong()
+                                        .color(palette.text),
+                                );
+                                ui.add_space(16.0);
+                                match step {
+                                    0 => {
+                                        // Two window-like tiles suggest activity flowing
+                                        // between the workspace and the desktop.
+                                        ui.horizontal_centered(|ui| {
+                                            showcase_tile(ui, palette, Icon::Dashboard, 64.0);
+                                            icon(ui, Icon::ChevronRight, palette.secondary, 18.0);
+                                            showcase_tile(ui, palette, Icon::Boxes, 64.0);
+                                        });
+                                    }
+                                    1 => {
+                                        ui.horizontal_centered(|ui| {
+                                            for initial in ["A", "B", "C"] {
+                                                let _ = crate::widgets::avatar(
+                                                    ui,
+                                                    None,
+                                                    initial,
+                                                    44.0,
+                                                    palette.accent,
+                                                    palette.on_accent,
+                                                    palette.outline,
+                                                );
+                                            }
+                                        });
+                                    }
+                                    2 => {
+                                        for row in 0..2 {
+                                            ui.horizontal_centered(|ui| {
+                                                for column in 0..2 {
+                                                    let which = if row == column {
+                                                        Icon::Dashboard
+                                                    } else {
+                                                        Icon::Boxes
+                                                    };
+                                                    showcase_tile(ui, palette, which, 64.0);
+                                                }
+                                            });
+                                        }
+                                    }
+                                    _ => {
+                                        ui.horizontal_centered(|ui| {
+                                            showcase_tile(ui, palette, Icon::Receipt, 90.0);
+                                            ui.vertical(|ui| {
+                                                showcase_tile(ui, palette, Icon::Dashboard, 64.0);
+                                                showcase_tile(ui, palette, Icon::Boxes, 64.0);
+                                            });
+                                        });
+                                    }
+                                }
+                            });
+                        });
+                });
+                ui.add_space(36.0);
+                ui.horizontal_centered(|ui| {
+                    for (index, title) in titles.iter().enumerate() {
+                        let button = egui::Button::new(
+                            RichText::new(format!("{:02}", index + 1)).color(if index == step {
+                                palette.on_accent
+                            } else {
+                                palette.secondary
+                            }),
+                        )
+                        .fill(if index == step {
+                            palette.accent
+                        } else {
+                            palette.surface_hover
+                        })
+                        .corner_radius(12.0)
+                        .min_size(egui::vec2(48.0, TARGET));
+                        let response = ui.add(button).on_hover_text(title.as_ref());
+                        if index == step && !app.settings.reduced_motion {
+                            let progress = (app.onboarding_started_at.elapsed().as_secs_f32()
+                                / CYCLE.as_secs_f32())
+                            .clamp(0.0, 1.0);
+                            let bar = egui::Rect::from_min_size(
+                                egui::pos2(
+                                    response.rect.left() + 5.0,
+                                    response.rect.bottom() - 5.0,
+                                ),
+                                egui::vec2((response.rect.width() - 10.0) * progress, 2.0),
+                            );
+                            ui.painter().rect_filled(bar, 1.0, palette.on_accent);
+                        }
+                        if response.clicked() {
+                            app.onboarding_step = index;
+                            app.onboarding_started_at = std::time::Instant::now();
+                        }
+                    }
+                });
+            });
+        ui.add_space(gap);
+        ui.allocate_ui_with_layout(
+            egui::vec2(right_width, size.y),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.add_space(24.0);
+                ui.horizontal(|ui| {
+                    crate::branding::lockup(ui, palette, 32.0);
+                    ui.add_space(16.0);
+                    if secondary_button(ui, t!(app.locale, "Change server"), palette) {
+                        app.onboarding_transition_at = Some(std::time::Instant::now());
+                        app.screen = Screen::ServerSetup;
+                    }
+                });
+                ui.add_space((size.y * 0.18).max(40.0));
+                ui.label(
+                    RichText::new(t!(app.locale, "Welcome to Atlas Commerce"))
+                        .font(crate::fonts::bold(30.0))
+                        .color(palette.text),
+                );
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new(t!(
+                        app.locale,
+                        "Manage stock, cash registers, and invoicing in real time."
+                    ))
+                    .color(palette.secondary)
+                    .size(16.0),
+                );
+                ui.add_space(32.0);
+                let primary = egui::Button::new(
+                    RichText::new(t!(app.locale, "Sign in to your workspace"))
+                        .strong()
+                        .color(palette.on_accent),
+                )
+                .fill(palette.accent)
+                .corner_radius(RADIUS);
+                if ui
+                    .add_sized([ui.available_width().min(360.0), 48.0], primary)
+                    .clicked()
+                {
+                    app.onboarding_transition_at = Some(std::time::Instant::now());
+                    app.screen = if app.server_store.selected_url().is_some() {
+                        Screen::Login
+                    } else {
+                        Screen::ServerSetup
+                    };
+                }
+                ui.add_space(12.0);
+                if secondary_button(ui, t!(app.locale, "Configure a custom server"), palette) {
+                    app.onboarding_transition_at = Some(std::time::Instant::now());
+                    app.screen = Screen::ServerSetup;
+                }
+                ui.add_space(36.0);
+                ui.label(
+                    RichText::new(format!("Atlas Commerce · v{}", env!("CARGO_PKG_VERSION")))
+                        .color(palette.dim),
+                );
+                if ui.link(t!(app.locale, "Documentation and help")).clicked()
+                    && let Err(error) = open::that(crate::screens::settings::REPOSITORY_URL)
+                {
+                    log::warn!("could not open documentation: {error}");
+                }
+            },
         );
     });
+}
+
+/// A neutral illustrative tile; it never displays live or fabricated data.
+fn showcase_tile(ui: &mut egui::Ui, palette: &Palette, which: Icon, width: f32) {
+    egui::Frame::NONE
+        .fill(palette.surface_hover)
+        .corner_radius(12.0)
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_min_width(width);
+            ui.vertical_centered(|ui| icon(ui, which, palette.secondary, 20.0));
+        });
 }
 
 // ── Server setup ───────────────────────────────────────────────────────────
@@ -510,6 +717,11 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         start_verify_link(app, link);
     }
 
+    if app.login.needs_otp {
+        draw_otp_step(app, ui, palette);
+        return;
+    }
+
     let width = (ui.available_width() - 48.0).clamp(220.0, 820.0);
     let split = width >= 680.0;
     // The desktop QR is a real one-time pairing session, never a decorative
@@ -682,6 +894,80 @@ fn draw_login_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
 }
 
+/// A separate verification step. Six ASCII digits (including a paste) start
+/// verification once; a failed attempt clears the code so it can be retried.
+fn draw_otp_step(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let elapsed = app.login.otp_shake_at.map(|at| at.elapsed().as_secs_f32());
+    let shake = if !app.settings.reduced_motion && elapsed.is_some_and(|t| t < 0.45) {
+        ui.ctx().request_repaint_after(Duration::from_millis(16));
+        let t = elapsed.unwrap_or_default();
+        (t * 42.0).sin() * 8.0 * (1.0 - t / 0.45)
+    } else {
+        0.0
+    };
+    ui.vertical_centered(|ui| {
+        ui.add_space(60.0);
+        crate::branding::lockup(ui, palette, 42.0);
+        ui.add_space(24.0);
+        card(palette).show(ui, |ui| {
+            ui.set_width(380.0_f32.min(ui.available_width()));
+            ui.vertical_centered(|ui| {
+                page_title(ui, t!(app.locale, "Verify your identity"), palette);
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(t!(app.locale, "Enter the six-digit code sent by email."))
+                        .color(palette.secondary),
+                );
+                ui.add_space(24.0);
+                if let Some(error) = &app.login.error {
+                    error_banner(ui, error, palette);
+                    ui.add_space(8.0);
+                }
+                ui.horizontal(|ui| {
+                    ui.add_space((shake + 8.0).max(0.0));
+                    let id = egui::Id::new("login-otp-code");
+                    let response = ui.add_sized(
+                        [260.0, 56.0],
+                        egui::TextEdit::singleline(&mut app.login.otp)
+                            .id(id)
+                            .font(crate::fonts::mono(24.0))
+                            .hint_text("• • • • • •")
+                            .char_limit(32),
+                    );
+                    if !app.login.otp_focus_requested {
+                        response.request_focus();
+                        app.login.otp_focus_requested = true;
+                    }
+                    if response.changed() {
+                        app.login.otp = normalize_otp(&app.login.otp);
+                        app.login.error = None;
+                        if app.login.otp.len() == 6 && !app.login.busy {
+                            start_otp(app);
+                        }
+                    }
+                });
+                ui.add_space(12.0);
+                if app.login.busy {
+                    crate::screens::centered_spinner(ui, palette);
+                } else {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Verification starts automatically."))
+                            .color(palette.dim),
+                    );
+                }
+                ui.add_space(16.0);
+                if secondary_button(ui, t!(app.locale, "Back"), palette) && !app.login.busy {
+                    app.login.needs_otp = false;
+                    app.login.otp.clear();
+                    app.login.password.clear();
+                    app.login.error = None;
+                    app.login.otp_focus_requested = false;
+                }
+            });
+        });
+    });
+}
+
 /// The password / phone-QR switch, drawn as one segmented control.
 fn segmented_tabs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let tab = if app.qr.active {
@@ -815,28 +1101,6 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 }
             });
         });
-
-        if app.login.needs_otp {
-            ui.add_space(8.0);
-            labelled_field(
-                ui,
-                t!(app.locale, "E-mail verification code (6 digits)"),
-                &mut app.login.otp,
-                palette,
-                false,
-            );
-            if !app.requires_password {
-                ui.add_space(6.0);
-                ui.label(
-                    RichText::new(t!(
-                        app.locale,
-                        "Tip: open the link in the e-mail — this app verifies it without typing."
-                    ))
-                    .color(palette.dim)
-                    .size(11.5),
-                );
-            }
-        }
     });
 }
 
@@ -844,11 +1108,7 @@ fn draw_password(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn draw_password_submit(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(16.0);
     let busy = app.login.busy;
-    let label = if app.login.needs_otp {
-        t!(app.locale, "Verify")
-    } else {
-        t!(app.locale, "Sign in")
-    };
+    let label = t!(app.locale, "Sign in");
     let clicked = ui
         .add_sized(
             [ui.available_width(), crate::theme::PRIMARY_BUTTON_HEIGHT],
@@ -868,11 +1128,7 @@ fn draw_password_submit(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         )
         .clicked();
     if clicked && !busy {
-        if app.login.needs_otp {
-            start_otp(app);
-        } else {
-            start_login(app);
-        }
+        start_login(app);
     }
 }
 
@@ -1019,6 +1275,10 @@ fn start_login(app: &mut AtlasApp) {
     );
 }
 
+fn normalize_otp(value: &str) -> String {
+    value.chars().filter(char::is_ascii_digit).take(6).collect()
+}
+
 fn start_otp(app: &mut AtlasApp) {
     let Some(client) = app.client.clone() else {
         return;
@@ -1026,7 +1286,7 @@ fn start_otp(app: &mut AtlasApp) {
     let username = app.login.username.trim().to_lowercase();
     let password = app.login.password.clone();
     let otp: String = app.login.otp.chars().filter(char::is_ascii_digit).collect();
-    if otp.len() < 4 {
+    if otp.len() != 6 {
         app.login.error =
             Some(t!(app.locale, "Enter the complete code received by e-mail.").into_owned());
         return;
@@ -1106,6 +1366,11 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
         app.login.job_otp = None;
         app.login.busy = false;
         handle_login_response(app, result);
+        if app.login.needs_otp && app.login.error.is_some() {
+            app.login.otp.clear();
+            app.login.otp_shake_at = Some(std::time::Instant::now());
+            app.login.otp_focus_requested = false;
+        }
     }
     // One-tap link.
     if let Some(job) = &app.login.job_link
@@ -1193,6 +1458,9 @@ fn handle_login_response(app: &mut AtlasApp, result: Result<LoginResponse, ApiEr
     match result {
         Ok(response) if response.success && response.needs_otp => {
             app.login.needs_otp = true;
+            app.qr = Default::default();
+            app.login.otp.clear();
+            app.login.otp_focus_requested = false;
             app.login.notice = Some(response.message.unwrap_or_else(|| {
                 t!(app.locale, "A verification code was sent by e-mail.").into_owned()
             }));
@@ -1330,5 +1598,17 @@ mod qr_rendering_tests {
         assert_eq!(first.top() - rect.top(), 40.0);
         assert_eq!(rect.right() - last.right(), 40.0);
         assert_eq!(rect.bottom() - last.bottom(), 40.0);
+    }
+}
+
+#[cfg(test)]
+mod otp_tests {
+    use super::normalize_otp;
+
+    #[test]
+    fn otp_accepts_paste_and_limits_to_six_ascii_digits() {
+        assert_eq!(normalize_otp("12 34-56"), "123456");
+        assert_eq!(normalize_otp("123456789"), "123456");
+        assert_eq!(normalize_otp("１２3"), "3");
     }
 }

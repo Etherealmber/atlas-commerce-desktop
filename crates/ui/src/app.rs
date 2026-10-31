@@ -1139,10 +1139,58 @@ impl eframe::App for EframeShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let mut palette = self.held.palette(&ctx);
-        if palette.dark && matches!(self.held.screen, Screen::Login | Screen::ServerSetup) {
+        if palette.dark
+            && matches!(
+                self.held.screen,
+                Screen::Login | Screen::ServerSetup | Screen::Onboarding
+            )
+        {
             // SOURCED-FROM: supplied authentication layout specification.
             palette.window = egui::Color32::from_rgb(0x12, 0x13, 0x16);
             palette.surface = egui::Color32::from_rgb(0x1e, 0x20, 0x25);
+        }
+        if !matches!(self.held.screen, Screen::Shell(_)) && fastframe_titlebar::enabled() {
+            egui::Panel::top(egui::Id::new("auth-titlebar"))
+                .exact_size(48.0)
+                .resizable(false)
+                .show_separator_line(false)
+                .frame(egui::Frame::NONE.fill(palette.window))
+                .show(ui, |ui| {
+                    let rect = ui.available_rect_before_wrap();
+                    ui.allocate_exact_size(rect.size(), egui::Sense::hover());
+                    fastframe_titlebar::drag(ui, rect);
+                    let footprint = fastframe_titlebar::footprint(&ctx, 48.0);
+                    let style = fastframe_titlebar::Style {
+                        icon: palette.secondary,
+                        button: palette.surface_hover,
+                        header_height: 48.0,
+                    };
+                    let minimize = t!(self.held.locale, "Minimize").into_owned();
+                    let maximize = t!(self.held.locale, "Maximize").into_owned();
+                    let restore = t!(self.held.locale, "Restore").into_owned();
+                    let close = t!(self.held.locale, "Close").into_owned();
+                    let labels = fastframe_titlebar::Labels {
+                        minimize: &minimize,
+                        maximize: &maximize,
+                        restore: &restore,
+                        close: &close,
+                    };
+                    crate::widgets::overlay_at(
+                        ui,
+                        egui::Rect::from_min_size(
+                            egui::pos2(rect.right() - footprint.right - 4.0, rect.top()),
+                            egui::vec2(footprint.right.max(120.0), 48.0),
+                        ),
+                        |ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    fastframe_titlebar::controls(ui, &style, &labels);
+                                },
+                            );
+                        },
+                    );
+                });
         }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it
@@ -1157,7 +1205,30 @@ impl eframe::App for EframeShell {
                         .inner_margin(egui::Margin::same(0)),
                 )
                 .show(ui, |ui| {
-                    self.held.draw(ui, &ctx, &palette);
+                    let transition = self.held.onboarding_transition_at.filter(|at| {
+                        !self.held.settings.reduced_motion
+                            && matches!(self.held.screen, Screen::Login | Screen::ServerSetup)
+                            && at.elapsed().as_secs_f64() < crate::motion::BASE
+                    });
+                    if let Some(started) = transition {
+                        let progress = crate::motion::standard(
+                            (started.elapsed().as_secs_f64() / crate::motion::BASE) as f32,
+                        );
+                        let rect = ui.available_rect_before_wrap();
+                        ui.scope(|ui| {
+                            ui.disable();
+                            ui.set_opacity(1.0 - progress);
+                            screens::auth::draw_onboarding(&mut self.held, ui, &palette);
+                        });
+                        crate::widgets::overlay_at(ui, rect, |ui| {
+                            ui.set_opacity(progress);
+                            self.held.draw(ui, &ctx, &palette);
+                        });
+                        ctx.request_repaint_after(Duration::from_millis(16));
+                    } else {
+                        self.held.onboarding_transition_at = None;
+                        self.held.draw(ui, &ctx, &palette);
+                    }
                 });
         }
     }
