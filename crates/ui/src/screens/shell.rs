@@ -625,7 +625,7 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         (t!(app.locale, "Overview"), &[Route::Dashboard]),
         (
             t!(app.locale, "Catalog"),
-            &[Route::Products, Route::Catalog],
+            &[Route::Products],
         ),
         (t!(app.locale, "Customer relations"), &[Route::Clients]),
         (t!(app.locale, "Team"), &[Route::Sales]),

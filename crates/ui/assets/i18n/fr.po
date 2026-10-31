@@ -1138,3 +1138,48 @@ msgstr "Impossible de créer le code QR. Réessayez."
 
 msgid "Hide password"
 msgstr "Masquer le mot de passe"
+
+msgid "Realtime workspace sync"
+msgstr "Synchronisation en temps réel"
+
+msgid "Team presence and roles"
+msgstr "Présence et rôles de l’équipe"
+
+msgid "Customizable dashboard layouts"
+msgstr "Tableaux de bord personnalisables"
+
+msgid "Automated daily recaps"
+msgstr "Récapitulatifs quotidiens automatisés"
+
+msgid "Keep your workspace in sync."
+msgstr "Gardez votre espace de travail synchronisé."
+
+msgid "Keep your team connected."
+msgstr "Gardez votre équipe connectée."
+
+msgid "See the information that matters."
+msgstr "Retrouvez les informations essentielles."
+
+msgid "Start each day with a clear overview."
+msgstr "Commencez chaque journée avec une vue claire."
+
+msgid "Manage stock, cash registers, and invoicing in real time."
+msgstr "Gérez les stocks, les caisses et la facturation en temps réel."
+
+msgid "Sign in to your workspace"
+msgstr "Se connecter à votre espace"
+
+msgid "Configure a custom server"
+msgstr "Configurer un serveur personnalisé"
+
+msgid "Documentation and help"
+msgstr "Documentation et aide"
+
+msgid "Verify your identity"
+msgstr "Vérifiez votre identité"
+
+msgid "Enter the six-digit code sent by email."
+msgstr "Saisissez le code à six chiffres envoyé par e-mail."
+
+msgid "Verification starts automatically."
+msgstr "La vérification démarre automatiquement."

@@ -171,6 +171,8 @@ pub struct LoginState {
     pub otp: String,
     pub show_password: bool,
     pub needs_otp: bool,
+    pub otp_focus_requested: bool,
+    pub otp_shake_at: Option<Instant>,
     pub notice: Option<String>,
     pub error: Option<String>,
     pub busy: bool,
@@ -338,6 +340,9 @@ pub struct AtlasApp {
 
     // ── navigation / boot ──
     pub screen: Screen,
+    /// Current onboarding illustration and its cycle start.
+    pub onboarding_step: usize,
+    pub onboarding_started_at: Instant,
     pub started_at: Instant,
     pub pending_deep_links: Vec<String>,
     /// Avatar URI whose cached HTTP texture must be evicted via the egui
@@ -503,6 +508,8 @@ impl AtlasApp {
             session,
             account_store,
             screen,
+            onboarding_step: 0,
+            onboarding_started_at: Instant::now(),
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
             avatar_evict: None,
