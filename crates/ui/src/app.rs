@@ -1197,7 +1197,30 @@ impl eframe::App for EframeShell {
                         .inner_margin(egui::Margin::same(0)),
                 )
                 .show(ui, |ui| {
-                    self.held.draw(ui, &ctx, &palette);
+                    let transition = self.held.onboarding_transition_at.filter(|at| {
+                        !self.held.settings.reduced_motion
+                            && matches!(self.held.screen, Screen::Login | Screen::ServerSetup)
+                            && at.elapsed().as_secs_f64() < crate::motion::BASE
+                    });
+                    if let Some(started) = transition {
+                        let progress = crate::motion::standard(
+                            (started.elapsed().as_secs_f64() / crate::motion::BASE) as f32,
+                        );
+                        let rect = ui.available_rect_before_wrap();
+                        ui.scope(|ui| {
+                            ui.disable();
+                            ui.set_opacity(1.0 - progress);
+                            screens::auth::draw_onboarding(&mut self.held, ui, &palette);
+                        });
+                        crate::widgets::overlay_at(ui, rect, |ui| {
+                            ui.set_opacity(progress);
+                            self.held.draw(ui, &ctx, &palette);
+                        });
+                        ctx.request_repaint_after(Duration::from_millis(16));
+                    } else {
+                        self.held.onboarding_transition_at = None;
+                        self.held.draw(ui, &ctx, &palette);
+                    }
                 });
         }
     }

@@ -343,6 +343,7 @@ pub struct AtlasApp {
     /// Current onboarding illustration and its cycle start.
     pub onboarding_step: usize,
     pub onboarding_started_at: Instant,
+    pub onboarding_transition_at: Option<Instant>,
     pub started_at: Instant,
     pub pending_deep_links: Vec<String>,
     /// Avatar URI whose cached HTTP texture must be evicted via the egui
@@ -510,6 +511,7 @@ impl AtlasApp {
             screen,
             onboarding_step: 0,
             onboarding_started_at: Instant::now(),
+            onboarding_transition_at: None,
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
             avatar_evict: None,

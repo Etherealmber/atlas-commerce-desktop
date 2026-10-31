@@ -270,6 +270,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     crate::branding::lockup(ui, palette, 32.0);
                     ui.add_space(16.0);
                     if secondary_button(ui, t!(app.locale, "Change server"), palette) {
+                        app.onboarding_transition_at = Some(std::time::Instant::now());
                         app.screen = Screen::ServerSetup;
                     }
                 });
@@ -294,6 +295,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 .fill(palette.accent)
                 .corner_radius(RADIUS);
                 if ui.add_sized([ui.available_width().min(360.0), 48.0], primary).clicked() {
+                    app.onboarding_transition_at = Some(std::time::Instant::now());
                     app.screen = if app.server_store.selected_url().is_some() {
                         Screen::Login
                     } else {
@@ -302,6 +304,7 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 }
                 ui.add_space(12.0);
                 if secondary_button(ui, t!(app.locale, "Configure a custom server"), palette) {
+                    app.onboarding_transition_at = Some(std::time::Instant::now());
                     app.screen = Screen::ServerSetup;
                 }
                 ui.add_space(36.0);
