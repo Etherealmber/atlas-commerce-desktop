@@ -190,15 +190,46 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                                 ui.add_space(20.0);
                                 ui.label(RichText::new(titles[step].as_ref()).strong().color(palette.text));
                                 ui.add_space(16.0);
-                                ui.horizontal_centered(|ui| {
-                                    for which in [Icon::Dashboard, Icon::Users, Icon::Boxes, Icon::Receipt] {
-                                        egui::Frame::NONE
-                                            .fill(palette.surface_hover)
-                                            .corner_radius(12.0)
-                                            .inner_margin(egui::Margin::same(12))
-                                            .show(ui, |ui| icon(ui, which, palette.secondary, 20.0));
+                                match step {
+                                    0 => {
+                                        // Two window-like tiles suggest activity flowing
+                                        // between the workspace and the desktop.
+                                        ui.horizontal_centered(|ui| {
+                                            showcase_tile(ui, palette, Icon::Dashboard, 64.0);
+                                            icon(ui, Icon::ChevronRight, palette.secondary, 18.0);
+                                            showcase_tile(ui, palette, Icon::Boxes, 64.0);
+                                        });
                                     }
-                                });
+                                    1 => {
+                                        ui.horizontal_centered(|ui| {
+                                            for initial in ["A", "B", "C"] {
+                                                let _ = crate::widgets::avatar(
+                                                    ui, None, initial, 44.0, palette.accent,
+                                                    palette.on_accent, palette.outline,
+                                                );
+                                            }
+                                        });
+                                    }
+                                    2 => {
+                                        for row in 0..2 {
+                                            ui.horizontal_centered(|ui| {
+                                                for column in 0..2 {
+                                                    let which = if row == column { Icon::Dashboard } else { Icon::Boxes };
+                                                    showcase_tile(ui, palette, which, 64.0);
+                                                }
+                                            });
+                                        }
+                                    }
+                                    _ => {
+                                        ui.horizontal_centered(|ui| {
+                                            showcase_tile(ui, palette, Icon::Receipt, 90.0);
+                                            ui.vertical(|ui| {
+                                                showcase_tile(ui, palette, Icon::Dashboard, 64.0);
+                                                showcase_tile(ui, palette, Icon::Boxes, 64.0);
+                                            });
+                                        });
+                                    }
+                                }
                             });
                         });
                 });
@@ -212,7 +243,17 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                         .fill(if index == step { palette.accent } else { palette.surface_hover })
                         .corner_radius(12.0)
                         .min_size(egui::vec2(48.0, TARGET));
-                        if ui.add(button).on_hover_text(titles[index].as_ref()).clicked() {
+                        let response = ui.add(button).on_hover_text(titles[index].as_ref());
+                        if index == step && !app.settings.reduced_motion {
+                            let progress = (app.onboarding_started_at.elapsed().as_secs_f32()
+                                / CYCLE.as_secs_f32()).clamp(0.0, 1.0);
+                            let bar = egui::Rect::from_min_size(
+                                egui::pos2(response.rect.left() + 5.0, response.rect.bottom() - 5.0),
+                                egui::vec2((response.rect.width() - 10.0) * progress, 2.0),
+                            );
+                            ui.painter().rect_filled(bar, 1.0, palette.on_accent);
+                        }
+                        if response.clicked() {
                             app.onboarding_step = index;
                             app.onboarding_started_at = std::time::Instant::now();
                         }
@@ -273,6 +314,18 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             },
         );
     });
+}
+
+/// A neutral illustrative tile; it never displays live or fabricated data.
+fn showcase_tile(ui: &mut egui::Ui, palette: &Palette, which: Icon, width: f32) {
+    egui::Frame::NONE
+        .fill(palette.surface_hover)
+        .corner_radius(12.0)
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_min_width(width);
+            ui.vertical_centered(|ui| icon(ui, which, palette.secondary, 20.0));
+        });
 }
 
 // ── Server setup ───────────────────────────────────────────────────────────
