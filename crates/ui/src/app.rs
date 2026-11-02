@@ -614,14 +614,12 @@ impl AtlasApp {
         for command in commands {
             match command {
                 TrayCommand::Show => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     self.show_requested = true;
                 }
                 TrayCommand::QuickStats => {
                     if self.session.is_some() {
                         self.screen = Screen::Shell(Route::Dashboard);
                         self.show_requested = true;
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     }
                 }
                 TrayCommand::Quit => {
@@ -674,16 +672,6 @@ impl AtlasApp {
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
             ctx.forget_image(&uri);
-        }
-        // A queued show request while a window already exists: bring it back.
-        // With no viewport (hidden to tray) headless_frame returns
-        // Headless::Show from the same flag instead.
-        if self.show_requested
-            && ctx
-                .input(|input| input.viewport().visible())
-                .unwrap_or(false)
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         }
         screens::auth::poll_login_jobs(self);
 
@@ -1117,6 +1105,14 @@ impl eframe::App for EframeShell {
         }
 
         self.held.poll_background(ctx);
+        // Unlike viewport.visible(), this also handles minimized, occluded,
+        // and hidden windows. Consume the request only in the windowed loop:
+        // the headless loop needs it to recreate the window instead.
+        if std::mem::take(&mut self.held.show_requested) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         let lock = ctx.input(|input| {
             let viewport = input.viewport();
             should_lock(
