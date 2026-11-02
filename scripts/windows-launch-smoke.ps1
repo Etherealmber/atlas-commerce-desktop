@@ -48,7 +48,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not [AtlasWindowSmoke]::IsIconic($handle)) { throw 'Could not minimize the window for the restore test.' }
-    $second = Start-Process -FilePath $exe -PassThru
+    $second = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput (Join-Path $profile 'second-stdout.txt') -RedirectStandardError (Join-Path $profile 'second-stderr.txt')
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while ([DateTime]::UtcNow -lt $deadline) {
         $process.Refresh()
@@ -64,7 +64,7 @@ try {
     $detail = $_.Exception.Message -replace '[\r\n]', ' '
     Write-Host "::error title=Windows launch smoke::$detail"
     # This profile is new and contains no real user data or credentials.
-    foreach ($output in @('stdout.txt', 'stderr.txt')) {
+    foreach ($output in @('stdout.txt', 'stderr.txt', 'second-stdout.txt', 'second-stderr.txt')) {
         $outputPath = Join-Path $profile $output
         if (Test-Path $outputPath) {
             Get-Content $outputPath -Tail 20 | ForEach-Object {

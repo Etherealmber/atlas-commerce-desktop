@@ -1109,6 +1109,7 @@ impl eframe::App for EframeShell {
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
         if std::mem::take(&mut self.held.show_requested) {
+            log::info!("Restoring the existing window");
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);

@@ -81,6 +81,7 @@ fn main() -> eframe::Result<()> {
             && let Ok(mut queue) = queue.lock()
         {
             // Plain second launch: ask the running instance to unhide.
+            log::info!("Received request to show the running instance");
             queue.push(atlas_ui::SHOW_REQUEST.to_owned());
         }
         // Always wake the running instance; it decides what the request means.
