@@ -228,6 +228,10 @@ jobs:
       - name: Release build
         shell: bash
         run: cargo build --release --workspace 2>&1 | tee "$LOG_DIR/release-build.log"
+      - name: Windows visible launch and restore smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/windows-launch-smoke.ps1
       - name: Job summary
         if: always()
         shell: bash
