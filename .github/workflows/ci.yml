@@ -231,7 +231,13 @@ jobs:
       - name: Windows visible launch and restore smoke test
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/windows-launch-smoke.ps1
+        run: |
+          try { ./scripts/windows-launch-smoke.ps1 }
+          catch {
+            $detail = $_.Exception.Message -replace '[\r\n]', ' '
+            Write-Host "::error title=Windows smoke test::$detail"
+            throw
+          }
       - name: Job summary
         if: always()
         shell: bash

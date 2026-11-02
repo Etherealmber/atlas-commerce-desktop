@@ -59,9 +59,17 @@ try {
     }
     Write-Host 'Second launch restored the minimized window.'
 } catch {
+    $detail = $_.Exception.Message -replace '[\r\n]', ' '
+    Write-Host "::error title=Windows launch smoke::$detail"
     # This profile is new and contains no real user data or credentials.
     Get-ChildItem -Path $profile -Filter '*.log' -Recurse -ErrorAction SilentlyContinue |
-        ForEach-Object { Write-Host "--- $($_.Name) ---"; Get-Content $_.FullName -Tail 60 }
+        ForEach-Object {
+            Write-Host "--- $($_.Name) ---"
+            Get-Content $_.FullName -Tail 20 | ForEach-Object {
+                $line = $_ -replace '[\r\n]', ' '
+                Write-Host "::warning title=Fresh-profile launch log::$line"
+            }
+        }
     throw
 } finally {
     foreach ($child in @($second, $process)) {
