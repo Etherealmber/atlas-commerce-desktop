@@ -5,8 +5,10 @@ $ErrorActionPreference = 'Stop'
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class AtlasWindowSmoke {
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int command);
 }
@@ -26,17 +28,22 @@ try {
     $stderr = Join-Path $profile 'stderr.txt'
     $stdout = Join-Path $profile 'stdout.txt'
     $process = Start-Process -FilePath $exe -PassThru -RedirectStandardError $stderr -RedirectStandardOutput $stdout
-    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    $deadline = [DateTime]::UtcNow.AddSeconds(120)
     $handle = [IntPtr]::Zero
     while ([DateTime]::UtcNow -lt $deadline) {
         $process.Refresh()
         if ($process.HasExited) { throw "App exited before opening its window (exit $($process.ExitCode))." }
         $handle = $process.MainWindowHandle
-        if ($handle -ne [IntPtr]::Zero -and [AtlasWindowSmoke]::IsWindowVisible($handle)) { break }
+        $title = New-Object System.Text.StringBuilder 256
+        if ($handle -ne [IntPtr]::Zero) { [void][AtlasWindowSmoke]::GetWindowText($handle, $title, $title.Capacity) }
+        # A winit helper window can also be visible. Require our title and
+        # proof the app reached its first UI logic, not merely a process handle.
+        $firstFrame = (Test-Path $stderr) -and (Select-String -Path $stderr -SimpleMatch 'Startup: first window logic frame' -Quiet)
+        if ($handle -ne [IntPtr]::Zero -and [AtlasWindowSmoke]::IsWindowVisible($handle) -and $title.ToString().StartsWith('Atlas Commerce') -and $firstFrame) { break }
         Start-Sleep -Milliseconds 500
     }
-    if ($handle -eq [IntPtr]::Zero -or -not [AtlasWindowSmoke]::IsWindowVisible($handle)) {
-        throw 'The app is running but did not open a visible main window.'
+    if (-not $firstFrame -or $handle -eq [IntPtr]::Zero -or -not [AtlasWindowSmoke]::IsWindowVisible($handle) -or -not $title.ToString().StartsWith('Atlas Commerce')) {
+        throw "The app did not reach its first window logic frame and open a visible Atlas Commerce window (title: '$title', first frame: $firstFrame)."
     }
     Write-Host "Visible window opened (PID $($process.Id))."
 
@@ -57,7 +64,9 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if ([AtlasWindowSmoke]::IsIconic($handle) -or -not [AtlasWindowSmoke]::IsWindowVisible($handle)) {
-        throw 'A second launch did not restore the minimized window.'
+        $second.Refresh()
+        $secondState = if ($second.HasExited) { "exited with code $($second.ExitCode)" } else { 'still running' }
+        throw "A second launch did not restore the minimized window (second process $secondState)."
     }
     Write-Host 'Second launch restored the minimized window.'
 } catch {

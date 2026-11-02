@@ -1022,6 +1022,7 @@ impl EframeShell {
         held.applied_palette = None;
         held.applied_reduced_motion = None;
         crate::theme::install_fonts_and_icons(ctx);
+        log::info!("Startup: fonts and image loaders ready");
         // Make egui's own preference follow the app setting before the first
         // palette read, so a forced Light/Dark mode resolves correctly even
         // when the OS reports the opposite appearance.
