@@ -674,7 +674,7 @@ jobs:
       # failing on an existing tag.
       - name: Create the GitHub Release as a draft (tag via API, no git push)
         id: release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ needs.prepare.outputs.repo }}
           tag_name: ${{ needs.prepare.outputs.tag }}
@@ -770,7 +770,7 @@ jobs:
       # failed upload fails the job, so the announce step never needs gh.
       - name: Attach all assets
         id: upload
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ needs.prepare.outputs.repo }}
           tag_name: ${{ needs.prepare.outputs.tag }}
@@ -779,7 +779,7 @@ jobs:
           # Stay a draft: publishing happens only after this succeeds.
           draft: true
       - name: Publish the release (only now is it visible to updaters)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ needs.prepare.outputs.repo }}
           tag_name: ${{ needs.prepare.outputs.tag }}
