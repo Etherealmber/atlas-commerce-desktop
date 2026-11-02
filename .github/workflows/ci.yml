@@ -238,6 +238,14 @@ jobs:
             Write-Host "::error title=Windows smoke test::$detail"
             throw
           }
+      - name: Upload Windows smoke-tested executable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-smoke-tested-executable
+          path: target/release/atlas-commerce-desktop.exe
+          if-no-files-found: error
+          retention-days: 7
       - name: Job summary
         if: always()
         shell: bash
