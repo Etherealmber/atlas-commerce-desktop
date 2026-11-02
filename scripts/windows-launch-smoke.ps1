@@ -23,7 +23,9 @@ New-Item -ItemType Directory -Path $env:APPDATA, $env:LOCALAPPDATA | Out-Null
 $process = $null
 $second = $null
 try {
-    $process = Start-Process -FilePath $exe -PassThru
+    $stderr = Join-Path $profile 'stderr.txt'
+    $stdout = Join-Path $profile 'stdout.txt'
+    $process = Start-Process -FilePath $exe -PassThru -RedirectStandardError $stderr -RedirectStandardOutput $stdout
     $deadline = [DateTime]::UtcNow.AddSeconds(60)
     $handle = [IntPtr]::Zero
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -62,6 +64,15 @@ try {
     $detail = $_.Exception.Message -replace '[\r\n]', ' '
     Write-Host "::error title=Windows launch smoke::$detail"
     # This profile is new and contains no real user data or credentials.
+    foreach ($output in @('stdout.txt', 'stderr.txt')) {
+        $outputPath = Join-Path $profile $output
+        if (Test-Path $outputPath) {
+            Get-Content $outputPath -Tail 20 | ForEach-Object {
+                $line = $_ -replace '[\r\n]', ' '
+                Write-Host "::warning title=Windows process output::$line"
+            }
+        }
+    }
     Get-ChildItem -Path $profile -Filter '*.log' -Recurse -ErrorAction SilentlyContinue |
         ForEach-Object {
             Write-Host "--- $($_.Name) ---"
