@@ -63,17 +63,22 @@ fn texture(ui: &Ui, wordmark: bool) -> TextureHandle {
     } else {
         "atlas-mark"
     };
-    ui.ctx().data_mut(|data| {
+    let ctx = ui.ctx();
+    let cached = ctx.data_mut(|data| {
         let cache = data.get_temp_mut_or_default::<BrandTextures>(egui::Id::new(CACHE_ID));
-        let slot = which(cache, wordmark);
-        if slot.is_none() {
-            *slot = Some(ui.ctx().load_texture(
-                name,
-                coverage_image(bytes),
-                TextureOptions::LINEAR,
-            ));
-        }
-        slot.clone().expect("brand texture was just created")
+        which(cache, wordmark).clone()
+    });
+    if let Some(texture) = cached {
+        return texture;
+    }
+
+    // Context::data_mut holds egui's context lock. load_texture also reads
+    // that same context, so loading inside the closure deadlocks the first
+    // frame (the splash paints this mark before the window appears).
+    let loaded = ctx.load_texture(name, coverage_image(bytes), TextureOptions::LINEAR);
+    ctx.data_mut(|data| {
+        let cache = data.get_temp_mut_or_default::<BrandTextures>(egui::Id::new(CACHE_ID));
+        which(cache, wordmark).get_or_insert(loaded).clone()
     })
 }
 
@@ -130,6 +135,34 @@ mod tests {
 
     fn opaque_pixels(image: &ColorImage) -> usize {
         image.pixels.iter().filter(|pixel| pixel.a() > 200).count()
+    }
+
+    #[test]
+    fn first_brand_frame_does_not_reenter_the_context_lock() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let ctx = egui::Context::default();
+            let mut ids = None;
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mark = texture(ui, false).id();
+                    let mark_again = texture(ui, false).id();
+                    let wordmark = texture(ui, true).id();
+                    let wordmark_again = texture(ui, true).id();
+                    ids = Some((mark, mark_again, wordmark, wordmark_again));
+                });
+            });
+            output.textures_delta.set.clear();
+            output.textures_delta.free.clear();
+            sender.send(ids).unwrap();
+        });
+        let ids = receiver
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the first brand frame must not deadlock")
+            .expect("the brand textures must be created");
+        assert_eq!(ids.0, ids.1);
+        assert_eq!(ids.2, ids.3);
+        assert_ne!(ids.0, ids.2);
     }
 
     #[test]
