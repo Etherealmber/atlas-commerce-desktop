@@ -14,6 +14,8 @@
 // Spotifast entry point.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod diagnostics;
+
 use std::sync::{Arc, Mutex};
 
 use atlas_core::session::load_session;
@@ -124,6 +126,8 @@ fn main() -> eframe::Result<()> {
         std::env::consts::ARCH
     );
 
+    diagnostics::log_environment();
+
     // 4. Persisted state. No password is ever read here — only the token.
     let settings = Settings::load(&paths.settings_file());
     let locale = atlas_ui::i18n::Locale::from_tag(&settings.language);
@@ -215,9 +219,11 @@ fn main() -> eframe::Result<()> {
         shell = shell.idle(fastframe_tray::idle);
     }
 
+    log::info!("Startup: entering desktop shell (start hidden: {start_hidden})");
     shell.run(move |lease| {
         let custom_titlebar = lease.peek(|app| app.settings.custom_titlebar);
         let options = native_options(custom_titlebar);
+        log::info!("Startup: creating native window");
         eframe::run_native(
             APP_NAME,
             options,

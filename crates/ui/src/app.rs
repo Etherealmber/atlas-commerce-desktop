@@ -1053,6 +1053,7 @@ impl eframe::App for EframeShell {
 
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         if self.first_frame {
+            log::info!("Startup: first window logic frame");
             self.first_frame = false;
             // The viewport was born hidden (see native_options): reveal it
             // only now that the first frame carries the real palette, fonts
