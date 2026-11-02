@@ -228,9 +228,29 @@ jobs:
       - name: Release build
         shell: bash
         run: cargo build --release --workspace 2>&1 | tee "$LOG_DIR/release-build.log"
+      # GitHub's Windows VM exposes only OpenGL 1.1. A checksum-pinned Mesa
+      # software renderer is used for this test only, not bundled in releases.
+      - name: Prepare software OpenGL for Windows smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'mesa-test.tgz'
+          $url = 'https://registry.npmjs.org/@gjsify/gl-runtime-win32-x64/-/gl-runtime-win32-x64-0.64.16.tgz'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $expected = '53274f8c8ad92a598a021adf0c4260d1a8c39c4e3f04f889fbb3ded4d0a6a169e8ef8459181ee73557f0d46fd19879a7d5b252c91789135439358836b1fdd915'
+          if ((Get-FileHash -Algorithm SHA512 $archive).Hash.ToLowerInvariant() -ne $expected) {
+            throw 'Mesa test archive checksum mismatch.'
+          }
+          $mesa = Join-Path $env:RUNNER_TEMP 'mesa-test'
+          New-Item -ItemType Directory -Force -Path $mesa | Out-Null
+          tar -xzf $archive -C $mesa
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract Mesa test archive.' }
+          Copy-Item "$mesa/package/bin/opengl32.dll", "$mesa/package/bin/libgallium_wgl.dll" target/release/
       - name: Windows visible launch and restore smoke test
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
         run: |
           try { ./scripts/windows-launch-smoke.ps1 }
           catch {
