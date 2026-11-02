@@ -68,6 +68,18 @@ Aucun moteur de navigateur, aucune télémétrie : tout le réseau passe par
   session enregistrée.
 - **Aucune télémétrie**, aucun analytics, aucun CDN tiers.
 
+## Journaux de diagnostic
+
+Au démarrage, les journaux locaux indiquent la version de l’application,
+la catégorie générale « client ordinateur » (le format portable ou fixe
+n’est pas détecté), l’architecture du binaire, le système et sa version ou
+son numéro de build lorsqu’ils sont disponibles, ainsi que les principales
+étapes d’ouverture de la fenêtre. Ils ne collectent pas de nom d’appareil,
+numéro de série, identifiant matériel ou nom d’utilisateur pour ce résumé.
+Ils restent sur l’appareil : aucune télémétrie n’est envoyée. Avant de
+partager un journal, vérifiez son contenu, notamment les chemins et autres
+informations éventuellement produits par des bibliothèques.
+
 ## Mise à jour
 
 Les mises à jour passent **exclusivement par les GitHub Releases** de ce

@@ -14,6 +14,8 @@
 // Spotifast entry point.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod diagnostics;
+
 use std::sync::{Arc, Mutex};
 
 use atlas_core::session::load_session;
@@ -81,6 +83,7 @@ fn main() -> eframe::Result<()> {
             && let Ok(mut queue) = queue.lock()
         {
             // Plain second launch: ask the running instance to unhide.
+            log::info!("Received request to show the running instance");
             queue.push(atlas_ui::SHOW_REQUEST.to_owned());
         }
         // Always wake the running instance; it decides what the request means.
@@ -122,6 +125,8 @@ fn main() -> eframe::Result<()> {
         std::env::consts::OS,
         std::env::consts::ARCH
     );
+
+    diagnostics::log_environment();
 
     // 4. Persisted state. No password is ever read here — only the token.
     let settings = Settings::load(&paths.settings_file());
@@ -214,9 +219,11 @@ fn main() -> eframe::Result<()> {
         shell = shell.idle(fastframe_tray::idle);
     }
 
+    log::info!("Startup: entering desktop shell (start hidden: {start_hidden})");
     shell.run(move |lease| {
         let custom_titlebar = lease.peek(|app| app.settings.custom_titlebar);
         let options = native_options(custom_titlebar);
+        log::info!("Startup: creating native window");
         eframe::run_native(
             APP_NAME,
             options,
@@ -243,11 +250,11 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
         .with_inner_size([1280.0, 800.0])
         .with_min_inner_size([1024.0, 680.0])
         .with_decorations(!custom_titlebar)
-        // Born hidden: the OS would otherwise paint the default white
-        // window background for several frames before the first egui
-        // present (the "Windows 7" white flash). EframeShell flips this
-        // back on once the first fully styled frame has been rendered.
-        .with_visible(false);
+        // Request a visible window. Eframe's native integration already
+        // creates it hidden until the first rendered frame; marking the
+        // viewport itself hidden can leave Windows waiting for a repaint of
+        // a window that the compositor considers occluded.
+        .with_visible(true);
     // Runtime window/taskbar icon (Linux window managers and any Windows
     // shell path that ignores the embedded resource). macOS takes its Dock
     // icon from the bundle, so setting one there would only flatten it.
