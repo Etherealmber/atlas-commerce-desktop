@@ -422,7 +422,43 @@ pub(crate) fn poll(app: &mut AtlasApp) {
 
 #[cfg(test)]
 mod tests {
-    use super::{origin, valid_authorization_url};
+    use super::{origin, same_context, secret, valid_authorization_url};
+    #[test]
+    fn proofs_are_random_url_safe_and_context_is_bound() {
+        let a = secret().unwrap();
+        let b = secret().unwrap();
+        assert_eq!(a.len(), 43);
+        assert_ne!(a, b);
+        assert!(
+            a.bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        );
+        assert!(same_context(
+            "id",
+            "https://server",
+            &a,
+            "id",
+            "https://server",
+            &a
+        ));
+        assert!(!same_context(
+            "id",
+            "https://server",
+            &a,
+            "id",
+            "https://other",
+            &a
+        ));
+        assert!(!same_context(
+            "id",
+            "https://server",
+            &a,
+            "id",
+            "https://server",
+            &b
+        ));
+    }
+
     #[test]
     fn authorization_url_is_bound_to_selected_server_and_proof() {
         let base = origin("https://self.example:8443/").unwrap();

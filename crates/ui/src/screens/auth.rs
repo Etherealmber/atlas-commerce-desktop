@@ -755,20 +755,22 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     egui::vec2(right_width, 520.0),
                                     egui::Layout::top_down(egui::Align::Center),
                                     |ui| {
-                                        ui.add_space(80.0);
-                                        if app.requires_password {
-                                            icon(ui, Icon::Lock, palette.secondary, 32.0);
-                                            ui.add_space(16.0);
-                                            ui.label(
-                                                RichText::new(t!(
-                                                    app.locale,
-                                                    "Enter your password to unlock this workspace."
-                                                ))
-                                                .color(palette.secondary),
-                                            );
-                                        } else {
-                                            draw_qr(app, ui, palette);
-                                        }
+                                        egui::ScrollArea::vertical()
+                                            .id_salt("login-qr-panel")
+                                            .max_height(520.0)
+                                            .show(ui, |ui| {
+                                                ui.add_space(24.0);
+                                                if app.requires_password {
+                                                    icon(ui, Icon::Lock, palette.secondary, 32.0);
+                                                    ui.add_space(16.0);
+                                                    ui.label(
+                                                        RichText::new(t!(app.locale, "Enter your password to unlock this workspace."))
+                                                            .color(palette.secondary),
+                                                    );
+                                                } else {
+                                                    draw_qr(app, ui, palette);
+                                                }
+                                            });
                                     },
                                 );
                             }
