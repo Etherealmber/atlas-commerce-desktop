@@ -50,6 +50,7 @@ struct Created {
     authorization_url: String,
     pairing_code: String,
     expires_in: u64,
+    expires_at: String,
     interval: u64,
 }
 #[derive(Deserialize)]
@@ -233,7 +234,15 @@ async fn run(
     )
     .ok_or("Adresse d’autorisation invalide.")?;
     let proof = serde_json::json!({"request_id":created.request_id,"origin":server,"state":state,"code_verifier":verifier});
-    let deadline = Instant::now() + Duration::from_secs(created.expires_in);
+    let expires = chrono::DateTime::parse_from_rfc3339(&created.expires_at)
+        .map_err(|_| "Expiration de connexion invalide.")?;
+    let remaining = expires
+        .signed_duration_since(chrono::Utc::now())
+        .num_seconds();
+    if remaining <= 0 {
+        return Err("La demande a expiré. Recommencez.");
+    }
+    let deadline = Instant::now() + Duration::from_secs((remaining as u64).min(created.expires_in));
     if events
         .send(Event {
             url,
@@ -377,19 +386,17 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         .events
         .as_ref()
         .and_then(|rx| rx.try_recv().ok())
+        && matches!(app.screen, Screen::Login)
+        && !app
+            .browser_login
+            .cancel
+            .as_ref()
+            .is_some_and(|v| v.load(Ordering::Relaxed))
     {
-        if matches!(app.screen, Screen::Login)
-            && !app
-                .browser_login
-                .cancel
-                .as_ref()
-                .is_some_and(|v| v.load(Ordering::Relaxed))
-        {
-            app.browser_login.pairing_code = Some(event.pairing_code);
-            if open::that(event.url.as_str()).is_err() {
-                cancel(app);
-                app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
-            }
+        app.browser_login.pairing_code = Some(event.pairing_code);
+        if open::that(event.url.as_str()).is_err() {
+            cancel(app);
+            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
         }
     }
     if let Some(result) = app.browser_login.job.as_ref().and_then(Job::poll) {
