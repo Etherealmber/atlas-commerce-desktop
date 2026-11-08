@@ -344,7 +344,10 @@ fn list_row(
 
 fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 380.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(480.0, 380.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("category-scrim")) {
         app.category_editor = None;
         return;
@@ -352,69 +355,76 @@ fn category_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(436.0, 0.0));
-            let title = if app
-                .category_editor
-                .as_ref()
-                .is_some_and(|editor| editor.editing_id.is_some())
-            {
-                t!(locale, "Edit category")
-            } else {
-                t!(locale, "New category")
-            };
-            ui.label(
-                RichText::new(title)
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
-            if let Some(editor) = app.category_editor.as_mut() {
-                labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Description"),
-                    &mut editor.description,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Sort order"),
-                    &mut editor.sort_order,
-                    palette,
-                    false,
-                );
-            }
-            if let Some(error) = app
-                .category_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone())
-            {
-                ui.add_space(8.0);
-                error_banner(ui, &error, palette);
-            }
-            ui.add_space(12.0);
-            widgets::dialog_actions(ui, |ui| {
-                let saving = app
-                    .category_editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.saving);
-                if secondary_button(ui, t!(locale, "Cancel"), palette) {
-                    app.category_editor = None;
-                }
-                if primary_button(ui, t!(locale, "Save"), palette, !saving) {
-                    submit_category(app);
-                }
-            });
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(436.0, 0.0));
+                    let title = if app
+                        .category_editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.editing_id.is_some())
+                    {
+                        t!(locale, "Edit category")
+                    } else {
+                        t!(locale, "New category")
+                    };
+                    ui.label(
+                        RichText::new(title)
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
+                    if let Some(editor) = app.category_editor.as_mut() {
+                        labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Description"),
+                            &mut editor.description,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Sort order"),
+                            &mut editor.sort_order,
+                            palette,
+                            false,
+                        );
+                    }
+                    if let Some(error) = app
+                        .category_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone())
+                    {
+                        ui.add_space(8.0);
+                        error_banner(ui, &error, palette);
+                    }
+                    ui.add_space(12.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let saving = app
+                            .category_editor
+                            .as_ref()
+                            .is_some_and(|editor| editor.saving);
+                        if secondary_button(ui, t!(locale, "Cancel"), palette) {
+                            app.category_editor = None;
+                        }
+                        if primary_button(ui, t!(locale, "Save"), palette, !saving) {
+                            submit_category(app);
+                        }
+                    });
+                });
         });
     });
 }
 
 fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 360.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(480.0, 360.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("unit-scrim")) {
         app.unit_editor = None;
         return;
@@ -422,53 +432,63 @@ fn unit_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(436.0, 0.0));
-            let title = if app
-                .unit_editor
-                .as_ref()
-                .is_some_and(|editor| editor.editing_id.is_some())
-            {
-                t!(locale, "Edit unit")
-            } else {
-                t!(locale, "New unit")
-            };
-            ui.label(
-                RichText::new(title)
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
-            if let Some(editor) = app.unit_editor.as_mut() {
-                labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
-                ui.add_space(8.0);
-                labelled_field(ui, t!(locale, "Symbol"), &mut editor.symbol, palette, false);
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Sort order"),
-                    &mut editor.sort_order,
-                    palette,
-                    false,
-                );
-            }
-            if let Some(error) = app
-                .unit_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone())
-            {
-                ui.add_space(8.0);
-                error_banner(ui, &error, palette);
-            }
-            ui.add_space(12.0);
-            widgets::dialog_actions(ui, |ui| {
-                let saving = app.unit_editor.as_ref().is_some_and(|editor| editor.saving);
-                if secondary_button(ui, t!(locale, "Cancel"), palette) {
-                    app.unit_editor = None;
-                }
-                if primary_button(ui, t!(locale, "Save"), palette, !saving) {
-                    submit_unit(app);
-                }
-            });
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(436.0, 0.0));
+                    let title = if app
+                        .unit_editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.editing_id.is_some())
+                    {
+                        t!(locale, "Edit unit")
+                    } else {
+                        t!(locale, "New unit")
+                    };
+                    ui.label(
+                        RichText::new(title)
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
+                    if let Some(editor) = app.unit_editor.as_mut() {
+                        labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Symbol"),
+                            &mut editor.symbol,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Sort order"),
+                            &mut editor.sort_order,
+                            palette,
+                            false,
+                        );
+                    }
+                    if let Some(error) = app
+                        .unit_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone())
+                    {
+                        ui.add_space(8.0);
+                        error_banner(ui, &error, palette);
+                    }
+                    ui.add_space(12.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let saving = app.unit_editor.as_ref().is_some_and(|editor| editor.saving);
+                        if secondary_button(ui, t!(locale, "Cancel"), palette) {
+                            app.unit_editor = None;
+                        }
+                        if primary_button(ui, t!(locale, "Save"), palette, !saving) {
+                            submit_unit(app);
+                        }
+                    });
+                });
         });
     });
 }

@@ -392,7 +392,10 @@ fn detail_row(
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 620.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(520.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
         app.client_editor = None;
         return;
@@ -401,85 +404,89 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(476.0, 0.0));
-            let title = if app
-                .client_editor
-                .as_ref()
-                .is_some_and(|editor| editor.editing_id.is_some())
-            {
-                t!(locale, "Edit client")
-            } else {
-                t!(locale, "New client")
-            };
-            ui.label(
-                RichText::new(title)
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(476.0, 0.0));
+                    let title = if app
+                        .client_editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.editing_id.is_some())
+                    {
+                        t!(locale, "Edit client")
+                    } else {
+                        t!(locale, "New client")
+                    };
+                    ui.label(
+                        RichText::new(title)
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
 
-            if let Some(editor) = app.client_editor.as_mut() {
-                labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
-                ui.add_space(8.0);
-                labelled_field(ui, "ICE", &mut editor.ice, palette, false);
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Tax ID (IF)"),
-                    &mut editor.if_number,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(ui, t!(locale, "Phone"), &mut editor.phone, palette, false);
-                ui.add_space(8.0);
-                labelled_field(ui, t!(locale, "Email"), &mut editor.email, palette, false);
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Address"),
-                    &mut editor.address,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(ui, t!(locale, "City"), &mut editor.city, palette, false);
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Credit limit (MAD)"),
-                    &mut editor.credit_limit,
-                    palette,
-                    false,
-                );
-                ui.add_space(10.0);
-                ui.checkbox(&mut editor.tax_exempt, t!(locale, "VAT exempt").to_string());
-            }
+                    if let Some(editor) = app.client_editor.as_mut() {
+                        labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(ui, "ICE", &mut editor.ice, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Tax ID (IF)"),
+                            &mut editor.if_number,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(ui, t!(locale, "Phone"), &mut editor.phone, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(ui, t!(locale, "Email"), &mut editor.email, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Address"),
+                            &mut editor.address,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(ui, t!(locale, "City"), &mut editor.city, palette, false);
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Credit limit (MAD)"),
+                            &mut editor.credit_limit,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(10.0);
+                        ui.checkbox(&mut editor.tax_exempt, t!(locale, "VAT exempt").to_string());
+                    }
 
-            if let Some(error) = app
-                .client_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone())
-            {
-                ui.add_space(8.0);
-                error_banner(ui, &error, palette);
-            }
+                    if let Some(error) = app
+                        .client_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone())
+                    {
+                        ui.add_space(8.0);
+                        error_banner(ui, &error, palette);
+                    }
 
-            ui.add_space(12.0);
-            widgets::dialog_actions(ui, |ui| {
-                let saving = app
-                    .client_editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.saving);
-                let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
-                    app.client_editor = None;
-                }
-                if save {
-                    submit_editor(app);
-                }
-            });
+                    ui.add_space(12.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let saving = app
+                            .client_editor
+                            .as_ref()
+                            .is_some_and(|editor| editor.saving);
+                        let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
+                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        if cancel {
+                            app.client_editor = None;
+                        }
+                        if save {
+                            submit_editor(app);
+                        }
+                    });
+                });
         });
     });
 }

@@ -855,34 +855,38 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
     }
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(width - 44.0, 0.0));
-            ui.label(
-                RichText::new(dialog.title.clone())
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(dialog.body.clone())
-                    .color(palette.secondary)
-                    .size(13.5),
-            );
-            ui.add_space(16.0);
-            widgets::dialog_actions(ui, |ui| {
-                let confirmed = if dialog.danger {
-                    danger_button(ui, &dialog.confirm_label, palette, true)
-                } else {
-                    crate::widgets::primary_button(ui, &dialog.confirm_label, palette, true)
-                };
-                let dismissed = secondary_button(ui, t!(app.locale, "Cancel"), palette);
-                if dismissed {
-                    app.confirm_dialog = None;
-                }
-                if confirmed {
-                    run_confirm_action(app, dialog.action);
-                    app.confirm_dialog = None;
-                }
-            });
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(width - 44.0, 0.0));
+                    ui.label(
+                        RichText::new(dialog.title.clone())
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new(dialog.body.clone())
+                            .color(palette.secondary)
+                            .size(13.5),
+                    );
+                    ui.add_space(16.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let confirmed = if dialog.danger {
+                            danger_button(ui, &dialog.confirm_label, palette, true)
+                        } else {
+                            crate::widgets::primary_button(ui, &dialog.confirm_label, palette, true)
+                        };
+                        let dismissed = secondary_button(ui, t!(app.locale, "Cancel"), palette);
+                        if dismissed {
+                            app.confirm_dialog = None;
+                        }
+                        if confirmed {
+                            run_confirm_action(app, dialog.action);
+                            app.confirm_dialog = None;
+                        }
+                    });
+                });
         });
     });
 }

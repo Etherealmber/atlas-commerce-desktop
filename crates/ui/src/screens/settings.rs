@@ -749,45 +749,49 @@ fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palet
     }
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(egui::vec2(width - 44.0, 0.0));
-            ui.label(
-                RichText::new(t!(app.locale, "Copy this key now"))
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(t!(
-                    app.locale,
-                    "It will not be shown again after this dialog closes."
-                ))
-                .color(palette.secondary)
-                .size(13.0),
-            );
-            ui.add_space(12.0);
-            egui::Frame::NONE
-                .fill(palette.window)
-                .stroke(egui::Stroke::new(1.0, palette.outline))
-                .corner_radius(crate::theme::RADIUS_CONTROL as f32)
-                .inner_margin(egui::Margin::symmetric(10, 8))
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
                 .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.monospace(
-                        RichText::new(created.key.clone())
+                    ui.set_min_size(egui::vec2(width - 44.0, 0.0));
+                    ui.label(
+                        RichText::new(t!(app.locale, "Copy this key now"))
                             .color(palette.text)
-                            .size(12.5),
+                            .font(crate::fonts::semibold(17.0)),
                     );
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new(t!(
+                            app.locale,
+                            "It will not be shown again after this dialog closes."
+                        ))
+                        .color(palette.secondary)
+                        .size(13.0),
+                    );
+                    ui.add_space(12.0);
+                    egui::Frame::NONE
+                        .fill(palette.window)
+                        .stroke(egui::Stroke::new(1.0, palette.outline))
+                        .corner_radius(crate::theme::RADIUS_CONTROL as f32)
+                        .inner_margin(egui::Margin::symmetric(10, 8))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.monospace(
+                                RichText::new(created.key.clone())
+                                    .color(palette.text)
+                                    .size(12.5),
+                            );
+                        });
+                    ui.add_space(14.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        if primary_button(ui, t!(app.locale, "Copy and close"), palette, true) {
+                            ui.ctx().copy_text(created.key.clone());
+                            app.created_key = None;
+                        }
+                        if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                            app.created_key = None;
+                        }
+                    });
                 });
-            ui.add_space(14.0);
-            widgets::dialog_actions(ui, |ui| {
-                if primary_button(ui, t!(app.locale, "Copy and close"), palette, true) {
-                    ui.ctx().copy_text(created.key.clone());
-                    app.created_key = None;
-                }
-                if secondary_button(ui, t!(app.locale, "Close"), palette) {
-                    app.created_key = None;
-                }
-            });
         });
     });
 }
