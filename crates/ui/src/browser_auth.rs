@@ -20,6 +20,7 @@ pub(crate) struct BrowserLogin {
     job: Option<Job<Result<Session, &'static str>>>,
     events: Option<mpsc::Receiver<Event>>,
     cancel: Option<Arc<AtomicBool>>,
+    server: Option<String>,
     pub(crate) pairing_code: Option<String>,
     pub(crate) active: bool,
 }
@@ -127,15 +128,31 @@ fn same_context(
     id == got_id && server == got_origin && state == got_state
 }
 async fn response<T: serde::de::DeserializeOwned>(
-    resp: reqwest::Response,
+    mut resp: reqwest::Response,
 ) -> Result<T, &'static str> {
     if !resp.status().is_success() {
         return Err("Le serveur a refusé la demande de connexion. Recommencez.");
     }
-    let body: Envelope<T> = resp
-        .json()
+    const MAX_BODY: usize = 8192;
+    if resp
+        .content_length()
+        .is_some_and(|size| size > MAX_BODY as u64)
+    {
+        return Err("Réponse de connexion trop volumineuse.");
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = resp
+        .chunk()
         .await
-        .map_err(|_| "Réponse de connexion invalide.")?;
+        .map_err(|_| "Réponse de connexion illisible.")?
+    {
+        if bytes.len().saturating_add(chunk.len()) > MAX_BODY {
+            return Err("Réponse de connexion trop volumineuse.");
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let body: Envelope<T> =
+        serde_json::from_slice(&bytes).map_err(|_| "Réponse de connexion invalide.")?;
     if !body.success {
         return Err("Le serveur a refusé la demande de connexion.");
     }
@@ -330,6 +347,7 @@ pub(crate) fn start(app: &mut AtlasApp) {
         return;
     };
     let fingerprint = app.identity.fingerprint().to_owned();
+    app.browser_login.server = Some(base.clone());
     let cancelled = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
     app.qr = Default::default();
@@ -349,7 +367,9 @@ pub(crate) fn poll(app: &mut AtlasApp) {
     if !app.browser_login.active {
         return;
     }
-    if !matches!(app.screen, Screen::Login) {
+    if !matches!(app.screen, Screen::Login)
+        || app.browser_login.server.as_deref() != app.server_store.selected_url()
+    {
         cancel(app);
     }
     if let Some(event) = app
