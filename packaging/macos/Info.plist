@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Atlas Commerce Desktop</string>
+    <key>CFBundleName</key><string>Atlas Commerce</string>
     <key>CFBundleDisplayName</key><string>Atlas Commerce</string>
     <key>CFBundleIdentifier</key><string>__IDENTIFIER__</string>
     <key>CFBundleExecutable</key><string>__EXECUTABLE__</string>

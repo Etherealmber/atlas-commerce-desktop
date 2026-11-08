@@ -13,9 +13,9 @@ fn main() {
         let mut resource = winresource::WindowsResource::new();
         resource
             .set_icon(icon)
-            .set("ProductName", "Atlas Commerce Desktop")
+            .set("ProductName", "Atlas Commerce")
             // Task Manager and the volume mixer name the process by this.
-            .set("FileDescription", "Atlas Commerce Desktop");
+            .set("FileDescription", "Atlas Commerce");
         if let Err(error) = resource.compile() {
             println!("cargo:warning=Windows resources not embedded: {error}");
         }
