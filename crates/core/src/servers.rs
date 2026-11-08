@@ -145,15 +145,18 @@ impl ServerUrl {
         if !matches!(parsed.scheme(), "http" | "https") {
             return None;
         }
-        let host = parsed.host_str()?;
-        if host.is_empty() {
+        parsed.host_str()?;
+        // A desktop authorization is bound to exactly the server origin.
+        // Never silently reinterpret a path, query, fragment or credentials.
+        if !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.path() != "/"
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
             return None;
         }
-        let mut base = format!("{}://{host}", parsed.scheme());
-        if let Some(port) = parsed.port() {
-            base.push_str(&format!(":{port}"));
-        }
-        Some(base)
+        Some(parsed.origin().ascii_serialization())
     }
 
     #[must_use]
@@ -199,9 +202,16 @@ mod tests {
             ServerUrl::normalize("https://worker.example.dev/").as_deref(),
             Some("https://worker.example.dev")
         );
+        assert_eq!(ServerUrl::normalize("https://atlas.local:8787/api"), None);
         assert_eq!(
-            ServerUrl::normalize(" https://atlas.local:8787/api ").as_deref(),
-            Some("https://atlas.local:8787")
+            ServerUrl::normalize("https://alice:secret@atlas.local"),
+            None
+        );
+        assert_eq!(ServerUrl::normalize("https://atlas.local/?key=value"), None);
+        assert_eq!(ServerUrl::normalize("https://atlas.local/#fragment"), None);
+        assert_eq!(
+            ServerUrl::normalize("https://[::1]:8443").as_deref(),
+            Some("https://[::1]:8443")
         );
         assert_eq!(ServerUrl::normalize("not a url"), None);
         assert_eq!(ServerUrl::normalize(""), None);

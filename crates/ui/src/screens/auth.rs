@@ -116,8 +116,8 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         } else if app.session.is_some() && app.client.is_some() {
             app.screen = Screen::Shell(crate::state::Route::Dashboard);
             app.bootstrap_shell();
-        } else if !app.server_store.onboarding_done || app.server_store.selected_url().is_none() {
-            app.screen = Screen::Onboarding;
+        } else if app.server_store.selected_url().is_none() {
+            app.screen = Screen::ServerSetup;
         } else {
             app.screen = Screen::Login;
         }
@@ -726,7 +726,8 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let split = width >= 680.0;
     // The desktop QR is a real one-time pairing session, never a decorative
     // code. Do not initiate it while the password-only lock is active.
-    if split && !app.requires_password && !app.qr.active && app.client.is_some() {
+    if split && !app.requires_password && !app.login.busy && !app.qr.active && app.client.is_some()
+    {
         start_qr_session(app);
     }
 
@@ -754,20 +755,22 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     egui::vec2(right_width, 520.0),
                                     egui::Layout::top_down(egui::Align::Center),
                                     |ui| {
-                                        ui.add_space(80.0);
-                                        if app.requires_password {
-                                            icon(ui, Icon::Lock, palette.secondary, 32.0);
-                                            ui.add_space(16.0);
-                                            ui.label(
-                                                RichText::new(t!(
-                                                    app.locale,
-                                                    "Enter your password to unlock this workspace."
-                                                ))
-                                                .color(palette.secondary),
-                                            );
-                                        } else {
-                                            draw_qr(app, ui, palette);
-                                        }
+                                        egui::ScrollArea::vertical()
+                                            .id_salt("login-qr-panel")
+                                            .max_height(520.0)
+                                            .show(ui, |ui| {
+                                                ui.add_space(24.0);
+                                                if app.requires_password {
+                                                    icon(ui, Icon::Lock, palette.secondary, 32.0);
+                                                    ui.add_space(16.0);
+                                                    ui.label(
+                                                        RichText::new(t!(app.locale, "Enter your password to unlock this workspace."))
+                                                            .color(palette.secondary),
+                                                    );
+                                                } else {
+                                                    draw_qr(app, ui, palette);
+                                                }
+                                            });
                                     },
                                 );
                             }
@@ -787,27 +790,10 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
 }
 
-/// Left half of the login card. Reserve the action before scrolling the form,
-/// so errors and OTP prompts cannot push it out of the card.
+/// Left half of the login card. Keep the action in normal layout so it
+/// cannot overlap or clip the password field.
 fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, split: bool) {
     let show_form = split || app.requires_password || !app.qr.active;
-    if show_form {
-        egui::Panel::bottom(egui::Id::new("login-submit"))
-            .exact_size(80.0)
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(egui::Frame::NONE.fill(palette.surface))
-            .show(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| draw_password_submit(app, ui, palette),
-                    );
-                });
-            });
-    }
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(32.0);
@@ -826,6 +812,35 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                     .size(12.5),
             );
             ui.add_space(12.0);
+            if app.browser_login.active {
+                if let Some(code) = &app.browser_login.pairing_code {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Compare this code with your browser:"))
+                            .color(palette.secondary),
+                    );
+                    ui.label(
+                        RichText::new(code)
+                            .font(crate::fonts::mono_semibold(20.0))
+                            .color(palette.text),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
+                            .color(palette.secondary),
+                    );
+                }
+                if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                    crate::browser_auth::cancel(app);
+                }
+            } else if primary_button(
+                ui,
+                t!(app.locale, "Sign in with your browser"),
+                palette,
+                !app.login.busy,
+            ) {
+                crate::browser_auth::start(app);
+            }
+            ui.add_space(10.0);
             let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 0.0),
@@ -849,6 +864,8 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             ui.add_space(8.0);
                         }
                         draw_password(app, ui, palette);
+                        ui.add_space(14.0);
+                        draw_password_submit(app, ui, palette);
                     } else {
                         draw_qr(app, ui, palette);
                     }
@@ -1214,10 +1231,68 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
         ui.add_space(10.0);
+        if let Some(base) = app.server_store.selected_url()
+            && secondary_button(ui, t!(app.locale, "Sign in on the server website"), palette)
+            && let Ok(mut url) = url::Url::parse(base)
+        {
+            url.set_path("/login");
+            url.set_query(None);
+            url.set_fragment(None);
+            if let Err(error) = open::that(url.as_str()) {
+                log::warn!("Could not open browser: {:?}", error.kind());
+                app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
+            }
+        }
+        if !app.qr.expired
+            && let Some(base) = app.server_store.selected_url()
+            && let Some(url) = browser_approval_url(base, &app.qr.qr_url, &app.qr.token)
+            && secondary_button(ui, t!(app.locale, "Approve in your browser"), palette)
+            && let Err(error) = open::that(url.as_str())
+        {
+            log::warn!("Could not open browser: {:?}", error.kind());
+            app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
+        }
+        ui.label(
+            RichText::new(t!(app.locale, "First sign in to this server in your browser, then approve the request here. If the code expires, create a new one."))
+                .color(palette.dim)
+                .size(12.0),
+        );
         if secondary_button(ui, t!(app.locale, "New code"), palette) {
             start_qr_session(app);
         }
     });
+}
+
+/// The server supplies a short-lived QR approval URL. Never open another
+/// origin, credentials, an unexpected path, or a different token.
+fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> {
+    let server = url::Url::parse(base).ok()?;
+    let approval = url::Url::parse(raw).ok()?;
+    if token.is_empty()
+        || approval.origin() != server.origin()
+        || !approval.username().is_empty()
+        || approval.password().is_some()
+        || approval.fragment().is_some()
+        || approval.path() != "/login/qr"
+    {
+        return None;
+    }
+    let pairs: Vec<_> = approval.query_pairs().collect();
+    if pairs.len() != 2
+        || pairs
+            .iter()
+            .filter(|(key, value)| key == "t" && value == token)
+            .count()
+            != 1
+        || pairs
+            .iter()
+            .filter(|(key, value)| key == "mode" && value == "pc")
+            .count()
+            != 1
+    {
+        return None;
+    }
+    Some(approval)
 }
 
 fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
@@ -1351,6 +1426,7 @@ fn start_qr_poll(app: &mut AtlasApp) {
 // ── Job polling / state transitions ─────────────────────────────────────────
 
 pub fn poll_login_jobs(app: &mut AtlasApp) {
+    crate::browser_auth::poll(app);
     // Login (password).
     if let Some(job) = &app.login.job_login
         && let Some(result) = job.poll()
@@ -1610,5 +1686,29 @@ mod otp_tests {
         assert_eq!(normalize_otp("12 34-56"), "123456");
         assert_eq!(normalize_otp("123456789"), "123456");
         assert_eq!(normalize_otp("１２3"), "3");
+    }
+}
+
+#[cfg(test)]
+mod browser_approval_tests {
+    use super::browser_approval_url;
+
+    #[test]
+    fn only_opens_the_selected_servers_matching_one_time_approval() {
+        let base = "https://store.example";
+        assert!(
+            browser_approval_url(base, "https://store.example/login/qr?t=abc&mode=pc", "abc")
+                .is_some()
+        );
+        for url in [
+            "https://evil.example/login/qr?t=abc&mode=pc",
+            "https://store.example/login/qr?t=other&mode=pc",
+            "https://store.example/login/qr?t=abc&mode=pc&redirect=evil",
+            "https://store.example/other?t=abc&mode=pc",
+            "http://store.example/login/qr?t=abc&mode=pc",
+            "https://user@store.example/login/qr?t=abc&mode=pc",
+        ] {
+            assert!(browser_approval_url(base, url, "abc").is_none(), "{url}");
+        }
     }
 }

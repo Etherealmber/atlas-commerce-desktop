@@ -58,7 +58,9 @@ Aucun moteur de navigateur, aucune télémétrie : tout le réseau passe par
   `X-Device-Fingerprint`. Le Worker lie chaque session à la paire
   (adresse IP, empreinte).
 - **Aucun mot de passe stocké** : seuls le serveur, le nom d'utilisateur et
-  le jeton de session sont persistés, dans des fichiers en mode `0600`.
+  le jeton de session peuvent être persistés dans des fichiers privés
+  (mode `0600` sur Unix). Le flux navigateur v1 conserve le jeton en mémoire
+  uniquement tant que le coffre système n’est pas intégré.
 - **En-têtes natifs** : `Authorization: Bearer`, `X-Atlas-Client: native`,
   `Accept: application/json` et un User-Agent non navigateur
   (`Atlas-Desktop/x.y.z (os-arch)`).
@@ -99,13 +101,20 @@ est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
 
 ## Session et verrouillage
 
-La perte de focus, la réduction et la fermeture dans la zone de notification
-mettent fin à la session locale et demandent une authentification par mot de
-passe à la réouverture. Les sessions enregistrées ne sont pas restaurées
-sans authentification au lancement. Aucun mot de passe n'est conservé. Une
-connexion peut aussi demander le code de vérification du serveur.
+La session reste active lors d’un changement de fenêtre, de la réduction, de
+la veille ou de la fermeture dans la zone de notification. Elle est aussi
+restaurée au redémarrage pour le serveur sélectionné après une connexion
+native ou QR ; leur jeton est enregistré dans un fichier local privé, pas dans
+un coffre chiffré. La connexion navigateur v1 conserve le jeton uniquement en
+mémoire : une reconnexion est nécessaire après fermeture complète. Utilisez **Se
+déconnecter** sur un ordinateur partagé. Le serveur peut toujours imposer une
+reconnexion si la session expire ou si sa liaison IP/appareil change. Aucun
+mot de passe n'est conservé.
 
-Le QR reste disponible pour une première connexion. Le client natif ne
+La connexion via le navigateur utilise le protocole v1 quand le serveur le
+propose : comparez le code affiché, connectez-vous sur le site et confirmez
+explicitement. Le QR et la connexion native restent disponibles pour les
+serveurs plus anciens. Le client natif ne
 présente pas de défi Turnstile : le contrat actuel du Worker dispense les
 requêtes natives de ce défi. Les passkeys et une durée de session choisie par
 l'utilisateur ne sont pas prises en charge par ce client.

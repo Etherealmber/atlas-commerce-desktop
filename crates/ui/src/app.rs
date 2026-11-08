@@ -15,12 +15,6 @@ use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
-/// Fall back to egui's raw input focus when the native viewport does not
-/// report its focus state. Unknown minimized state must not mask focus loss.
-fn should_lock(focused: bool, minimized: Option<bool>, closing: bool) -> bool {
-    !focused || minimized == Some(true) || closing
-}
-
 impl AtlasApp {
     /// Opens a session: persist it, remember the account, rebuild the
     /// authenticated client and load the first shell data.
@@ -32,15 +26,31 @@ impl AtlasApp {
         display_name: String,
         avatar_url: String,
     ) {
-        // Fail closed if the next launch cannot be made to require a fresh
-        // password. This marker contains no credentials or session data.
-        if let Err(error) = std::fs::write(self.paths.auth_guard_file(), b"1") {
-            log::warn!("could not persist authentication guard: {error}");
-            self.login.error =
-                Some(t!(self.locale, "Could not secure the session on this device.").into_owned());
-            self.login.password.clear();
-            return;
-        }
+        self.enter_session_with_persistence(token, username, role, display_name, avatar_url, true);
+    }
+
+    /// Browser sessions stay in memory until the native secure vault is wired.
+    pub(crate) fn enter_browser_session(&mut self, token: String, username: String, role: String) {
+        self.enter_session_with_persistence(
+            token,
+            username,
+            role,
+            String::new(),
+            String::new(),
+            false,
+        );
+    }
+
+    fn enter_session_with_persistence(
+        &mut self,
+        token: String,
+        username: String,
+        role: String,
+        display_name: String,
+        avatar_url: String,
+        persist: bool,
+    ) {
+        self.transient_session = !persist;
         self.requires_password = false;
         self.login.password.clear();
         let server_url = self
@@ -71,21 +81,14 @@ impl AtlasApp {
         self.login = Default::default();
         self.qr = Default::default();
         self.session = Some(record.clone());
-        self.account_store.upsert(&record);
-        self.save_session();
-        self.save_accounts();
+        if persist {
+            self.account_store.upsert(&record);
+            self.save_session();
+            self.save_accounts();
+        }
         self.rebuild_client();
         self.screen = Screen::Shell(Route::Dashboard);
         self.bootstrap_shell();
-    }
-
-    /// Drop the active session and all session-scoped caches on focus loss.
-    /// Re-authentication uses the server password flow, not the saved token.
-    fn lock_for_inactivity(&mut self) {
-        if self.session.is_some() {
-            self.sign_out();
-            self.requires_password = true;
-        }
     }
 
     /// First loads after entering the shell or restoring a session.
@@ -784,8 +787,8 @@ impl AtlasApp {
                 .is_some_and(|error| error.is_session_expired(true))
         });
         if expired {
-            self.notice("Votre session a expiré. Veuillez vous reconnecter.".to_owned());
             self.sign_out();
+            self.notice("Votre session a expiré. Veuillez vous reconnecter.".to_owned());
         }
     }
 
@@ -902,7 +905,6 @@ impl AtlasApp {
 
     /// Called by the binary when the system is about to sleep.
     pub fn handle_suspending(&mut self) {
-        self.lock_for_inactivity();
         self.power_paused = true;
     }
 
@@ -960,13 +962,11 @@ impl Resident for AtlasApp {
     }
 
     fn window_gone(&mut self) {
-        self.lock_for_inactivity();
         self.show_requested = false;
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
         self.poll_background(ctx);
-        self.lock_for_inactivity();
         if self.wants_quit {
             return Headless::Quit;
         }
@@ -1116,18 +1116,6 @@ impl eframe::App for EframeShell {
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
-        let lock = ctx.input(|input| {
-            let viewport = input.viewport();
-            should_lock(
-                viewport.focused.unwrap_or(input.focused),
-                viewport.minimized,
-                viewport.close_requested(),
-            )
-        });
-        if lock {
-            self.held.lock_for_inactivity();
-        }
-
         // Keep repainting while any job runs, so spinners and poll results
         // appear without user input.
         if self.held.busy() {
@@ -1234,19 +1222,5 @@ impl eframe::App for EframeShell {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.held.save_settings();
-    }
-}
-
-#[cfg(test)]
-mod security_tests {
-    use super::should_lock;
-
-    #[test]
-    fn explicit_focus_loss_minimize_and_close_lock_the_session() {
-        assert!(should_lock(false, Some(false), false));
-        assert!(should_lock(true, Some(true), false));
-        assert!(should_lock(true, Some(false), true));
-        assert!(!should_lock(true, Some(false), false));
-        assert!(should_lock(false, None, false));
     }
 }

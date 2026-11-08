@@ -175,21 +175,11 @@ fn main() -> eframe::Result<()> {
         queue.push(link);
     }
 
-    // Existing sessions are deliberately not restored into an unlocked UI.
-    // The guard survives a tray close or crash even if token cleanup is late.
-    let require_password = session.is_some() || paths.auth_guard_file().exists();
-    if require_password && let Err(error) = std::fs::write(paths.auth_guard_file(), b"1") {
-        log::warn!("could not persist authentication guard: {error}");
-    }
+    // Restore only a token bound to the selected server; expired tokens are
+    // rejected by the server and cleared by the normal session guard.
     let mut app = AtlasApp::new(
         paths, runner, identity, settings, servers, session, accounts, waker, power, incoming, tray,
     );
-    if require_password {
-        if app.session.is_some() {
-            app.sign_out();
-        }
-        app.requires_password = true;
-    }
     app.tray_available = tray_available;
     app.autostart_state = autostart_state;
     app.notifications = notifications;

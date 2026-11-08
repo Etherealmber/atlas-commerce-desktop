@@ -375,6 +375,9 @@ pub struct AtlasApp {
     pub server_form: ServerSetupForm,
     /// Password authentication is required after a lock or a previous run.
     pub requires_password: bool,
+    /// Browser-v1 tokens remain in memory until OS-vault storage is available.
+    pub transient_session: bool,
+    pub(crate) browser_login: crate::browser_auth::BrowserLogin,
     pub login: LoginState,
     pub qr: QrPairing,
     pub devices: Cache<Vec<TrustedDevice>>,
@@ -518,6 +521,8 @@ impl AtlasApp {
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             requires_password: false,
+            transient_session: false,
+            browser_login: Default::default(),
             login: LoginState::default(),
             qr: QrPairing::default(),
             devices: Cache::default(),
@@ -658,6 +663,9 @@ impl AtlasApp {
     }
 
     pub fn save_session(&self) {
+        if self.transient_session {
+            return;
+        }
         let path = self.paths.session_file();
         match &self.session {
             Some(session) => {
@@ -975,6 +983,7 @@ impl AtlasApp {
     }
 
     pub fn sign_out(&mut self) {
+        self.transient_session = false;
         if let Some(session) = self.session.take() {
             // Evict the user's cached avatar texture so a later account does
             // not keep the previous picture resident in the texture cache.

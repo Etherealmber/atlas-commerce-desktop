@@ -54,24 +54,34 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     metric_cards(app, ui, palette, &data);
     ui.add_space(14.0);
 
-    ui.horizontal_top(|ui| {
-        ui.set_min_height(180.0);
-        card(palette).show(ui, |ui| {
-            ui.set_width((ui.available_width() * 0.58).max(280.0));
-            // A frame inherits the parent row's horizontal layout; an
-            // explicit vertical child restores top-down stacking so labels
-            // and values never share the same row.
-            ui.vertical(|ui| {
-                unpaid_card(app, ui, palette, &data);
+    // Calculate outer widths once, before either card consumes the row.
+    // On narrower windows stack them rather than clipping their contents.
+    let available = ui.available_width();
+    if available >= 650.0 {
+        let gap = ui.spacing().item_spacing.x;
+        let left = ((available - gap) * 0.55 - 34.0).max(0.0);
+        let right = ((available - gap) * 0.45 - 34.0).max(0.0);
+        ui.horizontal_top(|ui| {
+            card(palette).show(ui, |ui| {
+                ui.set_width(left);
+                ui.vertical(|ui| unpaid_card(app, ui, palette, &data));
+            });
+            card(palette).show(ui, |ui| {
+                ui.set_width(right);
+                ui.vertical(|ui| monthly_card(app, ui, palette, &data));
             });
         });
+    } else {
         card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.vertical(|ui| {
-                monthly_card(app, ui, palette, &data);
-            });
+            ui.set_width((available - 34.0).max(0.0));
+            ui.vertical(|ui| unpaid_card(app, ui, palette, &data));
         });
-    });
+        ui.add_space(12.0);
+        card(palette).show(ui, |ui| {
+            ui.set_width((available - 34.0).max(0.0));
+            ui.vertical(|ui| monthly_card(app, ui, palette, &data));
+        });
+    }
 
     ui.add_space(14.0);
     card(palette).show(ui, |ui| {

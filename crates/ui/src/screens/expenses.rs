@@ -323,7 +323,10 @@ fn payment_source(key: &str) -> &'static str {
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 620.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(520.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("expense-editor-scrim")) {
         app.expense_editor = None;
         return;
@@ -332,128 +335,132 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(476.0, 0.0));
-            ui.label(
-                RichText::new(t!(locale, "New entry"))
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(476.0, 0.0));
+                    ui.label(
+                        RichText::new(t!(locale, "New entry"))
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
 
-            if let Some(editor) = app.expense_editor.as_mut() {
-                segmented_type(ui, editor, palette, locale);
-                ui.add_space(10.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Description"),
-                    &mut editor.description,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
+                    if let Some(editor) = app.expense_editor.as_mut() {
+                        segmented_type(ui, editor, palette, locale);
+                        ui.add_space(10.0);
                         labelled_field(
                             ui,
-                            t!(locale, "Amount"),
-                            &mut editor.amount,
+                            t!(locale, "Description"),
+                            &mut editor.description,
                             palette,
                             false,
                         );
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(t!(locale, "Payment method"))
-                                .color(palette.secondary)
-                                .size(12.5),
-                        );
-                        egui::ComboBox::from_id_salt("expense-payment-method")
-                            .selected_text(crate::i18n::gettext(
-                                locale,
-                                payment_source(editor.payment_method.as_str()),
-                            ))
-                            .show_ui(ui, |ui| {
-                                for (key, label) in PAYMENT_METHODS {
-                                    ui.selectable_value(
-                                        &mut editor.payment_method,
-                                        key.to_owned(),
-                                        crate::i18n::gettext(locale, label),
-                                    );
-                                }
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Amount"),
+                                    &mut editor.amount,
+                                    palette,
+                                    false,
+                                );
                             });
-                    });
-                });
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(t!(locale, "Payment method"))
+                                        .color(palette.secondary)
+                                        .size(12.5),
+                                );
+                                egui::ComboBox::from_id_salt("expense-payment-method")
+                                    .selected_text(crate::i18n::gettext(
+                                        locale,
+                                        payment_source(editor.payment_method.as_str()),
+                                    ))
+                                    .show_ui(ui, |ui| {
+                                        for (key, label) in PAYMENT_METHODS {
+                                            ui.selectable_value(
+                                                &mut editor.payment_method,
+                                                key.to_owned(),
+                                                crate::i18n::gettext(locale, label),
+                                            );
+                                        }
+                                    });
+                            });
+                        });
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Category"),
+                                    &mut editor.category,
+                                    palette,
+                                    false,
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Date"),
+                                    &mut editor.expense_date,
+                                    palette,
+                                    false,
+                                );
+                            });
+                        });
+                        ui.add_space(8.0);
                         labelled_field(
                             ui,
-                            t!(locale, "Category"),
-                            &mut editor.category,
+                            t!(locale, "Vendor (optional)"),
+                            &mut editor.vendor_name,
                             palette,
                             false,
                         );
-                    });
-                    ui.vertical(|ui| {
+                        ui.add_space(8.0);
                         labelled_field(
                             ui,
-                            t!(locale, "Date"),
-                            &mut editor.expense_date,
+                            t!(locale, "Reference (optional)"),
+                            &mut editor.reference,
                             palette,
                             false,
                         );
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Notes (optional)"),
+                            &mut editor.notes,
+                            palette,
+                            false,
+                        );
+                    }
+
+                    if let Some(error) = app
+                        .expense_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone())
+                    {
+                        ui.add_space(8.0);
+                        error_banner(ui, &error, palette);
+                    }
+
+                    ui.add_space(12.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let saving = app
+                            .expense_editor
+                            .as_ref()
+                            .is_some_and(|editor| editor.saving);
+                        let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
+                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        if cancel {
+                            app.expense_editor = None;
+                        }
+                        if save {
+                            submit_editor(app);
+                        }
                     });
                 });
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Vendor (optional)"),
-                    &mut editor.vendor_name,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Reference (optional)"),
-                    &mut editor.reference,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Notes (optional)"),
-                    &mut editor.notes,
-                    palette,
-                    false,
-                );
-            }
-
-            if let Some(error) = app
-                .expense_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone())
-            {
-                ui.add_space(8.0);
-                error_banner(ui, &error, palette);
-            }
-
-            ui.add_space(12.0);
-            widgets::dialog_actions(ui, |ui| {
-                let saving = app
-                    .expense_editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.saving);
-                let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
-                    app.expense_editor = None;
-                }
-                if save {
-                    submit_editor(app);
-                }
-            });
         });
     });
 }

@@ -179,7 +179,10 @@ fn status_label(status: &str) -> &'static str {
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 420.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(480.0, 420.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("delivery-note-scrim")) {
         app.delivery_note_editor = None;
         return;
@@ -188,64 +191,68 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(436.0, 0.0));
-            ui.label(
-                RichText::new(t!(locale, "New delivery note"))
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(436.0, 0.0));
+                    ui.label(
+                        RichText::new(t!(locale, "New delivery note"))
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
 
-            if let Some(editor) = app.delivery_note_editor.as_mut() {
-                labelled_field(
-                    ui,
-                    t!(locale, "Client name"),
-                    &mut editor.client_name,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Issue date"),
-                    &mut editor.issue_date,
-                    palette,
-                    false,
-                );
-                ui.add_space(8.0);
-                labelled_field(
-                    ui,
-                    t!(locale, "Notes (optional)"),
-                    &mut editor.notes,
-                    palette,
-                    false,
-                );
-            }
+                    if let Some(editor) = app.delivery_note_editor.as_mut() {
+                        labelled_field(
+                            ui,
+                            t!(locale, "Client name"),
+                            &mut editor.client_name,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Issue date"),
+                            &mut editor.issue_date,
+                            palette,
+                            false,
+                        );
+                        ui.add_space(8.0);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Notes (optional)"),
+                            &mut editor.notes,
+                            palette,
+                            false,
+                        );
+                    }
 
-            if let Some(error) = app
-                .delivery_note_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone())
-            {
-                ui.add_space(8.0);
-                error_banner(ui, &error, palette);
-            }
+                    if let Some(error) = app
+                        .delivery_note_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone())
+                    {
+                        ui.add_space(8.0);
+                        error_banner(ui, &error, palette);
+                    }
 
-            ui.add_space(12.0);
-            widgets::dialog_actions(ui, |ui| {
-                let saving = app
-                    .delivery_note_editor
-                    .as_ref()
-                    .is_some_and(|editor| editor.saving);
-                let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
-                    app.delivery_note_editor = None;
-                }
-                if save {
-                    submit_editor(app);
-                }
-            });
+                    ui.add_space(12.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let saving = app
+                            .delivery_note_editor
+                            .as_ref()
+                            .is_some_and(|editor| editor.saving);
+                        let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
+                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        if cancel {
+                            app.delivery_note_editor = None;
+                        }
+                        if save {
+                            submit_editor(app);
+                        }
+                    });
+                });
         });
     });
 }

@@ -1183,3 +1183,24 @@ msgstr "Saisissez le code à six chiffres envoyé par e-mail."
 
 msgid "Verification starts automatically."
 msgstr "La vérification démarre automatiquement."
+
+msgid "Approve in your browser"
+msgstr "Autoriser dans le navigateur"
+
+msgid "Could not open your browser."
+msgstr "Impossible d’ouvrir votre navigateur."
+
+msgid "First sign in to this server in your browser, then approve the request here. If the code expires, create a new one."
+msgstr "Connectez-vous d’abord à ce serveur dans votre navigateur, puis autorisez la demande. Si le code expire, créez-en un nouveau."
+
+msgid "Sign in on the server website"
+msgstr "Se connecter sur le site du serveur"
+
+msgid "Sign in with your browser"
+msgstr "Se connecter avec le navigateur"
+
+msgid "Compare this code with your browser:"
+msgstr "Comparez ce code avec celui du navigateur :"
+
+msgid "Preparing secure browser sign-in…"
+msgstr "Préparation de la connexion sécurisée…"

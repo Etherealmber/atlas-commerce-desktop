@@ -309,7 +309,10 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(520.0, 560.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(520.0, 560.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     let locale = app.locale;
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-editor-scrim")) {
         // Same dirty-draft decision as the Cancel button and Escape: an
@@ -334,98 +337,103 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(476.0, 0.0));
-            ui.label(
-                RichText::new(t!(locale, "New product"))
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(476.0, 0.0));
+                    ui.label(
+                        RichText::new(t!(locale, "New product"))
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(10.0);
 
-            let dirty = app
-                .product_editor
-                .as_ref()
-                .is_some_and(ProductEditor::is_dirty);
-            let saving = app
-                .product_editor
-                .as_ref()
-                .is_some_and(|editor| editor.saving);
-            let name_empty = app
-                .product_editor
-                .as_ref()
-                .is_some_and(|editor| editor.name.trim().is_empty());
-            let error = app
-                .product_editor
-                .as_ref()
-                .and_then(|editor| editor.error.clone());
+                    let dirty = app
+                        .product_editor
+                        .as_ref()
+                        .is_some_and(ProductEditor::is_dirty);
+                    let saving = app
+                        .product_editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.saving);
+                    let name_empty = app
+                        .product_editor
+                        .as_ref()
+                        .is_some_and(|editor| editor.name.trim().is_empty());
+                    let error = app
+                        .product_editor
+                        .as_ref()
+                        .and_then(|editor| editor.error.clone());
 
-            if let Some(editor) = app.product_editor.as_mut() {
-                labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
-                labelled_field(ui, t!(locale, "SKU"), &mut editor.sku, palette, false);
-                labelled_field(
-                    ui,
-                    t!(locale, "Barcode"),
-                    &mut editor.barcode,
-                    palette,
-                    false,
-                );
-                labelled_field(
-                    ui,
-                    t!(locale, "Category"),
-                    &mut editor.category,
-                    palette,
-                    false,
-                );
-                labelled_field(ui, t!(locale, "Unit"), &mut editor.unit, palette, false);
-                labelled_field(
-                    ui,
-                    t!(locale, "Price (MAD)"),
-                    &mut editor.price,
-                    palette,
-                    false,
-                );
-                labelled_field(
-                    ui,
-                    t!(locale, "Initial stock"),
-                    &mut editor.stock,
-                    palette,
-                    false,
-                );
-                labelled_field(
-                    ui,
-                    t!(locale, "Low stock threshold"),
-                    &mut editor.threshold,
-                    palette,
-                    false,
-                );
-            }
-
-            if let Some(error) = &error {
-                error_banner(ui, error, palette);
-            }
-
-            ui.add_space(10.0);
-            widgets::dialog_actions(ui, |ui| {
-                let save = primary_button(ui, t!(locale, "Save"), palette, !saving && !name_empty);
-                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
-                    if dirty {
-                        app.confirm_dialog = Some(Confirm {
-                            title: t!(locale, "Discard changes?").into_owned(),
-                            body: t!(locale, "The product information has not been saved.")
-                                .into_owned(),
-                            confirm_label: t!(locale, "Discard").into_owned(),
-                            danger: true,
-                            action: ConfirmAction::DiscardEditor,
-                        });
-                    } else {
-                        app.product_editor = None;
+                    if let Some(editor) = app.product_editor.as_mut() {
+                        labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
+                        labelled_field(ui, t!(locale, "SKU"), &mut editor.sku, palette, false);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Barcode"),
+                            &mut editor.barcode,
+                            palette,
+                            false,
+                        );
+                        labelled_field(
+                            ui,
+                            t!(locale, "Category"),
+                            &mut editor.category,
+                            palette,
+                            false,
+                        );
+                        labelled_field(ui, t!(locale, "Unit"), &mut editor.unit, palette, false);
+                        labelled_field(
+                            ui,
+                            t!(locale, "Price (MAD)"),
+                            &mut editor.price,
+                            palette,
+                            false,
+                        );
+                        labelled_field(
+                            ui,
+                            t!(locale, "Initial stock"),
+                            &mut editor.stock,
+                            palette,
+                            false,
+                        );
+                        labelled_field(
+                            ui,
+                            t!(locale, "Low stock threshold"),
+                            &mut editor.threshold,
+                            palette,
+                            false,
+                        );
                     }
-                }
-                if save {
-                    submit_product(app);
-                }
-            });
+
+                    if let Some(error) = &error {
+                        error_banner(ui, error, palette);
+                    }
+
+                    ui.add_space(10.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let save =
+                            primary_button(ui, t!(locale, "Save"), palette, !saving && !name_empty);
+                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        if cancel {
+                            if dirty {
+                                app.confirm_dialog = Some(Confirm {
+                                    title: t!(locale, "Discard changes?").into_owned(),
+                                    body: t!(locale, "The product information has not been saved.")
+                                        .into_owned(),
+                                    confirm_label: t!(locale, "Discard").into_owned(),
+                                    danger: true,
+                                    action: ConfirmAction::DiscardEditor,
+                                });
+                            } else {
+                                app.product_editor = None;
+                            }
+                        }
+                        if save {
+                            submit_product(app);
+                        }
+                    });
+                });
         });
     });
 }
@@ -526,7 +534,10 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     let screen = ui.ctx().input(|i| i.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(460.0, 360.0));
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(460.0, 360.0_f32.min((screen.height() - 32.0).max(1.0))),
+    );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("stock-scrim")) {
         app.stock_dialog = None;
         return;
@@ -535,103 +546,111 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(416.0, 0.0));
-            ui.label(
-                RichText::new(t!(locale, "Adjust stock"))
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(17.0)),
-            );
-            ui.add_space(6.0);
-            let product_name = app
-                .stock_dialog
-                .as_ref()
-                .map(|dialog| dialog.product_name.clone())
-                .unwrap_or_default();
-            ui.label(
-                RichText::new(product_name)
-                    .color(palette.secondary)
-                    .size(13.0),
-            );
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                for kind in [StockKind::In, StockKind::Out, StockKind::Adjustment] {
-                    let selected = app
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 46.0).max(1.0))
+                .show(ui, |ui| {
+                    ui.set_min_size(vec2(416.0, 0.0));
+                    ui.label(
+                        RichText::new(t!(locale, "Adjust stock"))
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(17.0)),
+                    );
+                    ui.add_space(6.0);
+                    let product_name = app
                         .stock_dialog
                         .as_ref()
-                        .is_some_and(|dialog| dialog.kind == kind);
-                    let button = egui::Button::new(
-                        RichText::new(kind.label(locale))
-                            .color(if selected {
-                                palette.on_accent
-                            } else {
-                                palette.text
-                            })
+                        .map(|dialog| dialog.product_name.clone())
+                        .unwrap_or_default();
+                    ui.label(
+                        RichText::new(product_name)
+                            .color(palette.secondary)
                             .size(13.0),
-                    )
-                    .wrap_mode(egui::TextWrapMode::Extend)
-                    .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
-                    .fill(if selected {
-                        palette.accent
-                    } else {
-                        palette.surface
-                    })
-                    .corner_radius(crate::theme::RADIUS_CONTROL as f32);
-                    if ui.add(button).clicked()
-                        && let Some(dialog) = app.stock_dialog.as_mut()
-                    {
-                        dialog.kind = kind;
+                    );
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        for kind in [StockKind::In, StockKind::Out, StockKind::Adjustment] {
+                            let selected = app
+                                .stock_dialog
+                                .as_ref()
+                                .is_some_and(|dialog| dialog.kind == kind);
+                            let button = egui::Button::new(
+                                RichText::new(kind.label(locale))
+                                    .color(if selected {
+                                        palette.on_accent
+                                    } else {
+                                        palette.text
+                                    })
+                                    .size(13.0),
+                            )
+                            .wrap_mode(egui::TextWrapMode::Extend)
+                            .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
+                            .fill(if selected {
+                                palette.accent
+                            } else {
+                                palette.surface
+                            })
+                            .corner_radius(crate::theme::RADIUS_CONTROL as f32);
+                            if ui.add(button).clicked()
+                                && let Some(dialog) = app.stock_dialog.as_mut()
+                            {
+                                dialog.kind = kind;
+                            }
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    if let Some(dialog) = app.stock_dialog.as_mut() {
+                        labelled_field(
+                            ui,
+                            t!(locale, "Quantity"),
+                            &mut dialog.quantity,
+                            palette,
+                            false,
+                        );
+                        labelled_field(
+                            ui,
+                            t!(locale, "Reason (optional)"),
+                            &mut dialog.reason,
+                            palette,
+                            false,
+                        );
                     }
-                }
-            });
 
-            ui.add_space(8.0);
-            if let Some(dialog) = app.stock_dialog.as_mut() {
-                labelled_field(
-                    ui,
-                    t!(locale, "Quantity"),
-                    &mut dialog.quantity,
-                    palette,
-                    false,
-                );
-                labelled_field(
-                    ui,
-                    t!(locale, "Reason (optional)"),
-                    &mut dialog.reason,
-                    palette,
-                    false,
-                );
-            }
+                    let error = app
+                        .stock_dialog
+                        .as_ref()
+                        .and_then(|dialog| dialog.error.clone());
+                    if let Some(error) = &error {
+                        error_banner(ui, error, palette);
+                    }
 
-            let error = app
-                .stock_dialog
-                .as_ref()
-                .and_then(|dialog| dialog.error.clone());
-            if let Some(error) = &error {
-                error_banner(ui, error, palette);
-            }
+                    let saving = app
+                        .stock_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.saving);
+                    let quantity_empty = app
+                        .stock_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.quantity.trim().is_empty());
 
-            let saving = app
-                .stock_dialog
-                .as_ref()
-                .is_some_and(|dialog| dialog.saving);
-            let quantity_empty = app
-                .stock_dialog
-                .as_ref()
-                .is_some_and(|dialog| dialog.quantity.trim().is_empty());
-
-            ui.add_space(10.0);
-            widgets::dialog_actions(ui, |ui| {
-                let confirm =
-                    primary_button(ui, t!(locale, "Apply"), palette, !saving && !quantity_empty);
-                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
-                    app.stock_dialog = None;
-                }
-                if confirm {
-                    submit_adjust(app);
-                }
-            });
+                    ui.add_space(10.0);
+                    widgets::dialog_actions(ui, |ui| {
+                        let confirm = primary_button(
+                            ui,
+                            t!(locale, "Apply"),
+                            palette,
+                            !saving && !quantity_empty,
+                        );
+                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        if cancel {
+                            app.stock_dialog = None;
+                        }
+                        if confirm {
+                            submit_adjust(app);
+                        }
+                    });
+                });
         });
     });
 }

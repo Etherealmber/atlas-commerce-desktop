@@ -209,7 +209,7 @@ pub fn labelled_field(
     label: impl AsRef<str>,
     value: &mut String,
     palette: &Palette,
-    password: bool,
+    masked: bool,
 ) {
     ui.vertical(|ui| {
         ui.label(
@@ -220,7 +220,7 @@ pub fn labelled_field(
         let edit = egui::TextEdit::singleline(value)
             .margin(egui::Margin::symmetric(14, 8))
             .clip_text(true);
-        let edit = if password { edit.password(true) } else { edit };
+        let edit = if masked { edit.password(true) } else { edit };
         // 44 px tall inputs: the parity spec's minimum interactive target.
         ui.add_sized(
             [ui.available_width(), crate::theme::TARGET_MIN_HEIGHT],
@@ -554,9 +554,11 @@ pub fn setting_row<R>(
     description: Option<&str>,
     control: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
+    let label_width = (ui.available_width() * 0.54).max(120.0);
     let inner = ui
         .horizontal(|ui| {
             ui.vertical(|ui| {
+                ui.set_width(label_width);
                 ui.add_space(2.0);
                 ui.label(
                     RichText::new(title.as_ref())
