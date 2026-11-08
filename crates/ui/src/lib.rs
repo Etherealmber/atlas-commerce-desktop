@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod branding;
+mod browser_auth;
 pub mod dialogs;
 pub mod fonts;
 pub mod i18n;

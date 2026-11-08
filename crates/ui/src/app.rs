@@ -26,6 +26,31 @@ impl AtlasApp {
         display_name: String,
         avatar_url: String,
     ) {
+        self.enter_session_with_persistence(token, username, role, display_name, avatar_url, true);
+    }
+
+    /// Browser sessions stay in memory until the native secure vault is wired.
+    pub(crate) fn enter_browser_session(&mut self, token: String, username: String, role: String) {
+        self.enter_session_with_persistence(
+            token,
+            username,
+            role,
+            String::new(),
+            String::new(),
+            false,
+        );
+    }
+
+    fn enter_session_with_persistence(
+        &mut self,
+        token: String,
+        username: String,
+        role: String,
+        display_name: String,
+        avatar_url: String,
+        persist: bool,
+    ) {
+        self.transient_session = !persist;
         self.requires_password = false;
         self.login.password.clear();
         let server_url = self
@@ -56,9 +81,11 @@ impl AtlasApp {
         self.login = Default::default();
         self.qr = Default::default();
         self.session = Some(record.clone());
-        self.account_store.upsert(&record);
-        self.save_session();
-        self.save_accounts();
+        if persist {
+            self.account_store.upsert(&record);
+            self.save_session();
+            self.save_accounts();
+        }
         self.rebuild_client();
         self.screen = Screen::Shell(Route::Dashboard);
         self.bootstrap_shell();

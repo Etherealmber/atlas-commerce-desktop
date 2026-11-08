@@ -1195,3 +1195,12 @@ msgstr "Connectez-vous d’abord à ce serveur dans votre navigateur, puis autor
 
 msgid "Sign in on the server website"
 msgstr "Se connecter sur le site du serveur"
+
+msgid "Sign in with your browser"
+msgstr "Se connecter avec le navigateur"
+
+msgid "Compare this code with your browser:"
+msgstr "Comparez ce code avec celui du navigateur :"
+
+msgid "Preparing secure browser sign-in…"
+msgstr "Préparation de la connexion sécurisée…"

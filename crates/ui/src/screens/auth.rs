@@ -726,7 +726,8 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let split = width >= 680.0;
     // The desktop QR is a real one-time pairing session, never a decorative
     // code. Do not initiate it while the password-only lock is active.
-    if split && !app.requires_password && !app.qr.active && app.client.is_some() {
+    if split && !app.requires_password && !app.login.busy && !app.qr.active && app.client.is_some()
+    {
         start_qr_session(app);
     }
 
@@ -809,6 +810,35 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                     .size(12.5),
             );
             ui.add_space(12.0);
+            if app.browser_login.active {
+                if let Some(code) = &app.browser_login.pairing_code {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Compare this code with your browser:"))
+                            .color(palette.secondary),
+                    );
+                    ui.label(
+                        RichText::new(code)
+                            .font(crate::fonts::mono_semibold(20.0))
+                            .color(palette.text),
+                    );
+                } else {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
+                            .color(palette.secondary),
+                    );
+                }
+                if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                    crate::browser_auth::cancel(app);
+                }
+            } else if primary_button(
+                ui,
+                t!(app.locale, "Sign in with your browser"),
+                palette,
+                !app.login.busy,
+            ) {
+                crate::browser_auth::start(app);
+            }
+            ui.add_space(10.0);
             let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 0.0),
@@ -1394,6 +1424,7 @@ fn start_qr_poll(app: &mut AtlasApp) {
 // ── Job polling / state transitions ─────────────────────────────────────────
 
 pub fn poll_login_jobs(app: &mut AtlasApp) {
+    crate::browser_auth::poll(app);
     // Login (password).
     if let Some(job) = &app.login.job_login
         && let Some(result) = job.poll()
