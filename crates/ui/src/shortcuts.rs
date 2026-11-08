@@ -60,6 +60,24 @@ pub enum PaletteTarget {
     SignOut,
 }
 
+/// Filter presentation and execution with the same policy. The backend is
+/// still responsible for enforcing permissions on every request.
+pub(crate) fn target_allowed(policy: crate::state::RolePolicy, target: PaletteTarget) -> bool {
+    match target {
+        PaletteTarget::Route(route) => policy.allows_route(route),
+        PaletteTarget::NewProduct => policy.can_edit_prices(),
+        PaletteTarget::NewClient => policy.allows_route(Route::Clients),
+        PaletteTarget::NewVendor => policy.allows_route(Route::Vendors),
+        PaletteTarget::NewExpense => policy.allows_route(Route::Expenses),
+        PaletteTarget::NewDelivery => policy.allows_route(Route::DeliveryNotes),
+        PaletteTarget::Refresh
+        | PaletteTarget::FocusSearch
+        | PaletteTarget::SettingsProfile
+        | PaletteTarget::SettingsGeneral
+        | PaletteTarget::SignOut => true,
+    }
+}
+
 /// One row of the palette: an action, its French label and an optional
 /// right-aligned key hint ("Ctrl+R").
 #[derive(Clone, Debug)]
@@ -383,7 +401,8 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
     ui.painter()
         .rect_filled(screen, 0.0, Color32::from_black_alpha(140));
 
-    let entries = entries(app.locale);
+    let mut entries = entries(app.locale);
+    entries.retain(|entry| target_allowed(app.role_policy(), entry.target));
     let matches = filter_entries(&app.palette_query, &entries);
     if app.palette_selected >= matches.len() {
         app.palette_selected = matches.len().saturating_sub(1);

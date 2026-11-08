@@ -87,7 +87,6 @@ impl AtlasApp {
             self.save_accounts();
         }
         self.rebuild_client();
-        self.screen = Screen::Shell(Route::Dashboard);
         self.bootstrap_shell();
     }
 
@@ -99,11 +98,19 @@ impl AtlasApp {
     /// when a chrome surface needs it (bell badge, profile popover). The
     /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
-        self.load_dashboard();
+        let route = self.role_policy().initial_route();
+        self.screen = Screen::Shell(route);
+        if route == Route::Dashboard {
+            self.load_dashboard();
+        } else {
+            self.ensure_route_data(route);
+        }
         // Native stock toasts need alert data even if the user never opens
         // the Notifications screen; only spend the request when the
         // persisted setting is enabled.
-        if self.settings.notifications_enabled {
+        if self.settings.notifications_enabled
+            && self.role_policy().allows_route(Route::Notifications)
+        {
             self.load_alerts();
         }
         if self.settings.update_check_on_start {
@@ -213,6 +220,9 @@ impl AtlasApp {
     /// rate-limited by [`crate::state::NAV_BADGES_RETRY_BACKOFF`] so a
     /// persistently failing endpoint cannot trigger one request per frame.
     pub fn ensure_nav_badges(&mut self) {
+        if !self.role_policy().allows_route(Route::Notifications) {
+            return;
+        }
         let backoff_open = self
             .nav_badges_retry_at
             .is_none_or(|at| Instant::now() >= at);
@@ -621,7 +631,7 @@ impl AtlasApp {
                 }
                 TrayCommand::QuickStats => {
                     if self.session.is_some() {
-                        self.screen = Screen::Shell(Route::Dashboard);
+                        self.go(Route::Dashboard);
                         self.show_requested = true;
                     }
                 }

@@ -224,15 +224,17 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 app.profile_menu_open = !app.profile_menu_open;
             }
 
-            let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
-            let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
-                badges.products_low + badges.invoices_unpaid + badges.vr_open
-            });
-            if alert_count > 0 {
-                paint_titlebar_badge(ui, &bell, palette, alert_count);
-            }
-            if bell.clicked() {
-                app.go(Route::Notifications);
+            if app.role_policy().allows_route(Route::Notifications) {
+                let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
+                    badges.products_low + badges.invoices_unpaid + badges.vr_open
+                });
+                if alert_count > 0 {
+                    paint_titlebar_badge(ui, &bell, palette, alert_count);
+                }
+                if bell.clicked() {
+                    app.go(Route::Notifications);
+                }
             }
 
             // While a release is downloading, surface a live progress pill
@@ -655,6 +657,12 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (heading, routes) in groups {
+            if !routes
+                .iter()
+                .any(|route| app.role_policy().allows_route(*route))
+            {
+                continue;
+            }
             if !collapsed {
                 ui.add_space(8.0);
                 ui.label(
@@ -664,6 +672,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                 );
             }
             for &route in routes {
+                if !app.role_policy().allows_route(route) {
+                    continue;
+                }
                 let (which, label) = route_meta(app.locale, route);
                 let response =
                     rail_row(ui, palette, which, &label, active == Some(route), collapsed);

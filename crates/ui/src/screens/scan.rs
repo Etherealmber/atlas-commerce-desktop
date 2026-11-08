@@ -104,7 +104,9 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if primary_button(ui, t!(app.locale, "Search"), palette, !busy) {
                 start_lookup(app);
             }
-            if secondary_button(ui, t!(app.locale, "Create from barcode"), palette) {
+            if app.role_policy().can_edit_prices()
+                && secondary_button(ui, t!(app.locale, "Create from barcode"), palette)
+            {
                 let code = app.scan.code.trim().to_owned();
                 if !code.is_empty() {
                     app.scan.duplicate = false;
@@ -181,12 +183,14 @@ fn draw_result(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.vertical(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new(money(product.price, currency))
-                                .color(palette.text)
-                                .strong()
-                                .size(14.0),
-                        );
+                        if app.role_policy().show_prices() {
+                            ui.label(
+                                RichText::new(money(product.price, currency))
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(14.0),
+                            );
+                        }
                     });
                     ui.label(
                         RichText::new(format!(
@@ -205,8 +209,12 @@ fn draw_result(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
-    let rect = egui::Rect::from_center_size(screen.center(), vec2(480.0, 480.0));
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("scan-quick-scrim")) {
+    let width = 480.0_f32.min((screen.width() - 24.0).max(1.0));
+    let height = 480.0_f32.min((screen.height() - 24.0).max(1.0));
+    let rect = egui::Rect::from_center_size(screen.center(), vec2(width, height));
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("scan-quick-scrim"))
+        && app.scan.create_job.is_none()
+    {
         app.scan.quick = None;
         return;
     }
@@ -214,7 +222,8 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_min_size(vec2(436.0, 0.0));
+            egui::ScrollArea::vertical().max_height((height - 46.0).max(1.0)).show(ui, |ui| {
+            ui.set_min_size(vec2((width - 44.0).max(1.0), 0.0));
             ui.label(
                 RichText::new(t!(locale, "Create from barcode"))
                     .color(palette.text)
@@ -299,7 +308,7 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 };
                 let save = primary_button(ui, label, palette, !saving);
                 let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                if cancel {
+                if cancel && !saving {
                     app.scan.quick = None;
                     app.scan.duplicate = false;
                     app.scan.error = None;
@@ -307,6 +316,7 @@ fn draw_quick_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 if save {
                     submit_quick(app);
                 }
+            });
             });
         });
     });

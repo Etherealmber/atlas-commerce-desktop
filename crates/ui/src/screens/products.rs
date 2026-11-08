@@ -106,7 +106,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Products"), palette);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "New product"), palette, true) {
+            if app.role_policy().can_edit_prices()
+                && primary_button(ui, t!(app.locale, "New product"), palette, true)
+            {
                 app.product_editor = Some(ProductEditor::new());
             }
             if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
@@ -210,24 +212,28 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                     widgets::no_wrap_scope(ui, |ui| {
                         ui.vertical(|ui| {
-                            ui.label(
-                                RichText::new(atlas_core::format::money(
-                                    product.price,
-                                    app.dashboard
-                                        .data
-                                        .as_ref()
-                                        .map(|d| d.currency())
-                                        .unwrap_or("MAD"),
-                                ))
-                                .color(palette.text)
-                                .strong()
-                                .size(13.5),
-                            );
+                            if app.role_policy().show_prices() {
+                                ui.label(
+                                    RichText::new(atlas_core::format::money(
+                                        product.price,
+                                        app.dashboard
+                                            .data
+                                            .as_ref()
+                                            .map(|d| d.currency())
+                                            .unwrap_or("MAD"),
+                                    ))
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(13.5),
+                                );
+                            }
                             stock_pill(ui, app.locale, palette, &product);
                         });
                         ui.vertical(|ui| {
                             ui.add_space(2.0);
-                            if secondary_button(ui, t!(app.locale, "Adjust stock"), palette) {
+                            if app.role_policy().can_manage_stock()
+                                && secondary_button(ui, t!(app.locale, "Adjust stock"), palette)
+                            {
                                 app.stock_dialog = Some(StockDialog::new(&product));
                             }
                         });

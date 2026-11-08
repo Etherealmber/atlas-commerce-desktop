@@ -134,6 +134,63 @@ pub enum Screen {
     Shell(Route),
 }
 
+/// Client-side presentation policy derived from the web role helpers.
+/// It is not an authorization boundary: the server remains authoritative.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RolePolicy {
+    office: bool,
+    admin: bool,
+    stock: bool,
+    signed_in: bool,
+}
+
+impl RolePolicy {
+    fn from_role(role: Option<&str>) -> Self {
+        let role = role.unwrap_or("").to_ascii_lowercase();
+        Self {
+            office: matches!(role.as_str(), "owner" | "admin" | "secretaire"),
+            admin: matches!(role.as_str(), "owner" | "admin"),
+            stock: role == "stock",
+            signed_in: !role.is_empty(),
+        }
+    }
+
+    pub(crate) fn allows_route(self, route: Route) -> bool {
+        self.signed_in
+            && match route {
+                Route::Products | Route::Settings | Route::Agent => true,
+                Route::Dashboard => !self.stock,
+                Route::Clients
+                | Route::Vendors
+                | Route::Expenses
+                | Route::DeliveryNotes
+                | Route::Sales
+                | Route::Catalog
+                | Route::Notifications => self.office,
+            }
+    }
+
+    pub(crate) fn can_manage_stock(self) -> bool {
+        self.office || self.stock
+    }
+
+    pub(crate) fn can_edit_prices(self) -> bool {
+        self.office
+    }
+
+    pub(crate) fn show_prices(self) -> bool {
+        !self.stock
+    }
+
+    pub(crate) fn initial_route(self) -> Route {
+        if self.stock {
+            Route::Products
+        } else {
+            Route::Dashboard
+        }
+    }
+}
+
 /// QR pairing state for the PC side.
 #[derive(Default)]
 pub struct QrPairing {
@@ -690,8 +747,15 @@ impl AtlasApp {
 
     // ── navigation ───────────────────────────────────────────────────────
 
+    pub(crate) fn role_policy(&self) -> RolePolicy {
+        RolePolicy::from_role(self.session.as_ref().map(|session| session.role.as_str()))
+    }
+
     /// Opens a shell route, recording the current one for the back button.
     pub fn go(&mut self, route: Route) {
+        if !self.role_policy().allows_route(route) {
+            return;
+        }
         if let Screen::Shell(current) = self.screen
             && current != route
         {
@@ -716,7 +780,13 @@ impl AtlasApp {
 
     /// Browser-style back. Returns false when no history is available.
     pub fn go_back(&mut self) -> bool {
-        let Some(previous) = self.nav_back.pop() else {
+        let policy = self.role_policy();
+        let Some(previous) = self
+            .nav_back
+            .iter()
+            .rposition(|route| policy.allows_route(*route))
+            .map(|index| self.nav_back.remove(index))
+        else {
             return false;
         };
         if let Screen::Shell(current) = self.screen {
@@ -730,7 +800,13 @@ impl AtlasApp {
 
     /// Browser-style forward.
     pub fn go_forward(&mut self) -> bool {
-        let Some(next) = self.nav_forward.pop() else {
+        let policy = self.role_policy();
+        let Some(next) = self
+            .nav_forward
+            .iter()
+            .rposition(|route| policy.allows_route(*route))
+            .map(|index| self.nav_forward.remove(index))
+        else {
             return false;
         };
         if let Screen::Shell(current) = self.screen {
@@ -768,6 +844,9 @@ impl AtlasApp {
     /// by the rail click and the command palette so the two entry points can
     /// never drift apart.
     pub fn ensure_route_data(&mut self, route: Route) {
+        if !self.role_policy().allows_route(route) {
+            return;
+        }
         match route {
             // Products was preloaded by startup before lazy loading; keep
             // its first-visit fetch here so the rail does not open an empty
@@ -789,7 +868,14 @@ impl AtlasApp {
                     self.load_units();
                 }
             }
-            Route::Sales if self.invoices.data.is_none() => self.load_invoices(),
+            Route::Sales => {
+                if self.invoices.data.is_none() && !self.invoices.loading {
+                    self.load_invoices();
+                }
+                if self.products.data.is_none() && !self.products.loading {
+                    self.load_products();
+                }
+            }
             Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
             // Settings aggregates four independent caches; load each once,
             // leaving the in-screen Retry action in charge of failed loads.
@@ -803,7 +889,10 @@ impl AtlasApp {
                 if self.devices.data.is_none() && !self.devices.loading {
                     self.load_devices();
                 }
-                if self.api_keys.data.is_none() && !self.api_keys.loading {
+                if self.role_policy().admin
+                    && self.api_keys.data.is_none()
+                    && !self.api_keys.loading
+                {
                     self.load_api_keys();
                 }
                 if self.assist.data.is_none() && !self.assist.loading {
@@ -840,7 +929,9 @@ impl AtlasApp {
             Route::Settings => {
                 self.load_profile();
                 self.load_devices();
-                self.load_api_keys();
+                if self.role_policy().admin {
+                    self.load_api_keys();
+                }
             }
         }
     }
@@ -859,6 +950,7 @@ impl AtlasApp {
             || self.category_editor.is_some()
             || self.unit_editor.is_some()
             || self.stock_dialog.is_some()
+            || self.scan.quick.is_some()
             // The quick-sale draft is an inline screen form, not a modal:
             // counting it here would block global shortcuts and hide the
             // FAB for the whole Sales screen. Escape still clears it via
@@ -880,6 +972,14 @@ impl AtlasApp {
         }
         if self.profile_menu_open {
             self.profile_menu_open = false;
+            return true;
+        }
+        if self.scan.quick.is_some() {
+            if self.scan.create_job.is_none() {
+                self.scan.quick = None;
+                self.scan.duplicate = false;
+                self.scan.error = None;
+            }
             return true;
         }
         // The stock dialog paints above the product editor, so Escape must
@@ -920,6 +1020,9 @@ impl AtlasApp {
     pub fn run_palette_target(&mut self, target: crate::shortcuts::PaletteTarget) -> bool {
         use crate::shortcuts::PaletteTarget;
         self.close_palette();
+        if !crate::shortcuts::target_allowed(self.role_policy(), target) {
+            return false;
+        }
         match target {
             PaletteTarget::Route(route) => {
                 self.go(route);
@@ -1082,4 +1185,46 @@ pub fn persist_private(path: std::path::PathBuf, bytes: Vec<u8>) {
             log::warn!("could not write {}: {error}", path.display());
         }
     });
+}
+
+#[cfg(test)]
+mod role_policy_tests {
+    use super::{RolePolicy, Route};
+
+    #[test]
+    fn stock_is_routed_away_from_financial_views() {
+        let stock = RolePolicy::from_role(Some("stock"));
+        assert_eq!(stock.initial_route(), Route::Products);
+        assert!(stock.allows_route(Route::Products));
+        assert!(stock.can_manage_stock());
+        assert!(!stock.show_prices());
+        assert!(!stock.can_edit_prices());
+        for route in [
+            Route::Dashboard,
+            Route::Sales,
+            Route::Expenses,
+            Route::Clients,
+            Route::Vendors,
+            Route::DeliveryNotes,
+            Route::Catalog,
+            Route::Notifications,
+        ] {
+            assert!(!stock.allows_route(route));
+        }
+    }
+
+    #[test]
+    fn office_and_regular_roles_do_not_gain_extra_actions() {
+        for role in ["owner", "admin", "secretaire"] {
+            let policy = RolePolicy::from_role(Some(role));
+            assert!(policy.allows_route(Route::Sales));
+            assert!(policy.can_edit_prices());
+        }
+        let user = RolePolicy::from_role(Some("user"));
+        assert!(user.allows_route(Route::Products));
+        assert!(user.allows_route(Route::Dashboard));
+        assert!(!user.allows_route(Route::Sales));
+        assert!(!user.can_manage_stock());
+        assert!(!RolePolicy::from_role(None).allows_route(Route::Products));
+    }
 }
