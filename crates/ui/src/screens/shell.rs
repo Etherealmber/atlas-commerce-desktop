@@ -156,8 +156,28 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     let left_inset = footprint.left.max(12.0);
     let right_inset = footprint.right.max(120.0);
 
+    // Keep an identifiable workspace at the start of the otherwise empty
+    // caption row; reserve its space before laying out search and controls.
+    let brand_width = if rect.width() >= 950.0 { 190.0 } else { 0.0 };
+    if brand_width > 0.0 {
+        let brand = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + left_inset, rect.top()),
+            egui::vec2(brand_width, rect.height()),
+        );
+        widgets::overlay_at(ui, brand, |ui| {
+            ui.horizontal_centered(|ui| {
+                crate::branding::mark(ui, palette, 26.0);
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new("Atlas Commerce")
+                        .color(palette.text)
+                        .font(crate::fonts::semibold(14.0)),
+                );
+            });
+        });
+    }
     let strip = egui::Rect::from_min_max(
-        egui::pos2(rect.left() + left_inset, rect.top()),
+        egui::pos2(rect.left() + left_inset + brand_width, rect.top()),
         egui::pos2(rect.right() - right_inset - 8.0, rect.bottom()),
     );
 
