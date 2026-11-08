@@ -5,6 +5,37 @@
 contrat d'API, et `src/pages/` pour les écrans. Le client desktop ne consomme
 que ces endpoints — aucun contrat n'est deviné.
 
+## Audit fonctionnel web de référence
+
+L'audit fourni par l'utilisateur porte sur le web au commit
+`cf951397553dc8749f15c96b33abf02d4a360e35` (analyse statique, sans captures
+ni test natif). Il complète l'inventaire d'endpoints ci-dessous ; ses
+recommandations P0–P2 ne sont pas des comportements observés du web.
+
+- Une vente rapide créée n'est pas nécessairement encaissée : le desktop
+  l'indique et vérifie chaque ligne avant l'envoi. L'encaissement séparé n'est
+  pas encore implémenté dans l'écran natif.
+- Le web déclenche le bon de livraison depuis une facture. Le desktop garde
+  son écran et son créateur de BL autonome existants : ce n'est pas une parité
+  du parcours facture → BL.
+- Les dépenses sont une section de « Solde & mouvements » sur le web ; le
+  desktop conserve actuellement son écran distinct. Notifications et agent
+  restent également des pages natives, pas encore un popover et un tiroir.
+- Les rôles web `owner`, `admin` et `secretaire` ont accès aux tâches bureau ;
+  `stock` est orienté produits/scan et ne voit pas les montants. Le desktop
+  masque les vues financières et les prix aux magasiniers, y compris dans la
+  palette et les raccourcis. Par prudence, les formulaires de création produit
+  natifs contenant des prix leur sont masqués ; l'ajustement du stock reste
+  disponible. Les contrôles d'interface ne remplacent jamais les permissions
+  côté serveur ; des tests sur serveur réel restent nécessaires.
+- Les réglages desktop restent des cartes, pas les 13 onglets web. L'audit
+  recommande une gestion cohérente des dialogues (focus, superposition,
+  brouillons et opérations en cours), mais ces garanties ne sont pas encore
+  généralisées à tous les formulaires natifs.
+
+Les chiffres de couverture ci-dessous reflètent l'inventaire à sa date de
+rédaction, pas une nouvelle mesure effectuée lors de cet audit.
+
 ## Couverture actuelle
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
