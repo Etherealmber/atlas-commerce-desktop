@@ -116,8 +116,8 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         } else if app.session.is_some() && app.client.is_some() {
             app.screen = Screen::Shell(crate::state::Route::Dashboard);
             app.bootstrap_shell();
-        } else if !app.server_store.onboarding_done || app.server_store.selected_url().is_none() {
-            app.screen = Screen::Onboarding;
+        } else if app.server_store.selected_url().is_none() {
+            app.screen = Screen::ServerSetup;
         } else {
             app.screen = Screen::Login;
         }
@@ -1214,10 +1214,56 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
         ui.add_space(10.0);
+        if !app.qr.expired
+            && let Some(base) = app.server_store.selected_url()
+            && let Some(url) = browser_approval_url(base, &app.qr.qr_url, &app.qr.token)
+            && secondary_button(ui, t!(app.locale, "Approve in your browser"), palette)
+            && let Err(error) = open::that(url.as_str())
+        {
+            log::warn!("Could not open browser: {:?}", error.kind());
+            app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
+        }
+        ui.label(
+            RichText::new(t!(app.locale, "First sign in to this server in your browser, then approve the request here. If the code expires, create a new one."))
+                .color(palette.dim)
+                .size(12.0),
+        );
         if secondary_button(ui, t!(app.locale, "New code"), palette) {
             start_qr_session(app);
         }
     });
+}
+
+/// The server supplies a short-lived QR approval URL. Never open another
+/// origin, credentials, an unexpected path, or a different token.
+fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> {
+    let server = url::Url::parse(base).ok()?;
+    let approval = url::Url::parse(raw).ok()?;
+    if token.is_empty()
+        || approval.origin() != server.origin()
+        || !approval.username().is_empty()
+        || approval.password().is_some()
+        || approval.fragment().is_some()
+        || approval.path() != "/login/qr"
+    {
+        return None;
+    }
+    let pairs: Vec<_> = approval.query_pairs().collect();
+    if pairs.len() != 2
+        || pairs
+            .iter()
+            .filter(|(key, value)| key == "t" && value == token)
+            .count()
+            != 1
+        || pairs
+            .iter()
+            .filter(|(key, value)| key == "mode" && value == "pc")
+            .count()
+            != 1
+    {
+        return None;
+    }
+    Some(approval)
 }
 
 fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
@@ -1610,5 +1656,29 @@ mod otp_tests {
         assert_eq!(normalize_otp("12 34-56"), "123456");
         assert_eq!(normalize_otp("123456789"), "123456");
         assert_eq!(normalize_otp("１２3"), "3");
+    }
+}
+
+#[cfg(test)]
+mod browser_approval_tests {
+    use super::browser_approval_url;
+
+    #[test]
+    fn only_opens_the_selected_servers_matching_one_time_approval() {
+        let base = "https://store.example";
+        assert!(
+            browser_approval_url(base, "https://store.example/login/qr?t=abc&mode=pc", "abc")
+                .is_some()
+        );
+        for url in [
+            "https://evil.example/login/qr?t=abc&mode=pc",
+            "https://store.example/login/qr?t=other&mode=pc",
+            "https://store.example/login/qr?t=abc&mode=pc&redirect=evil",
+            "https://store.example/other?t=abc&mode=pc",
+            "http://store.example/login/qr?t=abc&mode=pc",
+            "https://user@store.example/login/qr?t=abc&mode=pc",
+        ] {
+            assert!(browser_approval_url(base, url, "abc").is_none(), "{url}");
+        }
     }
 }
