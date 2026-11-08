@@ -115,7 +115,7 @@ pub fn window_icon() -> egui::IconData {
     let mut rgba = draw_icon(SIZE);
     // The tray icon is recoloured by the OS; the window icon is not.
     // Use the dark brand ink with the same transparent coverage mask.
-    for pixel in rgba.chunks_exact_mut(4) {
+    for pixel in rgba.as_chunks_mut::<4>().0 {
         pixel[..3].fill(10);
     }
     egui::IconData {
