@@ -1204,3 +1204,9 @@ msgstr "Comparez ce code avec celui du navigateur :"
 
 msgid "Preparing secure browser sign-in…"
 msgstr "Préparation de la connexion sécurisée…"
+
+msgid "Recording a quick sale does not confirm payment."
+msgstr "Enregistrer une vente rapide ne confirme pas son encaissement."
+
+msgid "Enter a client and a valid positive quantity for every line."
+msgstr "Indiquez un client et une quantité positive valide pour chaque ligne."
