@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Regenerate the Atlas Commerce Desktop brand assets.
 
-The brand is monochrome: a near-black rounded tile carrying the white
-sunburst symbol, plus sunburst + “Atlas” wordmark artwork for documentation.
+The app icon is a dark sunburst on a transparent background, plus
+sunburst + “Atlas” wordmark artwork for documentation.
 No teal, no saffron/orange.
 
 Inputs (committed in the repository):
@@ -27,18 +27,16 @@ import math
 import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 BRANDING = ROOT / "crates/ui/assets/branding"
 
-# 256-unit app-icon design: the same near-black tile as the previous mark,
-# now carrying the white sunburst. Geometry mirrors the supplied brand PNG
+# 256-unit app-icon design: a transparent background and dark sunburst. Geometry mirrors the supplied brand PNG
 # (measured on its 252 px symbol: outer radius 126, inner 77, stroke ~9.5,
 # 15 rays every 22.5° with a horizontal dash replacing the 0° ray), scaled so
 # the symbol occupies a 212 px square centred on the tile.
 CANVAS = 256
-TILE_RADIUS = 56
 MARK_INSET = 22
 CENTER = (128.0, 128.0)
 OUTER_RADIUS = 106.0
@@ -50,7 +48,6 @@ INNER_RADIUS = 65.0
 DASH_INNER_RADIUS = 0.0
 STROKE_WIDTH = 8
 BRAND = "#0A0A0A"
-PAPER = "#FAFAFA"
 
 
 def read_mask(name: str) -> tuple[Image.Image, int, int]:
@@ -78,10 +75,9 @@ def svg_mark() -> str:
         f'x2="{cx + OUTER_RADIUS:.2f}" y2="{cy:.2f}"/>'
     )
     lines = "\n".join(elements)
-    return f"""<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Atlas Commerce Desktop">
-  <title>Atlas Commerce Desktop</title>
-  <rect width="256" height="256" rx="{TILE_RADIUS}" fill="{BRAND}"/>
-  <g stroke="{PAPER}" stroke-width="{STROKE_WIDTH}" stroke-linecap="round">
+    return f"""<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Atlas Commerce">
+  <title>Atlas Commerce</title>
+  <g stroke="{BRAND}" stroke-width="{STROKE_WIDTH}" stroke-linecap="round">
 {lines}
   </g>
 </svg>
@@ -89,18 +85,11 @@ def svg_mark() -> str:
 
 
 def render_app_icon(size: int, mark: Image.Image) -> Image.Image:
-    """Black rounded tile with the white sunburst coverage mask centred."""
+    """Dark sunburst with an alpha background, without a square tile."""
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle(
-        (0, 0, size - 1, size - 1),
-        radius=TILE_RADIUS * size / CANVAS,
-        fill=(10, 10, 10, 255),
-    )
     mark_size = round(size * (CANVAS - 2 * MARK_INSET) / CANVAS)
     mark_scaled = mark.resize((mark_size, mark_size), Image.LANCZOS)
-    # The coverage mask becomes the alpha channel of a neutral white layer.
-    layer = Image.new("RGBA", (mark_size, mark_size), (250, 250, 250, 0))
+    layer = Image.new("RGBA", (mark_size, mark_size), (10, 10, 10, 0))
     layer.putalpha(mark_scaled)
     image.alpha_composite(layer, ((size - mark_size) // 2, (size - mark_size) // 2))
     return image

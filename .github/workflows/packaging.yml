@@ -12,11 +12,15 @@ on:
     paths:
       - native-packages.yaml
       - packaging/**
+      - scripts/generate-icons.py
+      - tests/test_packaging_identity.py
       - .github/workflows/packaging.yml
   pull_request:
     paths:
       - native-packages.yaml
       - packaging/**
+      - scripts/generate-icons.py
+      - tests/test_packaging_identity.py
       - .github/workflows/packaging.yml
   workflow_dispatch:
 
@@ -36,6 +40,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends desktop-file-utils
+      - name: Verify branding and upgrade identities
+        run: python3 -m unittest discover -s tests -v
       - name: Validate the native-packages manifest
         id: manifest
         run: |
