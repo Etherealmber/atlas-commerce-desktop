@@ -787,27 +787,10 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
 }
 
-/// Left half of the login card. Reserve the action before scrolling the form,
-/// so errors and OTP prompts cannot push it out of the card.
+/// Left half of the login card. Keep the action in normal layout so it
+/// cannot overlap or clip the password field.
 fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, split: bool) {
     let show_form = split || app.requires_password || !app.qr.active;
-    if show_form {
-        egui::Panel::bottom(egui::Id::new("login-submit"))
-            .exact_size(80.0)
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(egui::Frame::NONE.fill(palette.surface))
-            .show(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| draw_password_submit(app, ui, palette),
-                    );
-                });
-            });
-    }
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(32.0);
@@ -849,6 +832,8 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                             ui.add_space(8.0);
                         }
                         draw_password(app, ui, palette);
+                        ui.add_space(14.0);
+                        draw_password_submit(app, ui, palette);
                     } else {
                         draw_qr(app, ui, palette);
                     }

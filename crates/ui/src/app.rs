@@ -760,8 +760,8 @@ impl AtlasApp {
                 .is_some_and(|error| error.is_session_expired(true))
         });
         if expired {
-            self.notice("Votre session a expiré. Veuillez vous reconnecter.".to_owned());
             self.sign_out();
+            self.notice("Votre session a expiré. Veuillez vous reconnecter.".to_owned());
         }
     }
 
