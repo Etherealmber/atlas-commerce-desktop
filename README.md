@@ -99,11 +99,13 @@ est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
 
 ## Session et verrouillage
 
-La perte de focus, la réduction et la fermeture dans la zone de notification
-mettent fin à la session locale et demandent une authentification par mot de
-passe à la réouverture. Les sessions enregistrées ne sont pas restaurées
-sans authentification au lancement. Aucun mot de passe n'est conservé. Une
-connexion peut aussi demander le code de vérification du serveur.
+La session reste active lors d’un changement de fenêtre, de la réduction, de
+la veille ou de la fermeture dans la zone de notification. Elle est aussi
+restaurée au redémarrage pour le serveur sélectionné ; le jeton est enregistré
+dans un fichier local privé, pas dans un coffre chiffré. Utilisez **Se
+déconnecter** sur un ordinateur partagé. Le serveur peut toujours imposer une
+reconnexion si la session expire ou si sa liaison IP/appareil change. Aucun
+mot de passe n'est conservé.
 
 Le QR reste disponible pour une première connexion. Le client natif ne
 présente pas de défi Turnstile : le contrat actuel du Worker dispense les
