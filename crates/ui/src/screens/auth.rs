@@ -1214,6 +1214,18 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
         ui.add_space(10.0);
+        if let Some(base) = app.server_store.selected_url()
+            && secondary_button(ui, t!(app.locale, "Sign in on the server website"), palette)
+            && let Ok(mut url) = url::Url::parse(base)
+        {
+            url.set_path("/login");
+            url.set_query(None);
+            url.set_fragment(None);
+            if let Err(error) = open::that(url.as_str()) {
+                log::warn!("Could not open browser: {:?}", error.kind());
+                app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
+            }
+        }
         if !app.qr.expired
             && let Some(base) = app.server_store.selected_url()
             && let Some(url) = browser_approval_url(base, &app.qr.qr_url, &app.qr.token)

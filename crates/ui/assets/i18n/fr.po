@@ -1192,3 +1192,6 @@ msgstr "Impossible d’ouvrir votre navigateur."
 
 msgid "First sign in to this server in your browser, then approve the request here. If the code expires, create a new one."
 msgstr "Connectez-vous d’abord à ce serveur dans votre navigateur, puis autorisez la demande. Si le code expire, créez-en un nouveau."
+
+msgid "Sign in on the server website"
+msgstr "Se connecter sur le site du serveur"
