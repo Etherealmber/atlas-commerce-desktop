@@ -1308,7 +1308,7 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if self.browser_login.embedded {
             crate::browser_auth::cancel(self);
         }
@@ -1360,6 +1360,8 @@ pub struct EframeShell {
     login_view: Option<crate::webview_auth::LoginView>,
     #[cfg(target_os = "linux")]
     login_view: Option<crate::webview_auth_linux::LoginView>,
+    #[cfg(target_os = "macos")]
+    login_view: Option<atlas_webview_macos::LoginView>,
 }
 
 impl EframeShell {
@@ -1387,7 +1389,7 @@ impl EframeShell {
         Self {
             held,
             first_frame: true,
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             login_view: None,
         }
     }
@@ -1408,7 +1410,7 @@ impl eframe::App for EframeShell {
     }
 
     fn logic(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
         let _ = &frame;
         if self.first_frame {
             log::info!("Startup: first window logic frame");
@@ -1532,6 +1534,38 @@ impl eframe::App for EframeShell {
                 }
             }
         }
+        #[cfg(target_os = "macos")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else if let Some(window) = frame.winit_window() {
+                let size = window.inner_size();
+                let geometry = (size.width, size.height, window.scale_factor());
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    match atlas_webview_macos::LoginView::open(
+                        window.as_ref(),
+                        geometry,
+                        &url,
+                        &server,
+                    ) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if let Some(view) = &self.login_view {
+                    view.resize(geometry.0, geometry.1, geometry.2);
+                }
+            }
+        }
         // Unlike viewport.visible(), this also handles minimized, occluded,
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
@@ -1604,7 +1638,7 @@ impl eframe::App for EframeShell {
                     );
                 });
         }
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
             egui::CentralPanel::default()
                 .frame(

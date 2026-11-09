@@ -833,7 +833,7 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                     crate::browser_auth::cancel(app);
                 }
             } else {
-                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 if primary_button(
                     ui,
                     t!(app.locale, "Sign in inside Atlas"),
@@ -1723,7 +1723,7 @@ mod browser_approval_tests {
 
 /// Native chrome remains outside the remote login page and shows the v1
 /// comparison code and a cancellation control without exposing proofs.
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {

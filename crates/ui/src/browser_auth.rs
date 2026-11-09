@@ -23,9 +23,9 @@ pub(crate) struct BrowserLogin {
     server: Option<String>,
     pub(crate) pairing_code: Option<String>,
     pub(crate) active: bool,
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) embedded: bool,
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) pending_url: Option<Url>,
 }
 
@@ -433,13 +433,13 @@ pub(crate) fn start(app: &mut AtlasApp) {
     start_with_mode(app, false);
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub(crate) fn start_embedded(app: &mut AtlasApp) {
     start_with_mode(app, true);
 }
 
 fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     let _ = embedded;
     if app.browser_login.active || app.login.busy {
         return;
@@ -449,7 +449,7 @@ fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
     };
     let fingerprint = app.identity.fingerprint().to_owned();
     app.browser_login.server = Some(base.clone());
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {
         app.browser_login.embedded = embedded;
     }
@@ -464,7 +464,7 @@ fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
     app.browser_login.job = Some(app.runner.spawn(run(base, fingerprint, cancelled, tx)));
 }
 pub(crate) fn cancel(app: &mut AtlasApp) {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {
         app.browser_login.pending_url = None;
     }
@@ -472,7 +472,7 @@ pub(crate) fn cancel(app: &mut AtlasApp) {
         flag.store(true, Ordering::Relaxed);
     }
 }
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub(crate) fn embedded_active(app: &AtlasApp) -> bool {
     app.browser_login.active
         && app.browser_login.embedded
@@ -507,14 +507,14 @@ pub(crate) fn poll(app: &mut AtlasApp) {
             .is_some_and(|v| v.load(Ordering::Relaxed))
     {
         app.browser_login.pairing_code = Some(event.pairing_code);
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if app.browser_login.embedded {
             app.browser_login.pending_url = Some(event.url);
         } else if open::that(event.url.as_str()).is_err() {
             cancel(app);
             app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
         }
-        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
         if open::that(event.url.as_str()).is_err() {
             cancel(app);
             app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
