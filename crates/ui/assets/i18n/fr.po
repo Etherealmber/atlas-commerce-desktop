@@ -1300,3 +1300,18 @@ msgstr "Score"
 
 msgid "Only the first 150 results of each kind are shown."
 msgstr "Seuls les 150 premiers résultats de chaque type sont affichés."
+
+msgid "View"
+msgstr "Voir"
+
+msgid "Invoice detail"
+msgstr "Détail du document"
+
+msgid "No lines in this document."
+msgstr "Ce document ne contient aucune ligne."
+
+msgid "Tax rate"
+msgstr "Taux de TVA"
+
+msgid "Line total"
+msgstr "Total de la ligne"

@@ -410,12 +410,35 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
+    /// Read an individual invoice with its lines without opening a browser.
+    pub(crate) fn open_invoice_detail(&mut self, id: i64) {
+        if id <= 0
+            || !(self.role_policy().allows_route(Route::Sales)
+                || self.role_policy().allows_route(Route::Clients))
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.invoice_detail_id = Some(id);
+        self.invoice_detail = Default::default();
+        self.invoice_detail.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_detail(&api, id).await }),
+        );
+    }
+
     /// Load the server-filtered list into the native client detail panel.
     pub fn open_client_invoices(&mut self, client: &atlas_api::models::Client) {
         let Some(api) = self.client.clone() else {
             return;
         };
         let id = client.id;
+        if self.client_invoice_id != Some(id) {
+            self.invoice_detail_id = None;
+            self.invoice_detail = Default::default();
+        }
         self.client_invoice_id = Some(id);
         self.client_invoices = Default::default();
         self.client_invoices.start(
@@ -832,6 +855,9 @@ impl AtlasApp {
         if self.client_invoices.poll() {
             ctx.request_repaint();
         }
+        if self.invoice_detail.poll() {
+            ctx.request_repaint();
+        }
         if self.vendors.poll() {
             ctx.request_repaint();
         }
@@ -1075,6 +1101,7 @@ impl AtlasApp {
             || self.dashboard.loading
             || self.products.loading
             || self.client_invoices.loading
+            || self.invoice_detail.loading
             || self.bills.loading
             || self.ledger_reconciliation.loading
             || self.bank_reconciliation.loading

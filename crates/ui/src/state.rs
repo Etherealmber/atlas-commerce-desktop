@@ -472,6 +472,8 @@ pub struct AtlasApp {
     pub selected_client: Option<i64>,
     pub client_invoice_id: Option<i64>,
     pub client_invoices: Cache<Vec<Invoice>>,
+    pub(crate) invoice_detail_id: Option<i64>,
+    pub(crate) invoice_detail: Cache<crate::client_invoices::InvoiceDetail>,
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
@@ -631,6 +633,8 @@ impl AtlasApp {
             selected_client: None,
             client_invoice_id: None,
             client_invoices: Cache::default(),
+            invoice_detail_id: None,
+            invoice_detail: Cache::default(),
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
@@ -1161,6 +1165,8 @@ impl AtlasApp {
         self.invoice_search.clear();
         self.client_invoice_id = None;
         self.client_invoices = Cache::default();
+        self.invoice_detail_id = None;
+        self.invoice_detail = Cache::default();
         self.client_editor = None;
         self.vendors = Cache::default();
         self.vendor_search = String::new();

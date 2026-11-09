@@ -82,6 +82,10 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         invoice_history(app, ui, palette);
     });
+    if app.invoice_detail_id.is_some() {
+        ui.add_space(12.0);
+        draw_invoice_detail(app, ui, palette);
+    }
     ui.add_space(12.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -154,7 +158,8 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .data
         .as_ref()
         .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .unwrap_or("MAD")
+        .to_owned();
     let query = crate::shortcuts::normalize(app.invoice_search.trim());
     let mut found = false;
     for invoice in invoices
@@ -163,6 +168,9 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     {
         found = true;
         ui.horizontal(|ui| {
+            if secondary_button(ui, t!(app.locale, "View"), palette) {
+                app.open_invoice_detail(invoice.id);
+            }
             // No full-width pin inside a horizontal row: the amount and
             // status pill on the right would be starved and overlap.
             icon(ui, Icon::Receipt, palette.secondary, 16.0);
@@ -194,7 +202,7 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
-                    RichText::new(money(invoice.total, currency))
+                    RichText::new(money(invoice.total, &currency))
                         .color(palette.text)
                         .strong()
                         .size(13.0),
@@ -209,6 +217,101 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if !found {
         ui.label(RichText::new(t!(app.locale, "No matching invoice.")).color(palette.secondary));
     }
+}
+
+/// Detail is rendered natively from JSON; it is not the printable HTML/PDF.
+pub(crate) fn draw_invoice_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Invoice detail"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if let Some(id) = app.invoice_detail_id {
+                if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                    app.open_invoice_detail(id);
+                }
+                if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                    app.invoice_detail_id = None;
+                    app.invoice_detail = Default::default();
+                }
+            }
+        });
+        if app.invoice_detail.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoice_detail.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(detail) = &app.invoice_detail.data else {
+            return;
+        };
+        let invoice = &detail.invoice;
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency())
+            .unwrap_or("MAD");
+        ui.label(
+            RichText::new(format!(
+                "{} · {} · {} · {}",
+                invoice
+                    .number
+                    .clone()
+                    .unwrap_or_else(|| format!("#{}", invoice.id)),
+                invoice.client_name.as_deref().unwrap_or("—"),
+                invoice.issue_date.as_deref().unwrap_or("—"),
+                invoice.status.as_deref().unwrap_or("—")
+            ))
+            .color(palette.text),
+        );
+        ui.label(
+            RichText::new(format!(
+                "{} : {} · {} : {}",
+                t!(app.locale, "Total"),
+                money(invoice.total, currency),
+                t!(app.locale, "Remaining"),
+                money(invoice.remaining(), currency)
+            ))
+            .color(palette.text)
+            .strong(),
+        );
+        if detail.items.is_empty() {
+            ui.label(
+                RichText::new(t!(app.locale, "No lines in this document."))
+                    .color(palette.secondary),
+            );
+        }
+        for line in &detail.items {
+            ui.separator();
+            ui.label(
+                RichText::new(line.product_name.as_deref().unwrap_or("—"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            let number = |v: Option<f64>| v.map_or_else(|| "—".to_owned(), |n| n.to_string());
+            let amount = |v: Option<f64>| v.map_or_else(|| "—".to_owned(), |n| money(n, currency));
+            ui.label(
+                RichText::new(format!(
+                    "{} : {} · {} : {} · {} : {} % · {} : {}",
+                    t!(app.locale, "Quantity"),
+                    number(line.quantity),
+                    t!(app.locale, "Unit price"),
+                    amount(line.unit_price),
+                    t!(app.locale, "Tax rate"),
+                    number(line.tax_rate),
+                    t!(app.locale, "Line total"),
+                    amount(line.line_total)
+                ))
+                .color(palette.secondary),
+            );
+        }
+    });
 }
 
 /// Filter only the invoices already returned by the server; this is not a

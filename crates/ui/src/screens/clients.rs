@@ -376,7 +376,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             super::centered_spinner(ui, palette);
         } else if let Some(error) = &app.client_invoices.error {
             error_banner(ui, error, palette);
-        } else if let Some(invoices) = &app.client_invoices.data {
+        } else if let Some(invoices) = app.client_invoices.data.clone() {
             if invoices.is_empty() {
                 ui.label(
                     RichText::new(t!(app.locale, "No invoice for this client."))
@@ -385,6 +385,9 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
             for invoice in invoices {
                 ui.separator();
+                if secondary_button(ui, t!(app.locale, "View"), palette) {
+                    app.open_invoice_detail(invoice.id);
+                }
                 ui.label(
                     RichText::new(
                         invoice
@@ -414,6 +417,10 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .color(palette.text),
                 );
             }
+        }
+        if app.invoice_detail_id.is_some() {
+            ui.add_space(12.0);
+            super::sales::draw_invoice_detail(app, ui, palette);
         }
     }
 }

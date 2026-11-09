@@ -21,6 +21,36 @@ pub(crate) async fn fetch(api: &ApiClient, client_id: i64) -> Result<Vec<Invoice
     fetch_path(api, &format!("/api/invoices?client={client_id}"), None).await
 }
 
+/// Native, read-only representation of the invoice detail endpoint.
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct InvoiceDetail {
+    #[serde(flatten)]
+    pub invoice: Invoice,
+    pub items: Vec<InvoiceLine>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct InvoiceLine {
+    pub product_name: Option<String>,
+    pub quantity: Option<f64>,
+    pub unit_price: Option<f64>,
+    pub tax_rate: Option<f64>,
+    pub line_total: Option<f64>,
+}
+
+pub(crate) async fn fetch_detail(api: &ApiClient, id: i64) -> Result<InvoiceDetail, ApiError> {
+    if id <= 0 {
+        return Err(ApiError::client("Identifiant de facture invalide."));
+    }
+    let detail: InvoiceDetail = fetch_path(api, &format!("/api/invoices/{id}"), None).await?;
+    if detail.invoice.id != id {
+        return Err(ApiError::client(
+            "La facture reçue ne correspond pas à la demande.",
+        ));
+    }
+    Ok(detail)
+}
+
 /// A supplier invoice as returned by the existing GET /api/bills endpoint.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(crate) struct Bill {
@@ -191,7 +221,7 @@ async fn fetch_path<T: serde::de::DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use super::{BankReconciliation, Bill, Envelope, LedgerReconciliation};
+    use super::{BankReconciliation, Bill, Envelope, InvoiceDetail, LedgerReconciliation};
     use atlas_api::models::Invoice;
 
     #[test]
@@ -203,6 +233,18 @@ mod tests {
         let invoices = data.data.unwrap();
         assert_eq!(invoices[0].id, 42);
         assert_eq!(invoices[0].remaining(), 100.0);
+    }
+    #[test]
+    fn decodes_invoice_detail_and_lines() {
+        let reply: Envelope<InvoiceDetail> = serde_json::from_str(r#"{"success":true,"data":{"id":42,"number":"FA-42","total":120,"items":[{"product_name":"Produit","quantity":2,"unit_price":50,"tax_rate":20,"line_total":120}]}}"#).unwrap();
+        let detail = reply.data.unwrap();
+        assert_eq!(detail.invoice.id, 42);
+        assert_eq!(detail.items[0].product_name.as_deref(), Some("Produit"));
+        assert_eq!(detail.items[0].line_total, Some(120.0));
+        assert!(
+            serde_json::from_str::<Envelope<InvoiceDetail>>(r#"{"success":true,"data":{"id":42}}"#)
+                .is_err()
+        );
     }
     #[test]
     fn decodes_supplier_bill_without_inventing_payment_status() {
