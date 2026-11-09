@@ -1050,6 +1050,22 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             });
         }
+        if app.update.last_manifest.is_none()
+            && let Some(manifest) = &app.update.release_notes
+            && !manifest.notes.trim().is_empty()
+        {
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new(format!(
+                    "{} · v{}",
+                    t!(app.locale, "Release notes"),
+                    manifest.version
+                ))
+                .color(palette.text)
+                .strong(),
+            );
+            crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
+        }
         if let Some(error) = app.update.error.clone() {
             ui.add_space(8.0);
             error_banner(ui, &error, palette);

@@ -536,9 +536,8 @@ fn draw_profile_menu(
                         app.server_form.verified_selected = None;
                         app.screen = Screen::ServerSetup;
                     }
-                    // Web parity (profile dropdown): release notes open on
-                    // GitHub in the browser, About jumps to the settings
-                    // section that carries version and repository links.
+                    // Release notes are shown in the application; a browser
+                    // link remains available in the settings section.
                     let whats_new = menu_row(
                         ui,
                         palette,
@@ -548,8 +547,10 @@ fn draw_profile_menu(
                     .clicked();
                     if whats_new {
                         app.profile_menu_open = false;
-                        if let Err(error) = open::that(crate::screens::settings::RELEASES_URL) {
-                            log::warn!("could not open releases: {error}");
+                        app.settings_focus = crate::state::SettingsFocus::About;
+                        app.go(Route::Settings);
+                        if app.update.release_notes.is_none() && !app.update.checking {
+                            app.check_for_updates(false);
                         }
                     }
                     let about =

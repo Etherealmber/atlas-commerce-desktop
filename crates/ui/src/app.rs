@@ -660,6 +660,7 @@ impl AtlasApp {
     }
 
     fn apply_manifest(&mut self, manifest: UpdateManifest) {
+        self.update.release_notes = Some(manifest.clone());
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
             UpdateDecision::UpToDate => {

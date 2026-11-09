@@ -243,6 +243,8 @@ pub struct LoginState {
 /// Self-update state.
 #[derive(Default)]
 pub struct UpdateState {
+    /// Most recently fetched release notes, even when this build is current.
+    pub release_notes: Option<UpdateManifest>,
     pub last_manifest: Option<UpdateManifest>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
