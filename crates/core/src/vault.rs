@@ -242,6 +242,42 @@ mod tests {
         );
     }
 
+    struct DeleteFailure<'a>(&'a MemoryStore);
+
+    impl Store for DeleteFailure<'_> {
+        fn get(&self, key: &str) -> Result<Option<String>, VaultError> {
+            self.0.get(key)
+        }
+        fn put(&self, key: &str, value: &str) -> Result<(), VaultError> {
+            self.0.put(key, value)
+        }
+        fn delete(&self, key: &str) -> Result<(), VaultError> {
+            if key.starts_with("session-") {
+                Err(VaultError::Unavailable)
+            } else {
+                self.0.delete(key)
+            }
+        }
+    }
+
+    #[test]
+    fn failed_secret_deletion_does_not_leave_an_active_pointer() {
+        let store = MemoryStore::default();
+        let alice = session("https://a.example", "alice");
+        store_session(&store, &alice).unwrap();
+        assert_eq!(
+            remove_session(&DeleteFailure(&store), &alice),
+            Err(VaultError::Unavailable)
+        );
+        assert!(
+            restore_session(&store, "https://a.example")
+                .unwrap()
+                .is_none()
+        );
+        // A backend error must not leak its details through the public error.
+        assert_eq!(format!("{:?}", VaultError::Unavailable), "Unavailable");
+    }
+
     #[test]
     fn rejects_bad_origins_and_tampered_scope() {
         let store = MemoryStore::default();
