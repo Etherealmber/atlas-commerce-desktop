@@ -59,6 +59,8 @@ fn main() -> eframe::Result<()> {
         arguments: _,
         receipt,
         error: launch_error,
+        // The helper's diagnostic can contain local paths; do not log it.
+        failure: _,
     } = launch;
 
     // 2. Single instance. The running copy serves this slot on its own
