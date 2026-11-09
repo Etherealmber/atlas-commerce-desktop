@@ -15,6 +15,7 @@ on:
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
       - tests/windows-inno-upgrade.ps1
+      - tests/windows-mixed-install.ps1
       - .github/workflows/packaging.yml
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
       - tests/windows-inno-upgrade.ps1
+      - tests/windows-mixed-install.ps1
       - .github/workflows/packaging.yml
   workflow_dispatch:
 
@@ -190,6 +192,13 @@ jobs:
           }
           Get-Item "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" |
             Tee-Object -Append packaging-windows.log
+      - name: Exercise mixed MSI and Inno installations
+        shell: pwsh
+        run: |
+          $setups = @(Get-ChildItem "$env:RUNNER_TEMP\inno-check\*-setup.exe")
+          if ($setups.Count -ne 1) { throw 'Expected exactly one Inno setup' }
+          ./tests/windows-mixed-install.ps1 -Msi "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" `
+            -InnoSetup $setups[0].FullName
       - name: Job summary
         if: always()
         shell: pwsh
