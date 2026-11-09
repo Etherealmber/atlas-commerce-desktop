@@ -1336,3 +1336,6 @@ msgstr "Voir la facture"
 
 msgid "No matching receipt."
 msgstr "Aucun reçu correspondant."
+
+msgid "Products: first 200 server matches; clients, vendors, invoices and receipts: first 40 matches per category."
+msgstr "Produits : 200 premiers résultats du serveur ; clients, fournisseurs, factures et reçus : 40 premiers résultats par catégorie."

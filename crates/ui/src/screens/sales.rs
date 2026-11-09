@@ -88,16 +88,16 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(12.0);
     }
 
+    if app.invoice_detail_id.is_some() {
+        ui.add_space(12.0);
+        draw_invoice_detail(app, ui, palette);
+    }
     // Full-width content avoids starving the history or quick-sale form in
     // horizontal layouts and follows the web's stacked page structure.
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         invoice_history(app, ui, palette);
     });
-    if app.invoice_detail_id.is_some() {
-        ui.add_space(12.0);
-        draw_invoice_detail(app, ui, palette);
-    }
     ui.add_space(12.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());

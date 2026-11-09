@@ -10,6 +10,7 @@ pub(crate) struct SearchHit {
     pub id: i64,
     pub label: String,
     pub subtitle: String,
+    pub receipt: bool,
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SearchResults {
@@ -25,12 +26,13 @@ pub(crate) async fn search(
     products: bool,
     clients: bool,
     sales: bool,
+    vendors: bool,
 ) -> Result<SearchResults, ApiError> {
     let needle = crate::shortcuts::normalize(query.trim());
     if needle.is_empty() {
         return Err(ApiError::client("Saisissez une recherche."));
     }
-    let (p, c, i) = tokio::join!(
+    let (p, c, i, v, r) = tokio::join!(
         async {
             if products {
                 Some(api.products(&query, 200).await)
@@ -52,6 +54,20 @@ pub(crate) async fn search(
                 None
             }
         },
+        async {
+            if vendors {
+                Some(api.vendors().await)
+            } else {
+                None
+            }
+        },
+        async {
+            if sales {
+                Some(crate::client_invoices::fetch_receipts(api).await)
+            } else {
+                None
+            }
+        },
     );
     let mut result = SearchResults::default();
     if let Some(p) = p {
@@ -63,6 +79,7 @@ pub(crate) async fn search(
                         id: row.id,
                         label: row.name,
                         subtitle: row.sku.unwrap_or_default(),
+                        receipt: false,
                     });
                 }
             }
@@ -87,6 +104,7 @@ pub(crate) async fn search(
                         id: row.id,
                         label: row.name,
                         subtitle: row.phone,
+                        receipt: false,
                     });
                 }
             }
@@ -115,10 +133,66 @@ pub(crate) async fn search(
                         id: row.id,
                         label: row.number.unwrap_or_else(|| format!("#{}", row.id)),
                         subtitle: row.client_name.unwrap_or_default(),
+                        receipt: false,
                     });
                 }
             }
             Err(_) => result.failed.push("Sales"),
+        }
+    }
+    if let Some(v) = v {
+        match v {
+            Ok(rows) => {
+                for row in rows
+                    .into_iter()
+                    .filter(|r| {
+                        contains(
+                            &needle,
+                            &format!("{} {} {} {}", r.name, r.phone, r.ice, r.email),
+                        )
+                    })
+                    .take(40)
+                {
+                    result.hits.push(SearchHit {
+                        route: Route::Vendors,
+                        id: row.id,
+                        label: row.name,
+                        subtitle: row.phone,
+                        receipt: false,
+                    });
+                }
+            }
+            Err(_) => result.failed.push("Vendors"),
+        }
+    }
+    if let Some(r) = r {
+        match r {
+            Ok(rows) => {
+                for row in rows
+                    .into_iter()
+                    .filter(|r| {
+                        contains(
+                            &needle,
+                            &format!(
+                                "{} {} {}",
+                                r.number,
+                                r.client_name,
+                                r.invoice_number.as_deref().unwrap_or("")
+                            ),
+                        )
+                    })
+                    .take(40)
+                {
+                    result.hits.push(SearchHit {
+                        route: Route::Sales,
+                        id: row.id,
+                        label: row.number,
+                        subtitle: row.client_name,
+                        receipt: true,
+                    });
+                }
+            }
+            Err(_) => result.failed.push("Receipts"),
         }
     }
     Ok(result)
