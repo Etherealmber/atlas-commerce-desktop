@@ -84,8 +84,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     ui.add_space(14.0);
+    // Measure before entering the frame: its child can inherit an expanded
+    // layout width and center the empty state behind the agent drawer.
+    let recent_width = (ui.available_width() - 34.0).max(0.0);
     card(palette).show(ui, |ui| {
-        ui.set_width(ui.available_width());
+        ui.set_width(recent_width);
         ui.vertical(|ui| {
             recent_invoices(app, ui, palette, &data);
         });
