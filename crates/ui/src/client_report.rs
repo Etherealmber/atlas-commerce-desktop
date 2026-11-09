@@ -7,7 +7,12 @@ use scraper::{ElementRef, Html, Selector};
 #[derive(Clone, Debug)]
 pub(crate) enum ReportBlock {
     Text(String),
-    Table(Vec<Vec<String>>),
+    Table(Vec<ReportRow>),
+}
+#[derive(Clone, Debug)]
+pub(crate) struct ReportRow {
+    pub header: bool,
+    pub cells: Vec<String>,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct ClientReport {
@@ -58,9 +63,16 @@ fn collect(
     }
     let tag = element.value().name();
     if tag == "table" {
-        let rows: Vec<Vec<String>> = element
+        let rows: Vec<ReportRow> = element
             .select(row_sel)
-            .map(|row| row.select(cell_sel).map(text).collect())
+            .map(|row| {
+                let cells: Vec<_> = row.select(cell_sel).collect();
+                ReportRow {
+                    header: !cells.is_empty()
+                        && cells.iter().all(|cell| cell.value().name() == "th"),
+                    cells: cells.into_iter().map(text).collect(),
+                }
+            })
             .collect();
         blocks.push(ReportBlock::Table(rows));
     } else if matches!(tag, "p" | "h1" | "h2" | "h3" | "th" | "td")

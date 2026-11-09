@@ -451,11 +451,20 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                 crate::client_report::ReportBlock::Text(value) => { ui.label(RichText::new(value).color(palette.text)); }
                 crate::client_report::ReportBlock::Table(rows) => {
                     ui.add_space(4.0);
+                    let mut headings: Option<&[String]> = None;
                     for row in rows {
+                        if row.header {
+                            headings = Some(&row.cells);
+                            continue;
+                        }
                         ui.separator();
-                        ui.horizontal_wrapped(|ui| {
-                            for cell in row { ui.label(RichText::new(cell).color(palette.text)); ui.add_space(8.0); }
-                        });
+                        for (index, value) in row.cells.iter().enumerate() {
+                            let label = headings.and_then(|h| h.get(index)).map_or_else(
+                                || value.clone(),
+                                |name| format!("{name} : {value}"),
+                            );
+                            ui.label(RichText::new(label).color(palette.text));
+                        }
                     }
                     ui.add_space(4.0);
                 }
