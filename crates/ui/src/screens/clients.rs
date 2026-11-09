@@ -536,9 +536,10 @@ fn detail_row(
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
+    let width = 520.0_f32.min((screen.width() - 32.0).max(1.0));
     let rect = egui::Rect::from_center_size(
         screen.center(),
-        vec2(520.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
+        vec2(width, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
         app.client_editor = None;
@@ -548,26 +549,26 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width((width - 44.0).max(1.0));
+            let title = if app
+                .client_editor
+                .as_ref()
+                .is_some_and(|editor| editor.editing_id.is_some())
+            {
+                t!(locale, "Edit client")
+            } else {
+                t!(locale, "New client")
+            };
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
+            ui.add_space(10.0);
             egui::ScrollArea::vertical()
-                .max_height((rect.height() - 46.0).max(1.0))
+                .max_height((rect.height() - 150.0).max(1.0))
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    ui.set_min_size(vec2(476.0, 0.0));
-                    let title = if app
-                        .client_editor
-                        .as_ref()
-                        .is_some_and(|editor| editor.editing_id.is_some())
-                    {
-                        t!(locale, "Edit client")
-                    } else {
-                        t!(locale, "New client")
-                    };
-                    ui.label(
-                        RichText::new(title)
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
-                    );
-                    ui.add_space(10.0);
-
                     if let Some(editor) = app.client_editor.as_mut() {
                         labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
                         ui.add_space(8.0);
@@ -614,23 +615,22 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         ui.add_space(8.0);
                         error_banner(ui, &error, palette);
                     }
-
-                    ui.add_space(12.0);
-                    widgets::dialog_actions(ui, |ui| {
-                        let saving = app
-                            .client_editor
-                            .as_ref()
-                            .is_some_and(|editor| editor.saving);
-                        let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                        if cancel {
-                            app.client_editor = None;
-                        }
-                        if save {
-                            submit_editor(app);
-                        }
-                    });
                 });
+            ui.add_space(12.0);
+            widgets::dialog_actions(ui, |ui| {
+                let saving = app
+                    .client_editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.saving);
+                let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
+                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                if cancel {
+                    app.client_editor = None;
+                }
+                if save {
+                    submit_editor(app);
+                }
+            });
         });
     });
 }
