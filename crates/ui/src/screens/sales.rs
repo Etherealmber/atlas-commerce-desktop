@@ -76,28 +76,17 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    if ui.available_width() < 760.0 {
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            invoice_history(app, ui, palette);
-        });
-        ui.add_space(12.0);
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            quick_sale_form(app, ui, palette);
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            card(palette).show(ui, |ui| {
-                ui.set_width((ui.available_width() * 0.55).max(300.0));
-                invoice_history(app, ui, palette);
-            });
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                quick_sale_form(app, ui, palette);
-            });
-        });
-    }
+    // Full-width content avoids starving the history or quick-sale form in
+    // horizontal layouts and follows the web's stacked page structure.
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        invoice_history(app, ui, palette);
+    });
+    ui.add_space(12.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        quick_sale_form(app, ui, palette);
+    });
 }
 
 fn poll_sale_job(app: &mut AtlasApp) {
@@ -125,12 +114,20 @@ fn poll_sale_job(app: &mut AtlasApp) {
     }
 }
 
-fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.label(
         RichText::new(t!(app.locale, "Invoice history"))
             .color(palette.text)
             .strong()
             .size(15.0),
+    );
+    ui.add_space(8.0);
+    let width = ui.available_width();
+    widgets::search_field(
+        ui,
+        &mut app.invoice_search,
+        t!(app.locale, "Search by number or client"),
+        width,
     );
     ui.add_space(8.0);
     if app.invoices.loading && app.invoices.data.is_none() {
@@ -158,7 +155,13 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .as_ref()
         .map(|data| data.currency())
         .unwrap_or("MAD");
-    for invoice in invoices {
+    let query = crate::shortcuts::normalize(app.invoice_search.trim());
+    let mut found = false;
+    for invoice in invoices
+        .into_iter()
+        .filter(|invoice| invoice_matches(invoice, &query))
+    {
+        found = true;
         ui.horizontal(|ui| {
             // No full-width pin inside a horizontal row: the amount and
             // status pill on the right would be starved and overlap.
@@ -203,6 +206,21 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
         ui.separator();
     }
+    if !found {
+        ui.label(RichText::new(t!(app.locale, "No matching invoice.")).color(palette.secondary));
+    }
+}
+
+/// Filter only the invoices already returned by the server; this is not a
+/// server-wide search and does not change document kinds or payment state.
+fn invoice_matches(invoice: &atlas_api::models::Invoice, normalized_query: &str) -> bool {
+    normalized_query.is_empty()
+        || crate::shortcuts::normalize(&format!(
+            "{} {}",
+            invoice.number.as_deref().unwrap_or(""),
+            invoice.client_name.as_deref().unwrap_or("")
+        ))
+        .contains(normalized_query)
 }
 
 fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -477,5 +495,23 @@ mod tests {
         assert!(draft.valid());
         draft.lines[0].unit_price = f64::NAN;
         assert!(!draft.valid());
+    }
+}
+
+#[cfg(test)]
+mod invoice_search_tests {
+    use super::invoice_matches;
+    use atlas_api::models::Invoice;
+
+    #[test]
+    fn matches_number_and_accent_folded_client_name() {
+        let invoice = Invoice {
+            number: Some("FA-128".into()),
+            client_name: Some("Élodie".into()),
+            ..Default::default()
+        };
+        assert!(invoice_matches(&invoice, "fa-128"));
+        assert!(invoice_matches(&invoice, "elodie"));
+        assert!(!invoice_matches(&invoice, "autre"));
     }
 }

@@ -1246,3 +1246,9 @@ msgstr "Rapport du jour"
 
 msgid "Summarize today's sales."
 msgstr "Résume les ventes du jour."
+
+msgid "Search by number or client"
+msgstr "Rechercher par numéro ou nom de client"
+
+msgid "No matching invoice."
+msgstr "Aucune facture correspondante."
