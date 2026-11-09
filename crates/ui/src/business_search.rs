@@ -27,12 +27,14 @@ pub(crate) async fn search(
     clients: bool,
     sales: bool,
     vendors: bool,
+    delivery: bool,
+    bills: bool,
 ) -> Result<SearchResults, ApiError> {
     let needle = crate::shortcuts::normalize(query.trim());
     if needle.is_empty() {
         return Err(ApiError::client("Saisissez une recherche."));
     }
-    let (p, c, i, v, r) = tokio::join!(
+    let (p, c, i, v, r, d, b) = tokio::join!(
         async {
             if products {
                 Some(api.products(&query, 200).await)
@@ -64,6 +66,20 @@ pub(crate) async fn search(
         async {
             if sales {
                 Some(crate::client_invoices::fetch_receipts(api).await)
+            } else {
+                None
+            }
+        },
+        async {
+            if delivery {
+                Some(api.delivery_notes().await)
+            } else {
+                None
+            }
+        },
+        async {
+            if bills {
+                Some(crate::client_invoices::fetch_bills(api).await)
             } else {
                 None
             }
@@ -193,6 +209,55 @@ pub(crate) async fn search(
                 }
             }
             Err(_) => result.failed.push("Receipts"),
+        }
+    }
+    if let Some(d) = d {
+        match d {
+            Ok(rows) => {
+                for row in rows
+                    .into_iter()
+                    .filter(|r| contains(&needle, &format!("{} {}", r.number, r.client_name)))
+                    .take(40)
+                {
+                    result.hits.push(SearchHit {
+                        route: Route::DeliveryNotes,
+                        id: row.id,
+                        label: row.number,
+                        subtitle: row.client_name,
+                        receipt: false,
+                    });
+                }
+            }
+            Err(_) => result.failed.push("Delivery notes"),
+        }
+    }
+    if let Some(b) = b {
+        match b {
+            Ok(rows) => {
+                for row in rows
+                    .into_iter()
+                    .filter(|r| {
+                        contains(
+                            &needle,
+                            &format!(
+                                "{} {}",
+                                r.number.as_deref().unwrap_or(""),
+                                r.vendor_name.as_deref().unwrap_or("")
+                            ),
+                        )
+                    })
+                    .take(40)
+                {
+                    result.hits.push(SearchHit {
+                        route: Route::Expenses,
+                        id: row.id,
+                        label: row.number.unwrap_or_else(|| format!("#{}", row.id)),
+                        subtitle: row.vendor_name.unwrap_or_default(),
+                        receipt: false,
+                    });
+                }
+            }
+            Err(_) => result.failed.push("Supplier bills"),
         }
     }
     Ok(result)

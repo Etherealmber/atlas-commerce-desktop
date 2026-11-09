@@ -432,11 +432,16 @@ impl AtlasApp {
         let clients = policy.allows_route(Route::Clients);
         let sales = policy.allows_route(Route::Sales);
         let vendors = policy.allows_route(Route::Vendors);
+        let delivery = policy.allows_route(Route::DeliveryNotes);
+        let bills = policy.allows_route(Route::Expenses);
         self.business_search_open = true;
         self.business_search_query = query.clone();
         self.business_search = Default::default();
         self.business_search.start(self.runner.spawn(async move {
-            crate::business_search::search(&api, query, products, clients, sales, vendors).await
+            crate::business_search::search(
+                &api, query, products, clients, sales, vendors, delivery, bills,
+            )
+            .await
         }));
     }
 

@@ -484,6 +484,7 @@ pub struct AtlasApp {
     pub expense_search: String,
     pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
     pub(crate) bills_open: bool,
+    pub(crate) bill_search: String,
     pub(crate) ledger_reconciliation: Cache<crate::client_invoices::LedgerReconciliation>,
     pub(crate) ledger_reconciliation_open: bool,
     pub(crate) bank_csv: String,
@@ -491,6 +492,7 @@ pub struct AtlasApp {
     pub(crate) bank_reconciliation_open: bool,
     pub expense_editor: Option<ExpenseEditor>,
     pub delivery_notes: Cache<Vec<DeliveryNote>>,
+    pub(crate) delivery_search: String,
     pub delivery_note_editor: Option<DeliveryNoteEditor>,
     pub scan: ScanState,
     pub categories: Cache<Vec<Category>>,
@@ -651,6 +653,7 @@ impl AtlasApp {
             expense_search: String::new(),
             bills: Cache::default(),
             bills_open: false,
+            bill_search: String::new(),
             ledger_reconciliation: Cache::default(),
             ledger_reconciliation_open: false,
             bank_csv: String::new(),
@@ -658,6 +661,7 @@ impl AtlasApp {
             bank_reconciliation_open: false,
             expense_editor: None,
             delivery_notes: Cache::default(),
+            delivery_search: String::new(),
             delivery_note_editor: None,
             scan: ScanState::default(),
             categories: Cache::default(),
@@ -1191,6 +1195,7 @@ impl AtlasApp {
         self.expense_search = String::new();
         self.bills = Cache::default();
         self.bills_open = false;
+        self.bill_search.clear();
         self.ledger_reconciliation = Cache::default();
         self.ledger_reconciliation_open = false;
         self.bank_csv.clear();
@@ -1198,6 +1203,7 @@ impl AtlasApp {
         self.bank_reconciliation_open = false;
         self.expense_editor = None;
         self.delivery_notes = Cache::default();
+        self.delivery_search.clear();
         self.delivery_note_editor = None;
         self.scan = ScanState::default();
         self.categories = Cache::default();

@@ -408,6 +408,13 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 app.load_bills();
             }
         });
+        let width = ui.available_width();
+        widgets::search_field(
+            ui,
+            &mut app.bill_search,
+            t!(app.locale, "Search by number or vendor"),
+            width,
+        );
         if app.bills.loading {
             super::centered_spinner(ui, palette);
             return;
@@ -429,7 +436,19 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .as_ref()
             .map(|d| d.currency())
             .unwrap_or("MAD");
+        let query = crate::shortcuts::normalize(app.bill_search.trim());
+        let mut found = false;
         for bill in bills {
+            if !crate::shortcuts::normalize(&format!(
+                "{} {}",
+                bill.number.as_deref().unwrap_or(""),
+                bill.vendor_name.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+            {
+                continue;
+            }
+            found = true;
             ui.separator();
             ui.label(
                 RichText::new(
@@ -458,6 +477,12 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     money(bill.amount_paid.unwrap_or(0.0), currency)
                 ))
                 .color(palette.text),
+            );
+        }
+        if !found {
+            ui.label(
+                RichText::new(t!(app.locale, "No matching supplier bill."))
+                    .color(palette.secondary),
             );
         }
     });

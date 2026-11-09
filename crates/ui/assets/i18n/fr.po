@@ -1339,3 +1339,15 @@ msgstr "Aucun reçu correspondant."
 
 msgid "Products: first 200 server matches; clients, vendors, invoices and receipts: first 40 matches per category."
 msgstr "Produits : 200 premiers résultats du serveur ; clients, fournisseurs, factures et reçus : 40 premiers résultats par catégorie."
+
+msgid "Search by number or vendor"
+msgstr "Rechercher par numéro ou fournisseur"
+
+msgid "No matching delivery note."
+msgstr "Aucun bon de livraison correspondant."
+
+msgid "No matching supplier bill."
+msgstr "Aucune facture fournisseur correspondante."
+
+msgid "Products: first 200 server matches; other categories: first 40 matches. Delivery notes: latest 100 only."
+msgstr "Produits : 200 premiers résultats du serveur ; autres catégories : 40 premiers résultats. Bons de livraison : 100 plus récents seulement."
