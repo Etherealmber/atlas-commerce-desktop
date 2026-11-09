@@ -1231,3 +1231,9 @@ msgstr "Aucune facture fournisseur."
 
 msgid "Paid"
 msgstr "Payé"
+
+msgid "Here to help with your shop."
+msgstr "Je suis là pour vous aider sur Atlas Commerce."
+
+msgid "Current page"
+msgstr "Page actuelle"

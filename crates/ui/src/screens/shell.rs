@@ -102,7 +102,20 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             draw_rail(app, ui, palette, rail_collapsed);
         });
 
-    if app.agent_drawer_open {
+    let agent_available = matches!(
+        app.screen,
+        Screen::Shell(
+            Route::Dashboard
+                | Route::Products
+                | Route::Clients
+                | Route::Vendors
+                | Route::Expenses
+                | Route::DeliveryNotes
+                | Route::Sales
+                | Route::Catalog
+        )
+    );
+    if app.agent_drawer_open && agent_available {
         egui::Panel::right(egui::Id::new("agent-drawer"))
             .exact_size(
                 (viewport_width * 0.42)
@@ -118,15 +131,27 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             )
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    if secondary_button(ui, t!(app.locale, "Close"), palette) {
-                        app.agent_drawer_open = false;
-                    }
-                });
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        super::agent::draw(app, ui, palette);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new("Atlas Agent")
+                                .color(palette.text)
+                                .strong()
+                                .size(17.0),
+                        );
+                        ui.label(
+                            RichText::new(t!(app.locale, "Here to help with your shop."))
+                                .color(palette.secondary)
+                                .size(12.0),
+                        );
                     });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                            app.agent_drawer_open = false;
+                        }
+                    });
+                });
+                ui.separator();
+                super::agent::draw(app, ui, palette);
             });
     }
 
@@ -143,7 +168,12 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Global agent entry point, mirroring the web's floating Atlas Agent:
     // one FAB on every shell screen except the agent itself (which carries
     // its own new-conversation FAB). Hidden behind modal overlays.
-    if !app.agent_drawer_open && !app.modal_open() && !app.palette_open && !app.profile_menu_open {
+    if agent_available
+        && !app.agent_drawer_open
+        && !app.modal_open()
+        && !app.palette_open
+        && !app.profile_menu_open
+    {
         let fab = widgets::fab(
             ctx,
             palette,

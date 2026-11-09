@@ -532,7 +532,10 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|i| i.viewport_rect());
     let rect = egui::Rect::from_center_size(
         screen.center(),
-        vec2(460.0, 360.0_f32.min((screen.height() - 32.0).max(1.0))),
+        vec2(
+            460.0_f32.min((screen.width() - 32.0).max(1.0)),
+            460.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
     );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("stock-scrim")) {
         app.stock_dialog = None;
@@ -545,7 +548,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             egui::ScrollArea::vertical()
                 .max_height((rect.height() - 46.0).max(1.0))
                 .show(ui, |ui| {
-                    ui.set_min_size(vec2(416.0, 0.0));
+                    ui.set_width(ui.available_width());
                     ui.label(
                         RichText::new(t!(locale, "Adjust stock"))
                             .color(palette.text)
@@ -564,7 +567,7 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     );
                     ui.add_space(10.0);
 
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         for kind in [StockKind::In, StockKind::Out, StockKind::Adjustment] {
                             let selected = app
                                 .stock_dialog

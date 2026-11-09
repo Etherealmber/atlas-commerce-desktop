@@ -133,26 +133,17 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
-    if ui.available_width() < 860.0 {
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            client_list(app, ui, palette);
-        });
+    // Full-width list, like the web page. The former horizontal card layout
+    // allowed the first card to consume the remaining width, squeezing rows.
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        client_list(app, ui, palette);
+    });
+    if app.selected_client.is_some() {
         ui.add_space(12.0);
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             client_detail(app, ui, palette);
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width() * 0.50);
-                client_list(app, ui, palette);
-            });
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                client_detail(app, ui, palette);
-            });
         });
     }
 
@@ -222,50 +213,49 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
             app.selected_client = Some(client.id);
         }
-        widgets::overlay_at(
-            ui,
-            egui::Rect::from_min_size(rect.min + vec2(8.0, 0.0), rect.size() - vec2(16.0, 0.0)),
-            |ui| {
-                ui.horizontal_centered(|ui| {
-                    icon(ui, Icon::User, palette.secondary, 18.0);
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(client.name.clone())
-                                .color(palette.text)
-                                .strong()
-                                .size(13.5),
+        widgets::overlay_at(ui, rect.shrink2(vec2(8.0, 0.0)), |ui| {
+            // Explicit bounded columns keep long names from consuming the
+            // balance column or wrapping into a one-character-wide strip.
+            let width = ui.available_width();
+            ui.horizontal_centered(|ui| {
+                icon(ui, Icon::User, palette.secondary, 18.0);
+                let text_width = (width - 160.0).max(40.0);
+                ui.allocate_ui_with_layout(
+                    vec2(text_width, height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&client.name)
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(13.5),
+                            )
+                            .truncate(),
                         );
-                        let subline = [client.city.clone(), client.phone.clone()]
+                        let subline = [client.city.as_str(), client.phone.as_str()]
                             .into_iter()
                             .filter(|part| !part.is_empty())
                             .collect::<Vec<_>>()
                             .join(" · ");
-                        ui.label(
-                            RichText::new(if subline.is_empty() {
-                                "—".to_owned()
-                            } else {
-                                subline
-                            })
-                            .color(palette.dim)
-                            .size(11.5),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(if subline.is_empty() { "—" } else { &subline })
+                                    .color(palette.dim)
+                                    .size(11.5),
+                            )
+                            .truncate(),
                         );
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let tint = if client.balance_due > 0.001 {
-                            palette.text
-                        } else {
-                            palette.dim
-                        };
-                        ui.label(
-                            RichText::new(money(client.balance_due, currency))
-                                .color(tint)
-                                .strong()
-                                .size(12.5),
-                        );
-                    });
-                });
-            },
-        );
+                    },
+                );
+                ui.label(
+                    RichText::new(money(client.balance_due, currency))
+                        .color(palette.text)
+                        .strong()
+                        .size(12.5),
+                );
+            });
+        });
         ui.separator();
     }
 }

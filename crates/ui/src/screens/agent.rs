@@ -9,9 +9,7 @@ use crate::icons::Icon;
 use crate::state::{AtlasApp, ChatMessage};
 use crate::t;
 use crate::theme::Palette;
-use crate::widgets::{
-    card, empty_state, icon, info_banner, page_title, pill, primary_button, secondary_button,
-};
+use crate::widgets::{card, empty_state, info_banner, pill, primary_button, secondary_button};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session; a failed attempt waits out the
@@ -30,13 +28,19 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "AI Agent"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            icon(ui, Icon::Bot, palette.accent, 22.0);
+    if let crate::state::Screen::Shell(route) = app.screen {
+        let (_, name) = super::shell::route_meta(app.locale, route);
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(t!(app.locale, "Current page"))
+                    .color(palette.secondary)
+                    .size(11.0),
+            );
+            ui.label(RichText::new(name).color(palette.text).strong());
         });
-    });
-    ui.add_space(12.0);
+        ui.add_space(8.0);
+    }
 
     if let Some(policy) = &app.agent.policy {
         let used = atlas_core::format::integer(policy.daily_used as i64);
@@ -63,28 +67,35 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(12.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.set_min_height(360.0);
-        if app.agent.messages.is_empty() {
-            empty_state(
-                ui,
-                Icon::Bot,
-                t!(app.locale, "Ask anything about your shop"),
-                t!(
-                    app.locale,
-                    "Stock, sales and product questions are answered from your data."
-                ),
-                palette,
-            );
-        } else {
-            for message in &app.agent.messages {
-                chat_bubble(ui, palette, message);
-                ui.add_space(8.0);
-            }
-        }
-        if app.agent.busy {
-            ui.add_space(4.0);
-            super::spinner(ui, palette);
-        }
+        let transcript_height = (ui.available_height() - 145.0).max(100.0);
+        egui::ScrollArea::vertical()
+            .max_height(transcript_height)
+            .min_scrolled_height(transcript_height)
+            .stick_to_bottom(true)
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                if app.agent.messages.is_empty() {
+                    empty_state(
+                        ui,
+                        Icon::Bot,
+                        t!(app.locale, "Ask anything about your shop"),
+                        t!(
+                            app.locale,
+                            "Stock, sales and product questions are answered from your data."
+                        ),
+                        palette,
+                    );
+                } else {
+                    for message in &app.agent.messages {
+                        chat_bubble(ui, palette, message);
+                        ui.add_space(8.0);
+                    }
+                }
+                if app.agent.busy {
+                    ui.add_space(4.0);
+                    super::spinner(ui, palette);
+                }
+            });
     });
 
     ui.add_space(10.0);
