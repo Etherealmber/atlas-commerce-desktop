@@ -352,13 +352,13 @@ pub enum SettingsFocus {
 
 type AvatarJob = Job<Option<(String, Vec<u8>)>>;
 
-/// The whole application.
 type VaultRestore = (
     String,
     Instant,
     std::sync::mpsc::Receiver<Result<Option<SessionRecord>, atlas_core::vault_worker::Failure>>,
 );
 
+/// The whole application.
 pub struct AtlasApp {
     // ── services ──
     pub paths: AppPaths,
