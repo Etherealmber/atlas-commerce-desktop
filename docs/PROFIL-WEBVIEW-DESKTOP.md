@@ -16,7 +16,7 @@ Le client actuel ouvre `authorization_url` avec `open::that` et garde la session
 - Le [Worker](https://github.com/Etherealmber/atlas-commerce/blob/cf951397553dc8749f15c96b33abf02d4a360e35/worker/index.ts) a des heuristiques de client natif qui peuvent éviter Turnstile ; une WebView doit suivre le chemin web normal, sans marqueurs natifs ni bridge Capacitor. Sa CSP autorise notamment les scripts, connexions et frames Turnstile ; cela ne garantit pas le fonctionnement du challenge dans un moteur particulier.
 - [`config.ts`](https://github.com/Etherealmber/atlas-commerce/blob/cf951397553dc8749f15c96b33abf02d4a360e35/src/config.ts) donne priorité à `VITE_API_URL` puis détecte Capacitor/HTTPS localhost : vérifier la configuration réelle du serveur pour éviter un appel vers une autre origine. Ne pas héberger `/login` sous localhost/file/custom scheme.
 - [`auth.ts`](https://github.com/Etherealmber/atlas-commerce/blob/cf951397553dc8749f15c96b33abf02d4a360e35/src/auth.ts) utilise `localStorage` pour la session web et des comptes ; [`fingerprint.ts`](https://github.com/Etherealmber/atlas-commerce/blob/cf951397553dc8749f15c96b33abf02d4a360e35/src/fingerprint.ts) emploie local/session storage et teste surtout `PublicKeyCredential` avant `navigator.credentials`. Effacer seulement les cookies est insuffisant ; la présence de l'API ne démontre pas une passkey utilisable.
-- Les tests web de consentement utilisent un stub de login ; ils ne démontrent pas un parcours réel OTP/Turnstile en WebView. Les tests Worker existants couvrent notamment contexte, preuves, limites et échange concurrent ; ils n'ont **pas été réexécutés** dans cet audit.
+- Les tests web de consentement utilisent un stub de login ; ils ne démontrent pas un parcours réel OTP/Turnstile en WebView. Les tests Worker existants couvrent notamment contexte, preuves, limites et échange concurrent ; leurs résultats sont indiqués ci-dessous.
 
 ## Profil d'intégration proposé (à implémenter côté desktop)
 
@@ -43,3 +43,20 @@ Pour chaque plateforme, consigner uniquement version OS et moteur : Windows/WebV
 | Linux / WebKitGTK | Non exécuté |
 
 Contenu distant dans une WebView reste une frontière de confiance sensible ; une lecture du code ou un test unitaire ne remplace pas la validation de l'hôte, du stockage, des challenges et des passkeys sur les appareils réels.
+
+## Résultats automatisés de l'audit
+
+Dans une copie temporaire de `atlas-commerce` au commit `cf951397553dc8749f15c96b33abf02d4a360e35`, avec Node 22.22.3 :
+
+- `npm ci --ignore-scripts --no-audit --no-fund` : réussi.
+- `npm test -- worker/__tests__/desktop-auth.test.ts src/__tests__/desktop-approval.test.ts` : 42 tests réussis (32 Worker, 10 web). Les tests DOM utilisent un stub de login : ce n'est pas un E2E WebView.
+- `npm test` : 374 tests réussis dans 26 fichiers. Certains scénarios injectent délibérément des échecs ; les journaux de test ne sont pas des résultats de production.
+- `npm run build` : réussi, avec avertissements Vite sur les imports et trois avertissements de syntaxe CSS. Il s'agit d'un build local sans déploiement.
+- Aucun code web/Worker n'a été modifié dans la copie ; les tests demandés supplémentaires et les essais d'intégration WebView restent à écrire/exécuter. Le lint web n'a pas été exécuté.
+- CI desktop sur le commit `c9666a6` : qualité, tests Linux/macOS/Windows et CodeQL réussis. Les tests du parseur sont des tests de désérialisation, pas des tests HTTP, de WebView ou de serveur réel.
+
+### Notes de recette par hôte
+
+- **Windows** : relever version Windows et runtime WebView2, tester un profil isolé éphémère puis sa suppression après destruction effective du processus WebView ; vérifier également la disponibilité de WebAuthn et la compatibilité Turnstile. Non exécuté.
+- **macOS** : relever version macOS et WKWebView, utiliser un `WKWebsiteDataStore.nonPersistent()` et vérifier les prérequis d'authentificateur et de RP ID WebAuthn sur la machine de test. Non exécuté.
+- **Linux** : relever distribution, version WebKitGTK et environnement X11/Wayland ; vérifier que la version de l'hôte fournit un contexte et un gestionnaire de données éphémères, ainsi que les prérequis de challenge et WebAuthn. Non exécuté.
