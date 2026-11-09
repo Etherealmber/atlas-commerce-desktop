@@ -26,10 +26,28 @@ impl AtlasApp {
         display_name: String,
         avatar_url: String,
     ) {
+        // A legacy login must supersede any previous v1 vault authority.
+        // Delete the old active legacy record before making it authoritative,
+        // so an interrupted replacement cannot revive the prior account.
+        if let Some(server) = self.server_store.selected_url().map(str::to_owned)
+            && server.starts_with("https://")
+        {
+            let deleted = match std::fs::remove_file(self.paths.session_file()) {
+                Ok(()) => true,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                Err(_) => false,
+            };
+            if !deleted || self.vault_worker.legacy(&server).is_err() {
+                self.notice(
+                    "La restauration de la session ne peut pas être garantie sur cet appareil."
+                        .to_owned(),
+                );
+            }
+        }
         self.enter_session_with_persistence(token, username, role, display_name, avatar_url, true);
     }
 
-    /// Browser sessions stay in memory until the native secure vault is wired.
+    /// Enters a v1 browser session and queues its OS-vault persistence.
     pub(crate) fn enter_browser_session(&mut self, token: String, username: String, role: String) {
         self.enter_session_with_persistence(
             token,
@@ -81,6 +99,14 @@ impl AtlasApp {
         self.login = Default::default();
         self.qr = Default::default();
         self.session = Some(record.clone());
+        if !persist {
+            match self.vault_worker.save(record.clone()) {
+                Ok(result) => self.vault_saves.push(result),
+                Err(_) => self.notice(
+                    "Coffre indisponible : session conservée uniquement en mémoire.".to_owned(),
+                ),
+            }
+        }
         if persist {
             self.account_store.upsert(&record);
             self.save_session();
@@ -88,6 +114,70 @@ impl AtlasApp {
         }
         self.rebuild_client();
         self.bootstrap_shell();
+    }
+
+    /// Begins a bounded, asynchronous restoration after startup selected a v1 authority.
+    pub fn begin_vault_restore(&mut self, server: String) {
+        match self.vault_worker.load(server.clone()) {
+            Ok(receiver) => {
+                self.screen = Screen::Splash;
+                self.vault_restore = Some((server, Instant::now(), receiver));
+            }
+            Err(_) => self.notice("Coffre indisponible : reconnectez-vous.".to_owned()),
+        }
+    }
+
+    fn poll_vault(&mut self) {
+        use std::sync::mpsc::TryRecvError;
+        if let Some((server, started, receiver)) = self.vault_restore.take() {
+            match receiver.try_recv() {
+                Ok(Ok(Some(session)))
+                    if matches!(self.screen, Screen::Splash)
+                        && self.session.is_none()
+                        && self.server_store.selected_url() == Some(server.as_str()) =>
+                {
+                    self.session = Some(session);
+                    self.transient_session = true;
+                    self.rebuild_client();
+                }
+                Ok(Ok(_)) => {}
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    self.notice("Coffre indisponible : reconnectez-vous.".to_owned());
+                }
+                Err(TryRecvError::Empty) if started.elapsed() < Duration::from_secs(10) => {
+                    self.vault_restore = Some((server, started, receiver));
+                }
+                Err(TryRecvError::Empty) => {
+                    self.notice("Le coffre ne répond pas ; reconnectez-vous.".to_owned());
+                }
+            }
+        }
+        let mut save_error = false;
+        self.vault_saves
+            .retain(|receiver| match receiver.try_recv() {
+                Ok(Ok(_)) => false,
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    save_error = true;
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+            });
+        if save_error {
+            self.notice("Coffre indisponible : la session reste en mémoire seulement.".to_owned());
+        }
+        let mut removal_error = false;
+        self.vault_removals
+            .retain(|receiver| match receiver.try_recv() {
+                Ok(Ok(())) => false,
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    removal_error = true;
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+            });
+        if removal_error {
+            self.notice("La suppression du secret dans le coffre a échoué ; la restauration locale est bloquée.".to_owned());
+        }
     }
 
     /// First loads after entering the shell or restoring a session.
@@ -876,6 +966,7 @@ impl AtlasApp {
     pub fn poll_background(&mut self, ctx: &Context) {
         self.drain_power_events();
         self.drain_tray(ctx);
+        self.poll_vault();
         self.consume_deep_links();
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
@@ -1156,6 +1247,9 @@ impl AtlasApp {
     #[must_use]
     pub fn busy(&self) -> bool {
         self.login.busy
+            || self.vault_restore.is_some()
+            || !self.vault_saves.is_empty()
+            || !self.vault_removals.is_empty()
             || self.qr.job_status.is_some()
             || self.qr.job_create.is_some()
             || self.qr.job_complete.is_some()

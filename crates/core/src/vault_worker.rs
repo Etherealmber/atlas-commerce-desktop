@@ -111,6 +111,17 @@ impl VaultWorker {
         Ok(receiver)
     }
 
+    /// Prevents restoration without requiring a vault operation.
+    ///
+    /// # Errors
+    /// The local authority cannot be written.
+    pub fn block(&self, server: &str) -> Result<(), Failure> {
+        self.authority
+            .block(server)
+            .map(|_| ())
+            .map_err(|_| Failure::Authority)
+    }
+
     /// Marks a subsequent legacy login authoritative and invalidates saves.
     ///
     /// # Errors

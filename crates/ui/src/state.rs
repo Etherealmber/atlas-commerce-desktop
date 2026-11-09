@@ -445,6 +445,16 @@ pub struct AtlasApp {
     /// Browser-v1 tokens remain in memory until OS-vault storage is available.
     pub transient_session: bool,
     pub(crate) browser_login: crate::browser_auth::BrowserLogin,
+    pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
+    pub(crate) vault_restore: Option<(
+        String,
+        Instant,
+        std::sync::mpsc::Receiver<Result<Option<SessionRecord>, atlas_core::vault_worker::Failure>>,
+    )>,
+    pub(crate) vault_saves:
+        Vec<std::sync::mpsc::Receiver<Result<bool, atlas_core::vault_worker::Failure>>>,
+    pub(crate) vault_removals:
+        Vec<std::sync::mpsc::Receiver<Result<(), atlas_core::vault_worker::Failure>>>,
     pub login: LoginState,
     pub qr: QrPairing,
     pub devices: Cache<Vec<TrustedDevice>>,
@@ -569,6 +579,8 @@ impl AtlasApp {
         incoming_links: Arc<Mutex<Vec<String>>>,
         tray: Option<crate::tray::TrayHandle>,
     ) -> Self {
+        let vault_worker =
+            atlas_core::vault_worker::VaultWorker::new(paths.browser_authority_file());
         let locale = Locale::from_tag(&settings.language);
         let screen = if session.is_some() {
             Screen::Splash
@@ -612,6 +624,10 @@ impl AtlasApp {
             requires_password: false,
             transient_session: false,
             browser_login: Default::default(),
+            vault_worker,
+            vault_restore: None,
+            vault_saves: Vec::new(),
+            vault_removals: Vec::new(),
             login: LoginState::default(),
             qr: QrPairing::default(),
             devices: Cache::default(),
@@ -1150,6 +1166,20 @@ impl AtlasApp {
     }
 
     pub fn sign_out(&mut self) {
+        let was_browser = self.transient_session;
+        let mut vault_problem = false;
+        if let Some(session) = self.session.as_ref()
+            && session.server_url.starts_with("https://")
+        {
+            if was_browser {
+                match self.vault_worker.remove(session.clone()) {
+                    Ok(result) => self.vault_removals.push(result),
+                    Err(_) => vault_problem = true,
+                }
+            } else if self.vault_worker.block(&session.server_url).is_err() {
+                vault_problem = true;
+            }
+        }
         self.transient_session = false;
         self.avatar_job = None;
         if let Some(uri) = self.avatar_texture_uri.take() {
@@ -1246,6 +1276,9 @@ impl AtlasApp {
         self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
+        if vault_problem {
+            self.notice("La déconnexion locale n’a pas pu être confirmée dans le coffre ; vérifiez son accès avant de quitter.".to_owned());
+        }
         // The login endpoints need an unauthenticated client for this server.
         self.rebuild_client();
     }

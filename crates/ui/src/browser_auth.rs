@@ -490,7 +490,6 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         match result {
             Ok(session) => {
                 app.enter_browser_session(session.token, session.username, session.role);
-                app.notice("Session gardée en mémoire seulement ; reconnectez-vous après fermeture complète.".to_owned());
             }
             Err(error) => app.login.error = Some(error.to_owned()),
         }

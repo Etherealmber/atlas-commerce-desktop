@@ -136,9 +136,19 @@ fn main() -> eframe::Result<()> {
     let servers = ServerStore::load(&paths.servers_file());
     let identity = DeviceIdentity::load_or_create(&paths.device_file());
     let accounts = AccountStore::load(&paths.accounts_file());
-    let session = servers
-        .selected_url()
-        .and_then(|base| load_session(&paths.session_file(), base));
+    let restore_mode = servers.selected_url().map(|base| {
+        atlas_core::vault_authority::restore_mode(&paths.browser_authority_file(), base)
+    });
+    let session = if matches!(
+        restore_mode,
+        Some(atlas_core::vault_authority::RestoreMode::Legacy)
+    ) {
+        servers
+            .selected_url()
+            .and_then(|base| load_session(&paths.session_file(), base))
+    } else {
+        None
+    };
 
     // 5. Process-wide services. The waker was created before the single-
     //    instance claim so the slot handler shares this exact instance.
@@ -182,6 +192,13 @@ fn main() -> eframe::Result<()> {
     let mut app = AtlasApp::new(
         paths, runner, identity, settings, servers, session, accounts, waker, power, incoming, tray,
     );
+    if matches!(
+        restore_mode,
+        Some(atlas_core::vault_authority::RestoreMode::Vault)
+    ) && let Some(server) = app.server_store.selected_url().map(str::to_owned)
+    {
+        app.begin_vault_restore(server);
+    }
     app.tray_available = tray_available;
     app.autostart_state = autostart_state;
     app.notifications = notifications;

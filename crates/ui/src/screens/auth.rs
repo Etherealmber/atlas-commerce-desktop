@@ -110,7 +110,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     );
 
     // Brief, calm splash while state restores.
-    if app.started_at.elapsed() >= Duration::from_millis(650) {
+    if app.started_at.elapsed() >= Duration::from_millis(650) && app.vault_restore.is_none() {
         if app.update.mandatory.is_some() {
             app.screen = Screen::UpdateGate;
         } else if app.session.is_some() && app.client.is_some() {

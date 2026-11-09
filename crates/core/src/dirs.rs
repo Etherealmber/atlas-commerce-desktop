@@ -97,6 +97,12 @@ impl AppPaths {
         self.dirs.state.join("session.json")
     }
 
+    /// Non-secret authority marker for browser-v1 restoration.
+    #[must_use]
+    pub fn browser_authority_file(&self) -> PathBuf {
+        self.dirs.state.join("browser-v1-authority.json")
+    }
+
     #[must_use]
     pub fn accounts_file(&self) -> PathBuf {
         self.dirs.state.join("accounts.json")
