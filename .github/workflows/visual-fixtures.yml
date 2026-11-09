@@ -18,7 +18,7 @@ jobs:
       - name: Install virtual display and GUI dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils imagemagick libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev cmake
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool imagemagick libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev cmake
       - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
         with:
           key: visual-fixtures
@@ -37,6 +37,16 @@ jobs:
               import -window root "visual-output/$page.png"
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = agent ]; then
+                # Click the visible close control in the 1280x800 fixture.
+                xdotool mousemove 1230 90 click 1
+                sleep 2
+                import -window root visual-output/agent-closed.png
+                changed=$(compare -metric AE "visual-output/agent.png" visual-output/agent-closed.png null: 2>&1 || true)
+                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                  echo "Agent close click did not change the screen: $changed"; kill "$pid"; exit 1
+                fi
+              fi
               kill "$pid"
               wait "$pid" || true
             done
