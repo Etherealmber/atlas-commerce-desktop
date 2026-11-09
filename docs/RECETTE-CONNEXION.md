@@ -1,12 +1,19 @@
 # Recette manuelle de connexion — sans données sensibles
 
-Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. La connexion intégrée est proposée sur Windows via WebView2 ; sur macOS et Linux seul le navigateur système est disponible. Le coffre système est raccordé à la session v1 sur les trois plateformes, mais reste à vérifier sur les appareils réels. Aucun essai réel WebView, Turnstile ou passkey n'a encore été effectué.
+Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. La connexion intégrée est proposée via WebView2 (Windows), WKWebView (macOS) et une fenêtre WebKitGTK 6 séparée (Linux). Le navigateur système reste disponible en repli. Le coffre système est raccordé à la session v1 sur les trois plateformes, mais reste à vérifier sur les appareils réels. Aucun essai réel WebView, Turnstile ou passkey n'a encore été effectué.
 
 ## Préparation
 
 - Utiliser de préférence un serveur HTTPS et un compte de test sans données sensibles. Ne pas modifier la configuration de sécurité, désactiver Turnstile ou contourner l'OTP pour faire réussir le test.
 - Sauvegarder ses données et éviter de désinstaller ou écraser une installation existante ; la migration d'installations Windows MSI/Inno déjà dupliquées n'est pas automatisée. Les installeurs de validation CI ne sont pas une release. Le montage universel de test CI embarque deux fois le binaire x64 : **il ne convient pas à ARM64**.
 - Noter le commit testé, le système et sa version, ainsi que le navigateur et sa version. Ne pas communiquer l'adresse du serveur si elle est sensible.
+
+## Parcours intégré v1
+
+1. Choisir le serveur, puis « Se connecter dans Atlas ». Sous Linux, une fenêtre de connexion distincte s'ouvre ; le code et le serveur sont indiqués dans son en-tête. Comparer le code avec celui de la page web.
+2. Effectuer les étapes demandées par le serveur et approuver explicitement. Tester séparément refus, fermeture, bouton Annuler, expiration et changement de serveur. En cas d'échec de challenge ou passkey, annuler et recommencer avec le navigateur système, sans désactiver les contrôles du serveur.
+3. Vérifier la persistance après fermeture complète et la déconnexion après redémarrage. Sur Linux, relever distribution, version WebKitGTK et X11 ou Wayland ; sur Windows la version du runtime WebView2 ; sur macOS la version du système.
+4. Le test CI utilise seulement une URL fictive et n'établit pas une connexion. Ne pas envoyer de captures ou journaux comportant l'URL, le code, l'identité ou des secrets.
 
 ## Parcours navigateur v1
 
