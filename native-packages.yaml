@@ -64,6 +64,11 @@ nfpm:
       - libxrandr2
       - libgcc-s1
       - libstdc++6
+      # Optional embedded engine: the application and the system-browser
+      # fallback work without it. Debian installs recommends by default.
+      recommends:
+      - libwebkitgtk-6.0-4
+      - libgtk-4-1
     rpm:
       depends:
       - dbus-libs

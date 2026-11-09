@@ -463,6 +463,33 @@ fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
     app.browser_login.events = Some(rx);
     app.browser_login.job = Some(app.runner.spawn(run(base, fingerprint, cancelled, tx)));
 }
+/// Keep the existing v1 request and polling, but finish it in the system
+/// browser when the embedded engine cannot start. The URL was validated by
+/// the host before this call; it never comes from a navigation event.
+/// Policy failures must not be opened in the browser: only host failures
+/// fall back. Both messages are produced before any hosted page is loaded.
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub(crate) fn fallback_allowed(message: &str) -> bool {
+    !matches!(
+        message,
+        "Adresse d’autorisation invalide." | "Serveur HTTPS invalide."
+    )
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub(crate) fn fallback_to_browser(app: &mut AtlasApp, url: Url, message: &str) -> bool {
+    app.browser_login.embedded = false;
+    app.browser_login.pending_url = None;
+    if open::that(url.as_str()).is_err() {
+        cancel(app);
+        app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        false
+    } else {
+        app.login.error = Some(message.to_owned());
+        true
+    }
+}
+
 pub(crate) fn cancel(app: &mut AtlasApp) {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {

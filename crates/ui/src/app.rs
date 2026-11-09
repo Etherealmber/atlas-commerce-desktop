@@ -1488,6 +1488,9 @@ impl eframe::App for EframeShell {
                         &self.held.paths.dirs.cache,
                     ) {
                         Ok(view) => self.login_view = Some(view),
+                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
+                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
+                        }
                         Err(message) => {
                             crate::browser_auth::cancel(&mut self.held);
                             self.held.login.error = Some(message.to_owned());
@@ -1519,6 +1522,13 @@ impl eframe::App for EframeShell {
                         .unwrap_or_default();
                     match crate::webview_auth_linux::LoginView::open(&url, &server, code) {
                         Ok(view) => self.login_view = Some(view),
+                        Err(crate::webview_auth_linux::UNAVAILABLE) => {
+                            crate::browser_auth::fallback_to_browser(
+                                &mut self.held,
+                                url,
+                                crate::webview_auth_linux::UNAVAILABLE,
+                            );
+                        }
                         Err(message) => {
                             crate::browser_auth::cancel(&mut self.held);
                             self.held.login.error = Some(message.to_owned());
@@ -1568,6 +1578,9 @@ impl eframe::App for EframeShell {
                         &server,
                     ) {
                         Ok(view) => self.login_view = Some(view),
+                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
+                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
+                        }
                         Err(message) => {
                             crate::browser_auth::cancel(&mut self.held);
                             self.held.login.error = Some(message.to_owned());

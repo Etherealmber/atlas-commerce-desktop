@@ -1,6 +1,9 @@
 //! Supervises the optional WebKitGTK helper without linking GTK into Atlas.
 //! The authorization URL is sent only through a pipe, never command arguments.
 use atlas_core::webview_policy::{Frame, NavigationPolicy};
+
+pub(crate) const UNAVAILABLE: &str =
+    "Connexion intégrée indisponible. Poursuite dans le navigateur système.";
 use std::{
     io::Write,
     process::{Child, ChildStdin, Command, Stdio},
@@ -17,19 +20,18 @@ impl LoginView {
         if !policy.allows(Frame::Main, url.as_str()) {
             return Err("Adresse d’autorisation invalide.");
         }
-        let executable = std::env::current_exe()
-            .map_err(|_| "Connexion intégrée indisponible. Utilisez le navigateur système.")?;
+        let executable = std::env::current_exe().map_err(|_| UNAVAILABLE)?;
         let helper = executable.with_file_name("atlas-commerce-webview");
         let mut child = Command::new(helper)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|_| "Connexion intégrée indisponible. Utilisez le navigateur système.")?;
+            .map_err(|_| UNAVAILABLE)?;
         let Some(mut input) = child.stdin.take() else {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("Connexion intégrée indisponible. Utilisez le navigateur système.");
+            return Err(UNAVAILABLE);
         };
         let payload = serde_json::json!({ "url": url.as_str(), "server": server, "code": code });
         if serde_json::to_writer(&mut input, &payload).is_err()
@@ -39,7 +41,7 @@ impl LoginView {
             drop(input);
             let _ = child.kill();
             let _ = child.wait();
-            return Err("Connexion intégrée indisponible. Utilisez le navigateur système.");
+            return Err(UNAVAILABLE);
         }
         Ok(Self {
             child: Some(child),

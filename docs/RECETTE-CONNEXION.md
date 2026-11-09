@@ -1,6 +1,6 @@
 # Recette manuelle de connexion — sans données sensibles
 
-Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. La connexion intégrée est proposée via WebView2 (Windows), WKWebView (macOS) et un exécutable séparé WebKitGTK 6 (Linux). Le navigateur système reste disponible en repli ; sous Linux, l'application et ce repli fonctionnent même si WebKitGTK/GTK sont absents, seule la connexion intégrée étant alors indisponible. Le coffre système est raccordé à la session v1 sur les trois plateformes, mais reste à vérifier sur les appareils réels. Aucun essai réel WebView, Turnstile ou passkey n'a encore été effectué.
+Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. La connexion intégrée est proposée via WebView2 (Windows), WKWebView (macOS) et un exécutable séparé WebKitGTK 6 (Linux). Le navigateur système reste disponible en repli ; sous Linux, l'application et ce repli fonctionnent même si WebKitGTK/GTK sont absents : la demande est alors poursuivie automatiquement dans le navigateur système. Le coffre système est raccordé à la session v1 sur les trois plateformes, mais reste à vérifier sur les appareils réels. Aucun essai réel WebView, Turnstile ou passkey n'a encore été effectué.
 
 ## Préparation
 
