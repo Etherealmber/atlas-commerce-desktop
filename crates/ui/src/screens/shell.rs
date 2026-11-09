@@ -172,7 +172,10 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 ui.set_max_width(bounds.width().max(0.0));
             }
             ui.set_clip_rect(ui.clip_rect().intersect(bounds));
-            draw_content(app, ui, ctx, palette);
+            widgets::overlay_at(ui, bounds, |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(bounds));
+                draw_content(app, ui, ctx, palette);
+            });
         });
 
     // Global agent entry point, mirroring the web's floating Atlas Agent:
