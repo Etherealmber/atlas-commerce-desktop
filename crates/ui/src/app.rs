@@ -410,6 +410,22 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
+    pub(crate) fn search_business(&mut self, query: String) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let policy = self.role_policy();
+        let products = policy.allows_route(Route::Products);
+        let clients = policy.allows_route(Route::Clients);
+        let sales = policy.allows_route(Route::Sales);
+        self.business_search_open = true;
+        self.business_search_query = query.clone();
+        self.business_search = Default::default();
+        self.business_search.start(self.runner.spawn(async move {
+            crate::business_search::search(&api, query, products, clients, sales).await
+        }));
+    }
+
     /// Read an individual invoice with its lines without opening a browser.
     pub(crate) fn open_invoice_detail(&mut self, id: i64) {
         if id <= 0
@@ -855,6 +871,9 @@ impl AtlasApp {
         if self.client_invoices.poll() {
             ctx.request_repaint();
         }
+        if self.business_search.poll() {
+            ctx.request_repaint();
+        }
         if self.invoice_detail.poll() {
             ctx.request_repaint();
         }
@@ -1102,6 +1121,7 @@ impl AtlasApp {
             || self.products.loading
             || self.client_invoices.loading
             || self.invoice_detail.loading
+            || self.business_search.loading
             || self.bills.loading
             || self.ledger_reconciliation.loading
             || self.bank_reconciliation.loading

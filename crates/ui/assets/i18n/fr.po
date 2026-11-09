@@ -1315,3 +1315,18 @@ msgstr "Taux de TVA"
 
 msgid "Line total"
 msgstr "Total de la ligne"
+
+msgid "Search pages or business data…"
+msgstr "Rechercher une page ou des données métier…"
+
+msgid "Business search"
+msgstr "Recherche métier"
+
+msgid "Products: first 200 server matches; clients and documents: first 40 matches per category."
+msgstr "Produits : 200 premiers résultats du serveur ; clients et documents : 40 premiers résultats par catégorie."
+
+msgid "Search unavailable for"
+msgstr "Recherche indisponible pour"
+
+msgid "No results."
+msgstr "Aucun résultat."

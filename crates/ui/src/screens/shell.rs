@@ -346,7 +346,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     }
 }
 
-/// Recognize page shortcuts; other text remains a product search.
+/// Recognize page shortcuts; other text starts a business search.
 fn search_destination(query: &str) -> Option<Route> {
     match crate::shortcuts::normalize(query.trim()).as_str() {
         "facture" | "factures" | "invoice" | "invoices" | "ventes" | "sales" => Some(Route::Sales),
@@ -359,7 +359,7 @@ fn search_destination(query: &str) -> Option<Route> {
     }
 }
 
-/// Search offers page shortcuts and falls back to product search.
+/// Search offers page shortcuts and searches business data on Enter.
 fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, width: f32) {
     egui::Frame::NONE
         .fill(palette.surface)
@@ -378,7 +378,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         egui::TextEdit::singleline(&mut app.top_search)
                             .id(egui::Id::new("titlebar-search"))
                             .frame(egui::Frame::NONE)
-                            .hint_text(t!(app.locale, "Search pages or products…"))
+                            .hint_text(t!(app.locale, "Search pages or business data…"))
                             .desired_width(width - 42.0)
                             .clip_text(true),
                     );
@@ -389,9 +389,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         if let Some(route) = search_destination(&query) {
                             app.go(route);
                         } else {
-                            app.product_search = query;
-                            app.go(Route::Products);
-                            app.load_products();
+                            app.search_business(query);
                         }
                     }
                 },
@@ -841,6 +839,10 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
         .show(ui, |ui| {
             ui.set_opacity(entrance);
             ui.add_space(4.0 + (1.0 - entrance) * 18.0);
+            if app.business_search_open {
+                draw_business_search(app, ui, palette);
+                ui.add_space(12.0);
+            }
             match app.screen {
                 Screen::Shell(Route::Dashboard) => {
                     super::dashboard::draw(app, ui, palette);
@@ -878,6 +880,46 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 _ => {}
             }
         });
+}
+
+/// Results are explicitly scoped: products are server-filtered (max 200),
+/// clients and documents are filtered from the current list endpoints.
+fn draw_business_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    widgets::card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(format!("{} : {}", t!(app.locale, "Business search"), app.business_search_query)).color(palette.text).strong());
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.business_search_open = false;
+                app.business_search = Default::default();
+            }
+        });
+        ui.label(RichText::new(t!(app.locale, "Products: first 200 server matches; clients and documents: first 40 matches per category.")).color(palette.secondary));
+        if app.business_search.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.business_search.error { widgets::error_banner(ui, error, palette); return; }
+        let Some(result) = app.business_search.data.clone() else { return; };
+        if !result.failed.is_empty() {
+            let labels = result.failed.iter().map(|name| match *name { "Products" => t!(app.locale, "Products").into_owned(), "Clients" => t!(app.locale, "Clients").into_owned(), _ => t!(app.locale, "Sales").into_owned() }).collect::<Vec<_>>().join(", ");
+            ui.label(RichText::new(format!("{} : {labels}", t!(app.locale, "Search unavailable for"))).color(palette.warning));
+        }
+        if result.hits.is_empty() && result.failed.is_empty() { ui.label(t!(app.locale, "No results.")); }
+        for hit in result.hits {
+            let (_, category) = route_meta(app.locale, hit.route);
+            ui.horizontal_wrapped(|ui| {
+                if secondary_button(ui, t!(app.locale, "View"), palette) {
+                    app.business_search_open = false;
+                    app.business_search = Default::default();
+                    match hit.route {
+                        Route::Products => { app.product_search = hit.label.clone(); app.go(Route::Products); app.load_products(); }
+                        Route::Clients => { app.client_search.clear(); app.selected_client = Some(hit.id); app.client_invoice_id = None; app.client_invoices = Default::default(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Clients); app.load_clients(); }
+                        Route::Sales => { app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
+                        _ => {}
+                    }
+                }
+                ui.label(RichText::new(format!("{category} · {} · {}", hit.label, hit.subtitle)).color(palette.text));
+            });
+        }
+    });
 }
 
 // ── Confirm dialog ─────────────────────────────────────────────────────────

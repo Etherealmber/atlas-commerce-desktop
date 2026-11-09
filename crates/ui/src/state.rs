@@ -423,6 +423,9 @@ pub struct AtlasApp {
     pub route_entered_at: Instant,
     /// The top-bar search pill's text (submitted into the products search).
     pub top_search: String,
+    pub(crate) business_search_open: bool,
+    pub(crate) business_search_query: String,
+    pub(crate) business_search: Cache<crate::business_search::SearchResults>,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
     pub agent_drawer_open: bool,
@@ -619,6 +622,9 @@ impl AtlasApp {
             anim_token: 0,
             route_entered_at: Instant::now(),
             top_search: String::new(),
+            business_search_open: false,
+            business_search_query: String::new(),
+            business_search: Cache::default(),
             profile_menu_open: false,
             agent_drawer_open: false,
             palette_open: false,
@@ -1151,6 +1157,9 @@ impl AtlasApp {
         self.products = Cache::default();
         self.product_search.clear();
         self.top_search.clear();
+        self.business_search_open = false;
+        self.business_search_query.clear();
+        self.business_search = Cache::default();
         self.product_editor = None;
         self.stock_dialog = None;
         self.quick_sale = None;

@@ -9,6 +9,7 @@
 pub mod app;
 pub mod branding;
 mod browser_auth;
+mod business_search;
 mod client_invoices;
 pub mod dialogs;
 pub mod fonts;

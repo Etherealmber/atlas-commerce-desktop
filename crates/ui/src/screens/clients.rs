@@ -210,6 +210,8 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if app.selected_client != Some(client.id) {
                 app.client_invoice_id = None;
                 app.client_invoices = Default::default();
+                app.invoice_detail_id = None;
+                app.invoice_detail = Default::default();
             }
             app.selected_client = Some(client.id);
         }
