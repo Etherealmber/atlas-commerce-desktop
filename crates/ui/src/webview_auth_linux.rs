@@ -67,3 +67,24 @@ impl Drop for LoginView {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{LoginView, UNAVAILABLE};
+
+    #[test]
+    fn missing_helper_reports_the_browser_fallback() {
+        let sibling = std::env::current_exe()
+            .ok()
+            .map(|exe| exe.with_file_name("atlas-commerce-webview"));
+        if sibling.is_some_and(|path| path.exists()) {
+            return;
+        }
+        let url = url::Url::parse(
+            "https://example.invalid/login/desktop#request_id=fixture&state=fixture",
+        )
+        .unwrap();
+        let result = LoginView::open(&url, "https://example.invalid", "fixture");
+        assert!(matches!(result, Err(message) if message == UNAVAILABLE));
+    }
+}
