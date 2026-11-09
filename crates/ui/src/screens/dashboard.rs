@@ -13,7 +13,6 @@ use crate::widgets::{card, icon, page_title, pill, primary_button};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    if app.agent_drawer_open { eprintln!("GEOM start {:?} avail {}", ui.max_rect(), ui.available_width()); }
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Dashboard"), palette);
@@ -52,9 +51,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     };
 
-    if app.agent_drawer_open { eprintln!("GEOM pre-metric {:?} avail {}", ui.max_rect(), ui.available_width()); }
     metric_cards(app, ui, palette, &data);
-    if app.agent_drawer_open { eprintln!("GEOM post-metric {:?} avail {}", ui.max_rect(), ui.available_width()); }
     ui.add_space(14.0);
 
     // Calculate outer widths once, before either card consumes the row.
@@ -87,7 +84,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     ui.add_space(14.0);
-    if app.agent_drawer_open { eprintln!("GEOM pre-recent {:?} avail {}", ui.max_rect(), ui.available_width()); }
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.vertical(|ui| {
@@ -124,6 +120,14 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
             data.low_stock_count > 0,
         ),
     ];
+    render_metric_cards(ui, palette, &cards);
+}
+
+fn render_metric_cards(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    cards: &[(Icon, String, String, bool)],
+) {
     // A fixed 4-column grid starved narrow windows (each card demanded at
     // least 168px, so the row overflowed its card). Pick a column count from
     // the real available width and let the row wrap instead. The card frame
@@ -426,5 +430,50 @@ fn status_label(status: &str) -> String {
         "unpaid" => "Non payée".to_owned(),
         "overdue" => "En retard".to_owned(),
         other => other.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metric_rows_do_not_expand_a_narrow_dashboard() {
+        let ctx = egui::Context::default();
+        let mut measured_width = 0.0;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.allocate_ui_with_layout(
+                    vec2(560.0, 700.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        let cards = [
+                            (
+                                Icon::Wallet,
+                                "Solde actuel".into(),
+                                "42 000 MAD".into(),
+                                false,
+                            ),
+                            (
+                                Icon::Boxes,
+                                "Valeur du stock".into(),
+                                "17 500 MAD".into(),
+                                false,
+                            ),
+                            (Icon::Package, "Produits".into(), "2".into(), false),
+                            (Icon::TriangleAlert, "Stock bas".into(), "0".into(), false),
+                        ];
+                        render_metric_cards(ui, &Palette::dark(), &cards);
+                        measured_width = ui.max_rect().width();
+                    },
+                );
+            });
+        });
+        output.textures_delta.set.clear();
+        output.textures_delta.free.clear();
+        assert!(
+            measured_width <= 561.0,
+            "dashboard expanded to {measured_width}"
+        );
     }
 }
