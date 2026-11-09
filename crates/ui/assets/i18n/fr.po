@@ -1363,3 +1363,6 @@ msgstr "Solde dû des clients chargés"
 
 msgid "Loaded clients"
 msgstr "Clients chargés"
+
+msgid "Welcome"
+msgstr "Bienvenue"
