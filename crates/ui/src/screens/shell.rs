@@ -848,6 +848,7 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
     // horizontal scrollbar must never appear (content overflow would paint
     // under the rail instead of reflowing).
     egui::ScrollArea::vertical()
+        .max_width(ui.available_width())
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.set_opacity(entrance);
