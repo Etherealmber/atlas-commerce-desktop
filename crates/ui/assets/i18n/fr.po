@@ -1273,3 +1273,30 @@ msgstr "Solde orphelin"
 
 msgid "Paid without receipt"
 msgstr "Payées sans reçu"
+
+msgid "Bank reconciliation"
+msgstr "Rapprochement bancaire"
+
+msgid "Paste a CSV: date;description;amount. Results are suggestions, not confirmed entries."
+msgstr "Collez un CSV : date;libellé;montant. Les résultats sont des suggestions, pas des écritures confirmées."
+
+msgid "Find matches"
+msgstr "Rechercher les correspondances"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Lines read"
+msgstr "Lignes lues"
+
+msgid "Proposed matches"
+msgstr "Correspondances proposées"
+
+msgid "Unmatched"
+msgstr "Sans correspondance"
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Only the first 150 results of each kind are shown."
+msgstr "Seuls les 150 premiers résultats de chaque type sont affichés."

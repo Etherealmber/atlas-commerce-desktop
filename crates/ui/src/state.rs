@@ -481,6 +481,9 @@ pub struct AtlasApp {
     pub(crate) bills_open: bool,
     pub(crate) ledger_reconciliation: Cache<crate::client_invoices::LedgerReconciliation>,
     pub(crate) ledger_reconciliation_open: bool,
+    pub(crate) bank_csv: String,
+    pub(crate) bank_reconciliation: Cache<crate::client_invoices::BankReconciliation>,
+    pub(crate) bank_reconciliation_open: bool,
     pub expense_editor: Option<ExpenseEditor>,
     pub delivery_notes: Cache<Vec<DeliveryNote>>,
     pub delivery_note_editor: Option<DeliveryNoteEditor>,
@@ -637,6 +640,9 @@ impl AtlasApp {
             bills_open: false,
             ledger_reconciliation: Cache::default(),
             ledger_reconciliation_open: false,
+            bank_csv: String::new(),
+            bank_reconciliation: Cache::default(),
+            bank_reconciliation_open: false,
             expense_editor: None,
             delivery_notes: Cache::default(),
             delivery_note_editor: None,
@@ -1166,6 +1172,9 @@ impl AtlasApp {
         self.bills_open = false;
         self.ledger_reconciliation = Cache::default();
         self.ledger_reconciliation_open = false;
+        self.bank_csv.clear();
+        self.bank_reconciliation = Cache::default();
+        self.bank_reconciliation_open = false;
         self.expense_editor = None;
         self.delivery_notes = Cache::default();
         self.delivery_note_editor = None;

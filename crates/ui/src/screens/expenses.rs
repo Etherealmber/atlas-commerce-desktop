@@ -130,6 +130,16 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     });
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Bank reconciliation"), palette) {
+            app.bank_reconciliation_open = !app.bank_reconciliation_open;
+        }
+    });
+    if app.bank_reconciliation_open {
+        ui.add_space(10.0);
+        draw_bank_reconciliation(app, ui, palette);
+        ui.add_space(12.0);
+    }
     if app.ledger_reconciliation_open {
         ui.add_space(10.0);
         draw_ledger_reconciliation(app, ui, palette);
@@ -279,6 +289,40 @@ fn expense_row(
             });
         },
     );
+}
+
+/// Submit a user-provided CSV to the documented matching endpoint and show
+/// proposals. No matching is confirmed, persisted or automatically repaired.
+fn draw_bank_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(t!(app.locale, "Bank reconciliation")).color(palette.text).strong());
+        ui.label(RichText::new(t!(app.locale, "Paste a CSV: date;description;amount. Results are suggestions, not confirmed entries.")).color(palette.secondary));
+        ui.add(egui::TextEdit::multiline(&mut app.bank_csv).desired_width(ui.available_width()).desired_rows(5).char_limit(1_000_000));
+        ui.horizontal_wrapped(|ui| {
+            if primary_button(ui, t!(app.locale, "Find matches"), palette, !app.bank_reconciliation.loading && !app.bank_csv.trim().is_empty() && app.bank_csv.len() <= 1024 * 1024) { app.reconcile_bank_csv(); }
+            if secondary_button(ui, t!(app.locale, "Clear"), palette) {
+                app.bank_csv.clear();
+                app.bank_reconciliation = Default::default();
+            }
+        });
+        if app.bank_reconciliation.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.bank_reconciliation.error { error_banner(ui, error, palette); return; }
+        let Some(result) = &app.bank_reconciliation.data else { return; };
+        ui.label(RichText::new(format!("{} : {} · {} : {} · {} : {}", t!(app.locale, "Lines read"), result.parsed, t!(app.locale, "Proposed matches"), result.matched, t!(app.locale, "Unmatched"), result.unmatched_count)).color(palette.text).strong());
+        for entry in &result.matches {
+            ui.separator();
+            ui.label(RichText::new(format!("#{} · {} · {} · {}", entry.bank.line, entry.bank.date, entry.bank.label, entry.bank.amount)).color(palette.text));
+            ui.label(RichText::new(format!("{} #{} · {} · {} {}", entry.candidate.kind, entry.candidate.id, entry.candidate.label, t!(app.locale, "Score"), entry.score)).color(palette.secondary));
+        }
+        for entry in &result.unmatched {
+            ui.separator();
+            ui.label(RichText::new(format!("{} · #{} · {} · {} · {}", t!(app.locale, "Unmatched"), entry.line, entry.date, entry.label, entry.amount)).color(palette.secondary));
+        }
+        if result.matched > result.matches.len() as u64 || result.unmatched_count > result.unmatched.len() as u64 {
+            ui.label(RichText::new(t!(app.locale, "Only the first 150 results of each kind are shown.")).color(palette.secondary));
+        }
+    });
 }
 
 /// Shows the server's diagnostic without making repairs or equating this

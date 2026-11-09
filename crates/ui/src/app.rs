@@ -157,6 +157,21 @@ impl AtlasApp {
         self.vendors.start(job);
     }
 
+    pub(crate) fn reconcile_bank_csv(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) || self.bank_reconciliation.loading {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let csv = self.bank_csv.clone();
+        self.bank_reconciliation.start(
+            self.runner.spawn(async move {
+                crate::client_invoices::reconcile_bank_csv(&client, csv).await
+            }),
+        );
+    }
+
     pub(crate) fn load_ledger_reconciliation(&mut self) {
         if !self.role_policy().allows_route(Route::Expenses) {
             return;
@@ -829,6 +844,9 @@ impl AtlasApp {
         if self.ledger_reconciliation.poll() {
             ctx.request_repaint();
         }
+        if self.bank_reconciliation.poll() {
+            ctx.request_repaint();
+        }
         if self.delivery_notes.poll() {
             ctx.request_repaint();
         }
@@ -1059,6 +1077,7 @@ impl AtlasApp {
             || self.client_invoices.loading
             || self.bills.loading
             || self.ledger_reconciliation.loading
+            || self.bank_reconciliation.loading
             || self.invoices.loading
             || self.alerts.loading
             || self.devices.loading
