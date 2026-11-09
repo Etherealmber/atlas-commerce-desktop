@@ -29,7 +29,7 @@ jobs:
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
             for page in clients client-editor products stock sales expenses vendors delivery agent; do
-              ATLAS_VISUAL_DEBUG=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
+              ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
               xwininfo -root -tree > "visual-output/$page.windows" || true
@@ -86,8 +86,6 @@ jobs:
             printf '::notice title=FixtureImage-stock-%03d::%s\n' "$count" "$line"
             count=$((count + 1))
           done < /tmp/review.parts
-      - name: Inspect agent layout bounds
-        run: echo "::notice title=FixtureBounds::$(tail -c 1000 visual-output/agent.log | base64 -w0)"
       - name: Review agent screenshot
         run: |
           convert visual-output/agent.png -resize 640x400 -quality 30 /tmp/review.jpg

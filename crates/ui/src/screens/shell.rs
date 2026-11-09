@@ -115,13 +115,13 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 | Route::Catalog
         )
     );
-    if app.agent_drawer_open && agent_available {
+    let drawer_visible = app.agent_drawer_open && agent_available;
+    let drawer_width = (viewport_width * 0.42)
+        .clamp(280.0, 440.0)
+        .min((viewport_width - rail_width - 32.0).max(1.0));
+    if drawer_visible {
         egui::Panel::right(egui::Id::new("agent-drawer"))
-            .exact_size(
-                (viewport_width * 0.42)
-                    .clamp(280.0, 440.0)
-                    .min((viewport_width - rail_width - 32.0).max(1.0)),
-            )
+            .exact_size(drawer_width)
             .resizable(false)
             .frame(
                 egui::Frame::NONE
@@ -130,14 +130,6 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                     .inner_margin(egui::Margin::same(12)),
             )
             .show(ui, |ui| {
-                if std::env::var_os("ATLAS_VISUAL_DEBUG").is_some() {
-                    eprintln!(
-                        "DRAWER max={:?} clip={:?} avail={}",
-                        ui.max_rect(),
-                        ui.clip_rect(),
-                        ui.available_width()
-                    );
-                }
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(
@@ -173,14 +165,10 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             // Child widgets can request more than the central panel's width.
             // Clip their painting to the space left after the right drawer is
             // reserved, so they cannot paint across its controls.
-            let bounds = ui.max_rect();
-            if std::env::var_os("ATLAS_VISUAL_DEBUG").is_some() && app.agent_drawer_open {
-                eprintln!(
-                    "CENTER max={:?} clip={:?} avail={}",
-                    bounds,
-                    ui.clip_rect(),
-                    ui.available_width()
-                );
+            let mut bounds = ui.max_rect();
+            if drawer_visible {
+                bounds.max.x = bounds.max.x.min(viewport_width - drawer_width);
+                ui.set_max_width(bounds.width().max(0.0));
             }
             ui.set_clip_rect(ui.clip_rect().intersect(bounds));
             draw_content(app, ui, ctx, palette);
