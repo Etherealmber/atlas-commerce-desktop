@@ -34,6 +34,12 @@ define_class!(
             // The target frame is supplied by WebKit, not inferred from a URL.
             // Missing targets include popup requests and are rejected.
             let allowed = unsafe {
+                if action.respondsToSelector(objc2::sel!(shouldPerformDownload))
+                    && action.shouldPerformDownload()
+                {
+                    handler.call((WKNavigationActionPolicy::Cancel,));
+                    return;
+                }
                 let frame: Option<Retained<WKFrameInfo>> = msg_send![action, targetFrame];
                 let Some(frame) = frame else {
                     handler.call((WKNavigationActionPolicy::Cancel,));
