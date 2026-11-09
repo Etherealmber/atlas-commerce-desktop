@@ -56,9 +56,5 @@ fastframe-i18n = { workspace = true, features = ["build"] }
 wry = { version = "=0.56.1", default-features = false }
 tempfile = "3"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-gtk4 = { version = "=0.11.5", default-features = false, features = ["v4_10"] }
-webkit6 = "=0.6.1"
-
 [target.'cfg(target_os = "macos")'.dependencies]
 atlas-webview-macos = { path = "../webview-macos" }

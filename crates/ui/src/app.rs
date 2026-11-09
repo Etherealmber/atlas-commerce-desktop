@@ -1525,9 +1525,22 @@ impl eframe::App for EframeShell {
                         }
                     }
                 }
-                if self.login_view.as_ref().is_some_and(|view| !view.pump()) {
-                    self.login_view = None;
-                    crate::browser_auth::cancel(&mut self.held);
+                if let Some(view) = self.login_view.as_mut() {
+                    match view.pump() {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            self.login_view = None;
+                            crate::browser_auth::cancel(&mut self.held);
+                        }
+                        Err(()) => {
+                            self.login_view = None;
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(
+                                "Connexion intégrée indisponible. Utilisez le navigateur système."
+                                    .to_owned(),
+                            );
+                        }
+                    }
                 }
                 if self.login_view.is_some() {
                     ctx.request_repaint_after(Duration::from_millis(16));

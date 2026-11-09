@@ -284,6 +284,9 @@ jobs:
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop.exe" "dist/$name/"
           else
             cp "target/${{ matrix.target }}/release/atlas-commerce-desktop" "dist/$name/"
+            if [ "${{ runner.os }}" = "Linux" ]; then
+              cp "target/${{ matrix.target }}/release/atlas-commerce-webview" "dist/$name/"
+            fi
           fi
           cp README.md LICENSE "dist/$name/"
           cp packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
