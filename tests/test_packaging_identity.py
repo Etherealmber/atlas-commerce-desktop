@@ -1,5 +1,7 @@
 """Keep user-facing names separate from stable installation identities."""
 import importlib.util
+import struct
+import zlib
 from pathlib import Path
 import unittest
 
@@ -23,6 +25,29 @@ class PackagingIdentityTests(unittest.TestCase):
         self.assertIn('UpgradeCode="07D6D2FA-2A3F-42BE-8938-B2AFC2A17C7B"', source)
         self.assertIn('<Directory Id="INSTALLFOLDER" Name="Atlas Commerce Desktop"', source)
         self.assertIn('Name="Atlas Commerce"', source)
+
+    def test_readme_wordmarks_have_transparent_background(self):
+        for theme in ("light", "dark"):
+            with self.subTest(theme=theme):
+                png = (ROOT / f"packaging/branding/atlas-wordmark-{theme}.png").read_bytes()
+                self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+                width, height, depth, color, *_ = struct.unpack(">IIBBBBB", png[16:29])
+                self.assertGreater(width, 1)
+                self.assertGreater(height, 1)
+                self.assertEqual((depth, color), (8, 6), "expected 8-bit RGBA")
+                chunks = []
+                offset = 8
+                while offset < len(png):
+                    size = struct.unpack(">I", png[offset:offset + 4])[0]
+                    kind = png[offset + 4:offset + 8]
+                    if kind == b"IDAT":
+                        chunks.append(png[offset + 8:offset + 8 + size])
+                    offset += 12 + size
+                first_row = zlib.decompress(b"".join(chunks))
+                self.assertIn(first_row[0], range(5))
+                # Every PNG filter has zero predictors for the first pixel
+                # of the first row, so its alpha byte is directly readable.
+                self.assertEqual(first_row[4], 0)
 
     def test_icon_svg_has_no_background_tile(self):
         icon = (ROOT / "packaging/icons/atlas-commerce-desktop.svg").read_text()
