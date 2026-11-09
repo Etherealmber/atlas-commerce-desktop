@@ -422,7 +422,47 @@ pub(crate) fn poll(app: &mut AtlasApp) {
 
 #[cfg(test)]
 mod tests {
-    use super::{origin, same_context, secret, valid_authorization_url};
+    use super::{
+        Capabilities, Created, Envelope, Poll, Session, origin, same_context, secret,
+        valid_authorization_url,
+    };
+    #[test]
+    fn v1_envelopes_do_not_confuse_poll_or_otp_with_desktop_session() {
+        // These are distinct worker contracts; no token is accepted outside
+        // the exchange envelope or from the legacy web-login root.
+        let poll = r#"{"success":true,"data":{"status":"pending","request_id":"id","origin":"https://example.test","state":"state","interval":5}}"#;
+        let parsed: Envelope<Poll> = serde_json::from_str(poll).unwrap();
+        assert_eq!(parsed.data.unwrap().status, "pending");
+        assert!(serde_json::from_str::<Envelope<Session>>(poll).is_err());
+        let otp = r#"{"success":true,"needs_otp":true}"#;
+        assert!(
+            serde_json::from_str::<Envelope<Session>>(otp)
+                .unwrap()
+                .data
+                .is_none()
+        );
+        for body in [
+            "",
+            "<html>proxy</html>",
+            "{",
+            r#"{"success":true,"data":{"token":"x"}}"#,
+        ] {
+            assert!(serde_json::from_str::<Envelope<Session>>(body).is_err());
+        }
+        let valid = r#"{"success":true,"data":{"token":"opaque","token_type":"Bearer","username":"test","role":"owner","request_id":"id","origin":"https://example.test","state":"state"}}"#;
+        let session: Envelope<Session> = serde_json::from_str(valid).unwrap();
+        assert_eq!(session.data.unwrap().token, "opaque");
+        assert!(
+            serde_json::from_str::<Envelope<Capabilities>>(
+                r#"{"success":true,"data":{"version":"1"}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<Envelope<Created>>(r#"{"success":true,"data":{}}"#).is_err()
+        );
+    }
+
     #[test]
     fn proofs_are_random_url_safe_and_context_is_bound() {
         let a = secret().unwrap();
