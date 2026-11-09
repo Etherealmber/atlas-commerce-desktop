@@ -15,6 +15,12 @@ Cette recette est destinée à la personne qui possède la machine de test. Elle
 3. Vérifier la persistance après fermeture complète et la déconnexion après redémarrage. Sur Linux, relever distribution, version WebKitGTK et X11 ou Wayland ; sur Windows la version du runtime WebView2 ; sur macOS la version du système.
 4. Le test CI utilise seulement une URL fictive et n'établit pas une connexion. Ne pas envoyer de captures ou journaux comportant l'URL, le code, l'identité ou des secrets.
 
+## Repli Linux sans moteur intégré
+
+1. Sur une **copie** de l'archive portable, retirer `atlas-commerce-webview` (ne pas modifier l'installation réelle). Lancer l'application : elle doit démarrer normalement.
+2. Choisir le serveur et « Se connecter dans Atlas ». L'application doit poursuivre automatiquement la même demande dans le navigateur système et afficher un message explicite ; comparer le code, puis approuver.
+3. Vérifier qu'aucun processus `atlas-commerce-webview` ne reste après fermeture ou annulation. Si le moteur est présent mais échoue au démarrage, vérifier que l'échec est signalé et que le navigateur reste proposé.
+
 ## Parcours navigateur v1
 
 1. Choisir le serveur et cliquer sur « Se connecter avec le navigateur ». Vérifier que le navigateur système s'ouvre et que le serveur affiché correspond au serveur choisi.
