@@ -1,6 +1,6 @@
 # Recette manuelle de connexion — sans données sensibles
 
-Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. **La WebView intégrée et le coffre système ne sont pas encore implémentés** : pour l'instant, seul le parcours v1 avec le navigateur système peut être testé ici. Ce parcours conserve actuellement la session uniquement en mémoire ; une fermeture complète impose donc de se reconnecter. Ne pas interpréter ce comportement comme une validation de la persistance demandée.
+Cette recette est destinée à la personne qui possède la machine de test. Elle ne remplace pas les tests automatiques. La connexion intégrée est proposée sur Windows via WebView2 ; sur macOS et Linux seul le navigateur système est disponible. Le coffre système est raccordé à la session v1 sur les trois plateformes, mais reste à vérifier sur les appareils réels. Aucun essai réel WebView, Turnstile ou passkey n'a encore été effectué.
 
 ## Préparation
 
@@ -14,7 +14,7 @@ Cette recette est destinée à la personne qui possède la machine de test. Elle
 2. Suivre la politique normale du serveur : challenge Turnstile et OTP si demandés, ou passkey si elle est proposée. Ne pas communiquer le mot de passe, le code OTP, le QR, le code de comparaison ou les données de passkey.
 3. Comparer le code affiché dans l'application et le navigateur, puis approuver explicitement. Vérifier l'accès à une page autorisée et indiquer si cela a fonctionné.
 4. Dans une nouvelle tentative, refuser ou annuler avant l'approbation ; vérifier qu'aucune session ne s'ouvre. Tester l'expiration et le changement de serveur séparément. L'annulation locale n'est pas une preuve de révocation côté serveur.
-5. Quitter complètement l'application, y compris la zone de notification, puis la rouvrir : noter le résultat. Le retour à l'écran de connexion est attendu pour la session v1 actuelle, faute de coffre et de restauration implémentés.
+5. Quitter complètement l'application, y compris la zone de notification, puis la rouvrir : vérifier la restauration de la session v1 et noter tout message d'indisponibilité du coffre.
 
 ## En cas d'erreur
 
