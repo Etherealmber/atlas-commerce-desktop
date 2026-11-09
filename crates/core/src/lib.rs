@@ -15,6 +15,7 @@ pub mod session;
 pub mod settings;
 pub mod update_feed;
 pub mod vault;
+pub mod webview_policy;
 
 pub use deep_link::{QrTokenParser, VerifyLink};
 pub use device::DeviceIdentity;
