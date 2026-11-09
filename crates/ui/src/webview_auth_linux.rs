@@ -161,6 +161,22 @@ impl Drop for LoginView {
 #[cfg(test)]
 mod tests {
     use super::challenge_navigation;
+    // Run only under an isolated virtual display. No credentials or real server.
+    #[test]
+    #[ignore = "requires a display and WebKitGTK runtime"]
+    fn opens_and_destroys_an_ephemeral_window() {
+        let url = url::Url::parse(
+            "https://example.invalid/login/desktop#request_id=fixture&state=fixture",
+        )
+        .unwrap();
+        let view = super::LoginView::open(&url, "https://example.invalid", "fixture").unwrap();
+        for _ in 0..10 {
+            assert!(view.pump());
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        drop(view);
+    }
+
     #[test]
     fn challenge_is_limited_to_cloudflare_https() {
         assert!(challenge_navigation(

@@ -24,6 +24,10 @@ jobs:
           key: visual-fixtures
       - name: Build offline fixture
         run: cargo build -p atlas-ui --example visual_fixture
+      - name: Exercise the isolated WebKitGTK window
+        run: |
+          xvfb-run -a -s '-screen 0 1280x800x24' cargo test -p atlas-ui --lib \
+            webview_auth_linux::tests::opens_and_destroys_an_ephemeral_window -- --ignored --test-threads=1
       - name: Render fictional screens under Xvfb
         run: |
           mkdir -p visual-output
