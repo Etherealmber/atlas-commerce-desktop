@@ -503,6 +503,74 @@ mod tests {
         Capabilities, Created, Envelope, Poll, Session, decode_envelope, origin, same_context,
         secret, valid_authorization_url,
     };
+    // A local fixture exercises the actual HTTP response handling without
+    // contacting a real server or weakening the HTTPS requirement in run().
+    fn fixture_response(raw: Vec<u8>) -> Result<Poll, &'static str> {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = [0u8; 2048];
+            let _ = stream.read(&mut request);
+            // A rejection may stop reading before the whole body is sent.
+            let _ = stream.write_all(&raw);
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(async {
+            let client = reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .unwrap();
+            let resp = client
+                .get(format!("http://{address}/"))
+                .send()
+                .await
+                .unwrap();
+            super::response(resp, super::Stage::Poll).await
+        });
+        server.join().unwrap();
+        result
+    }
+
+    #[test]
+    fn http_response_rejects_redirects_proxy_pages_and_oversized_bodies() {
+        let redirect = b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/private\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+        assert_eq!(
+            fixture_response(redirect).err(),
+            Some("Le serveur a refusé la demande de connexion. Recommencez.")
+        );
+        let page = b"<html>private proxy page</html>";
+        let mut html = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", page.len()).into_bytes();
+        html.extend_from_slice(page);
+        assert_eq!(
+            fixture_response(html).err(),
+            Some("Réponse de connexion invalide (format inattendu).")
+        );
+        let mut large = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n2001\r\n".to_vec();
+        large.extend(std::iter::repeat_n(b'x', 8193));
+        large.extend_from_slice(b"\r\n0\r\n\r\n");
+        assert_eq!(
+            fixture_response(large).err(),
+            Some("Réponse de connexion trop volumineuse.")
+        );
+    }
+
+    #[test]
+    fn http_response_accepts_only_a_valid_poll_envelope() {
+        let body = br#"{"success":true,"data":{"status":"pending","request_id":"id","origin":"https://example.test","state":"state","interval":5}}"#;
+        let mut raw = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes();
+        raw.extend_from_slice(body);
+        let poll = fixture_response(raw).ok().unwrap();
+        assert_eq!(poll.status, "pending");
+        assert_eq!(poll.interval, 5);
+    }
+
     #[test]
     fn v1_envelopes_do_not_confuse_poll_or_otp_with_desktop_session() {
         // These are distinct worker contracts; no token is accepted outside
