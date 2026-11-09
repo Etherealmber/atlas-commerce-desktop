@@ -138,12 +138,16 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     let outer_width =
         ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(140.0);
     let card_width = (outer_width - FRAME_OVERHEAD).max(120.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        for (which, label, value, warn) in cards {
-            metric_card(ui, palette, which, &label, &value, warn, card_width);
-        }
-    });
+    // A wrapped horizontal layout can grow past its intended width when
+    // frames request space before wrapping. Build explicit rows instead.
+    for row in cards.chunks(cols) {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for (which, label, value, warn) in row {
+                metric_card(ui, palette, *which, label, value, *warn, card_width);
+            }
+        });
+    }
 }
 
 fn metric_card(
