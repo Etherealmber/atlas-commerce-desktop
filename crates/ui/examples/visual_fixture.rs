@@ -74,6 +74,8 @@ fn build(route: &str) -> AtlasApp {
             sku: Some("DEMO-001".into()),
             price: 350.0,
             stock: 24.0,
+            track_inventory: 1,
+            is_active: 1,
             ..Product::default()
         },
         Product {
@@ -82,6 +84,8 @@ fn build(route: &str) -> AtlasApp {
             sku: Some("DEMO-002".into()),
             price: 120.0,
             stock: 4.0,
+            track_inventory: 1,
+            is_active: 1,
             ..Product::default()
         },
     ]);

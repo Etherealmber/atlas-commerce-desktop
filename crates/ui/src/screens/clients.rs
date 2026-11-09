@@ -153,8 +153,10 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ] {
                 card(palette).show(ui, |ui| {
                     ui.set_width(width - 32.0);
-                    ui.label(RichText::new(label).color(palette.secondary).size(11.0));
-                    ui.label(RichText::new(value).color(palette.text).strong().size(18.0));
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new(label).color(palette.secondary).size(11.0));
+                        ui.label(RichText::new(value).color(palette.text).strong().size(18.0));
+                    });
                 });
             }
         });

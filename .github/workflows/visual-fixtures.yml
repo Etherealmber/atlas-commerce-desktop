@@ -50,18 +50,51 @@ jobs:
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
-      - name: Surface a small screenshot for API-only review
-        if: success()
+      - name: Review clients screenshot
         run: |
-          for page in clients products vendors stock agent; do
-            convert "visual-output/$page.png" -resize 640x400 -quality 30 "/tmp/fixture-$page.jpg"
-            base64 -w0 "/tmp/fixture-$page.jpg" | fold -w 2500 > /tmp/fixture-review.parts
-            count=0
-            while IFS= read -r line || [ -n "$line" ]; do
-              printf '::notice title=FixtureImage-%s-%03d::%s\n' "$page" "$count" "$line"
-              count=$((count + 1))
-            done < /tmp/fixture-review.parts
-          done
+          convert visual-output/clients.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-clients-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review products screenshot
+        run: |
+          convert visual-output/products.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-products-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review vendors screenshot
+        run: |
+          convert visual-output/vendors.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-vendors-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review stock screenshot
+        run: |
+          convert visual-output/stock.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-stock-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review agent screenshot
+        run: |
+          convert visual-output/agent.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-agent-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
       - name: Publish offline screenshots
         uses: actions/upload-artifact@v7
         with:
