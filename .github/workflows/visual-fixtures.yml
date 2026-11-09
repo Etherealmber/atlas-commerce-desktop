@@ -96,6 +96,9 @@ jobs:
             printf '::notice title=FixtureImage-stock-%03d::%s\n' "$count" "$line"
             count=$((count + 1))
           done < /tmp/review.parts
+      - name: Review layout measurements
+        run: |
+          grep GEOM visual-output/agent.log | tail -8
       - name: Review agent screenshot
         run: |
           convert visual-output/agent.png -resize 640x400 -quality 30 /tmp/review.jpg

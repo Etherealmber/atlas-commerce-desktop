@@ -13,6 +13,7 @@ use crate::widgets::{card, icon, page_title, pill, primary_button};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    if app.agent_drawer_open { eprintln!("GEOM start {:?} avail {}", ui.max_rect(), ui.available_width()); }
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Dashboard"), palette);
@@ -51,7 +52,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     };
 
+    if app.agent_drawer_open { eprintln!("GEOM pre-metric {:?} avail {}", ui.max_rect(), ui.available_width()); }
     metric_cards(app, ui, palette, &data);
+    if app.agent_drawer_open { eprintln!("GEOM post-metric {:?} avail {}", ui.max_rect(), ui.available_width()); }
     ui.add_space(14.0);
 
     // Calculate outer widths once, before either card consumes the row.
@@ -84,6 +87,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     ui.add_space(14.0);
+    if app.agent_drawer_open { eprintln!("GEOM pre-recent {:?} avail {}", ui.max_rect(), ui.available_width()); }
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.vertical(|ui| {
