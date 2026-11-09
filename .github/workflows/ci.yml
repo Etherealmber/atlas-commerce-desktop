@@ -41,7 +41,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev libwebkitgtk-6.0-dev \
             libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
             cmake
       - uses: Swatinem/rust-cache@v2
@@ -185,7 +185,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev libwebkitgtk-6.0-dev \
             libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev
       - uses: Swatinem/rust-cache@v2
         with:

@@ -18,7 +18,7 @@ jobs:
       - name: Install virtual display and GUI dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool imagemagick libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev cmake
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool imagemagick libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev libwebkitgtk-6.0-dev cmake
       - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
         with:
           key: visual-fixtures

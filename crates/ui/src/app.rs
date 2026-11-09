@@ -1308,7 +1308,7 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         if self.browser_login.embedded {
             crate::browser_auth::cancel(self);
         }
@@ -1358,6 +1358,8 @@ pub struct EframeShell {
     first_frame: bool,
     #[cfg(target_os = "windows")]
     login_view: Option<crate::webview_auth::LoginView>,
+    #[cfg(target_os = "linux")]
+    login_view: Option<crate::webview_auth_linux::LoginView>,
 }
 
 impl EframeShell {
@@ -1385,7 +1387,7 @@ impl EframeShell {
         Self {
             held,
             first_frame: true,
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             login_view: None,
         }
     }
@@ -1492,6 +1494,41 @@ impl eframe::App for EframeShell {
                 }
                 if let Some(view) = &self.login_view {
                     view.resize(geometry.0, geometry.1, geometry.2);
+                }
+            }
+        }
+        #[cfg(target_os = "linux")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else {
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let code = self
+                        .held
+                        .browser_login
+                        .pairing_code
+                        .as_deref()
+                        .unwrap_or_default();
+                    match crate::webview_auth_linux::LoginView::open(&url, &server, code) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if self.login_view.as_ref().is_some_and(|view| !view.pump()) {
+                    self.login_view = None;
+                    crate::browser_auth::cancel(&mut self.held);
+                }
+                if self.login_view.is_some() {
+                    ctx.request_repaint_after(Duration::from_millis(16));
                 }
             }
         }

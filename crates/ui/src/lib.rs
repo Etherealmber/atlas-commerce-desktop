@@ -25,6 +25,8 @@ pub mod tray;
 pub mod update;
 #[cfg(target_os = "windows")]
 mod webview_auth;
+#[cfg(target_os = "linux")]
+mod webview_auth_linux;
 pub mod widgets;
 
 pub use app::EframeShell;
