@@ -162,6 +162,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 .inner_margin(egui::Margin::same(0)),
         )
         .show(ui, |ui| {
+            // Child widgets can request more than the central panel's width.
+            // Clip their painting to the space left after the right drawer is
+            // reserved, so they cannot paint across its controls.
+            let bounds = ui.max_rect();
+            ui.set_clip_rect(ui.clip_rect().intersect(bounds));
             draw_content(app, ui, ctx, palette);
         });
 
