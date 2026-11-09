@@ -157,9 +157,10 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 
     egui::CentralPanel::no_frame()
         .frame(
-            egui::Frame::NONE
-                .fill(palette.window)
-                .inner_margin(egui::Margin::same(0)),
+            // The framebuffer already uses palette.window. An opaque panel
+            // frame can expand beyond its assigned bounds and cover the
+            // neighbouring drawer before the child clip is applied.
+            egui::Frame::NONE.inner_margin(egui::Margin::same(0)),
         )
         .show(ui, |ui| {
             // Child widgets can request more than the central panel's width.

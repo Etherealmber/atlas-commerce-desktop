@@ -16,6 +16,9 @@ struct Fixture {
     palette: Palette,
 }
 impl eframe::App for Fixture {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        self.palette.window.to_normalized_gamma_f32()
+    }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.app.draw(ui, &ctx, &self.palette);
