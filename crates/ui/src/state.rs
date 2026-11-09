@@ -470,11 +470,15 @@ pub struct AtlasApp {
     pub clients: Cache<Vec<Client>>,
     pub client_search: String,
     pub selected_client: Option<i64>,
+    pub client_invoice_id: Option<i64>,
+    pub client_invoices: Cache<Vec<Invoice>>,
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
     pub expenses: Cache<Vec<Expense>>,
     pub expense_search: String,
+    pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
+    pub(crate) bills_open: bool,
     pub expense_editor: Option<ExpenseEditor>,
     pub delivery_notes: Cache<Vec<DeliveryNote>>,
     pub delivery_note_editor: Option<DeliveryNoteEditor>,
@@ -619,11 +623,15 @@ impl AtlasApp {
             clients: Cache::default(),
             client_search: String::new(),
             selected_client: None,
+            client_invoice_id: None,
+            client_invoices: Cache::default(),
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
             expenses: Cache::default(),
             expense_search: String::new(),
+            bills: Cache::default(),
+            bills_open: false,
             expense_editor: None,
             delivery_notes: Cache::default(),
             delivery_note_editor: None,
@@ -1138,6 +1146,8 @@ impl AtlasApp {
         self.clients = Cache::default();
         self.client_search = String::new();
         self.selected_client = None;
+        self.client_invoice_id = None;
+        self.client_invoices = Cache::default();
         self.client_editor = None;
         self.vendors = Cache::default();
         self.vendor_search = String::new();
@@ -1145,6 +1155,8 @@ impl AtlasApp {
         self.vendor_editor = None;
         self.expenses = Cache::default();
         self.expense_search = String::new();
+        self.bills = Cache::default();
+        self.bills_open = false;
         self.expense_editor = None;
         self.delivery_notes = Cache::default();
         self.delivery_note_editor = None;

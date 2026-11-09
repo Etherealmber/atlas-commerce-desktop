@@ -216,6 +216,10 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
         }
         if response.clicked() {
+            if app.selected_client != Some(client.id) {
+                app.client_invoice_id = None;
+                app.client_invoices = Default::default();
+            }
             app.selected_client = Some(client.id);
         }
         widgets::overlay_at(
@@ -362,6 +366,66 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
+    if app.client_invoice_id == Some(client.id) {
+        ui.add_space(14.0);
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Invoices"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.open_client_invoices(client);
+            }
+            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) {
+                app.open_client_invoices_in_browser(client);
+            }
+        });
+        if app.client_invoices.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.client_invoices.error {
+            error_banner(ui, error, palette);
+        } else if let Some(invoices) = &app.client_invoices.data {
+            if invoices.is_empty() {
+                ui.label(
+                    RichText::new(t!(app.locale, "No invoice for this client."))
+                        .color(palette.secondary),
+                );
+            }
+            for invoice in invoices {
+                ui.separator();
+                ui.label(
+                    RichText::new(
+                        invoice
+                            .number
+                            .clone()
+                            .unwrap_or_else(|| format!("#{}", invoice.id)),
+                    )
+                    .color(palette.text)
+                    .strong(),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {}",
+                        invoice.issue_date.as_deref().unwrap_or("—"),
+                        invoice.status.as_deref().unwrap_or("—")
+                    ))
+                    .color(palette.secondary),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} : {} · {} : {}",
+                        t!(app.locale, "Total"),
+                        money(invoice.total, &currency),
+                        t!(app.locale, "Remaining"),
+                        money(invoice.remaining(), &currency)
+                    ))
+                    .color(palette.text),
+                );
+            }
+        }
+    }
 }
 
 fn blank(value: &str) -> &str {

@@ -157,6 +157,19 @@ impl AtlasApp {
         self.vendors.start(job);
     }
 
+    pub(crate) fn load_bills(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.bills.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_bills(&client).await }),
+        );
+    }
+
     pub fn load_expenses(&mut self) {
         let Some(client) = self.client.clone() else {
             return;
@@ -369,10 +382,22 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
-    /// Open the web app's filtered invoice list for one client in the system
-    /// browser. The browser keeps its own web session (same route the web
-    /// client navigates to from its Clients table).
+    /// Load the server-filtered list into the native client detail panel.
     pub fn open_client_invoices(&mut self, client: &atlas_api::models::Client) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let id = client.id;
+        self.client_invoice_id = Some(id);
+        self.client_invoices = Default::default();
+        self.client_invoices.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch(&api, id).await }),
+        );
+    }
+
+    /// Optional system-browser link to the web client's filtered list.
+    pub fn open_client_invoices_in_browser(&mut self, client: &atlas_api::models::Client) {
         let Some(api) = self.client.clone() else {
             return;
         };
@@ -776,10 +801,16 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.client_invoices.poll() {
+            ctx.request_repaint();
+        }
         if self.vendors.poll() {
             ctx.request_repaint();
         }
         if self.expenses.poll() {
+            ctx.request_repaint();
+        }
+        if self.bills.poll() {
             ctx.request_repaint();
         }
         if self.delivery_notes.poll() {
@@ -1009,6 +1040,8 @@ impl AtlasApp {
             || self.server_form.probe_job.is_some()
             || self.dashboard.loading
             || self.products.loading
+            || self.client_invoices.loading
+            || self.bills.loading
             || self.invoices.loading
             || self.alerts.loading
             || self.devices.loading

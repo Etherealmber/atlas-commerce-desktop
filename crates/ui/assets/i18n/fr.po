@@ -1213,3 +1213,21 @@ msgstr "Indiquez un client et une quantité positive valide pour chaque ligne."
 
 msgid "Search pages or products…"
 msgstr "Rechercher une page ou un produit…"
+
+msgid "Open in browser"
+msgstr "Ouvrir dans le navigateur"
+
+msgid "No invoice for this client."
+msgstr "Aucune facture pour ce client."
+
+msgid "Remaining"
+msgstr "Reste à payer"
+
+msgid "Supplier bills"
+msgstr "Factures fournisseurs"
+
+msgid "No supplier bills."
+msgstr "Aucune facture fournisseur."
+
+msgid "Paid"
+msgstr "Payé"
