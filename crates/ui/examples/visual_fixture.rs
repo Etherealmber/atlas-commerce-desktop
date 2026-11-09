@@ -33,6 +33,7 @@ fn build(route: &str) -> AtlasApp {
     };
     let settings = Settings {
         reduced_motion: true,
+        theme: atlas_core::ThemeMode::Light,
         update_check_on_start: false,
         notifications_enabled: false,
         ..Settings::default()
@@ -154,6 +155,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
+            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
             let palette = Palette::light();
             theme::apply(&cc.egui_ctx, &palette, true);
             Ok(Box::new(Fixture {
