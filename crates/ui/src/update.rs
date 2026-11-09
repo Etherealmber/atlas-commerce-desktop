@@ -8,6 +8,7 @@
 use atlas_core::update_feed::{MANIFEST_ASSET, UpdateManifest};
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig, Updater};
 use serde::Deserialize;
+use std::io::Read;
 
 const REPOSITORY: &str = "Etherealmber/atlas-commerce-desktop";
 const SLUG: &str = "atlas-commerce-desktop";
@@ -133,13 +134,79 @@ pub fn is_release_not_ready(error: &str) -> bool {
     lower.contains("404") || lower.contains("no unique")
 }
 
+/// Hide MSI assets only from the updater's release metadata when the
+/// running installation has an Inno uninstaller. fastframe otherwise prefers
+/// MSI even for Inno installs, creating a second Windows registration.
+/// Asset downloads and checksum/signature validation are unchanged.
+struct InstallerAwareTransport {
+    inner: ReqwestTransport,
+    inno: bool,
+}
+
+fn without_msi_metadata(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let mut release: serde_json::Value = serde_json::from_slice(bytes)?;
+    let assets = release
+        .get_mut("assets")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| anyhow::anyhow!("Métadonnées de mise à jour invalides"))?;
+    assets.retain(|asset| {
+        !asset
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|name| name.ends_with(".msi"))
+    });
+    Ok(serde_json::to_vec(&release)?)
+}
+
+impl fastframe_update::Transport for InstallerAwareTransport {
+    fn get(
+        &self,
+        request: &fastframe_update::Request<'_>,
+    ) -> anyhow::Result<fastframe_update::Response> {
+        let response = fastframe_update::Transport::get(&self.inner, request)?;
+        let metadata_prefix = format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/");
+        if self.inno && response.status == 200 && request.url.starts_with(&metadata_prefix) {
+            const MAX_METADATA: u64 = 4 * 1024 * 1024;
+            let mut body = Vec::new();
+            response
+                .body
+                .take(MAX_METADATA + 1)
+                .read_to_end(&mut body)?;
+            anyhow::ensure!(
+                body.len() as u64 <= MAX_METADATA,
+                "Métadonnées de mise à jour trop volumineuses"
+            );
+            return Ok(fastframe_update::Response::ok(std::io::Cursor::new(
+                without_msi_metadata(&body)?,
+            )));
+        }
+        Ok(response)
+    }
+}
+
+fn is_inno_install(executable: &std::path::Path) -> bool {
+    executable
+        .parent()
+        .is_some_and(|dir| dir.join("unins000.exe").is_file())
+}
+
 /// Builds the blocking fastframe updater on the system-proxy-aware client.
 ///
 /// # Errors
 /// When the transport cannot be built.
 pub fn build_updater() -> anyhow::Result<Updater> {
     let builder = reqwest::blocking::Client::builder();
-    Ok(Updater::new(CONFIG, ReqwestTransport::new(builder)?))
+    let inno = cfg!(target_os = "windows")
+        && std::env::current_exe()
+            .ok()
+            .is_some_and(|path| is_inno_install(&path));
+    Ok(Updater::new(
+        CONFIG,
+        InstallerAwareTransport {
+            inner: ReqwestTransport::new(builder)?,
+            inno,
+        },
+    ))
 }
 
 /// Blocking check for a newer release, run inside `spawn_blocking`.
@@ -153,6 +220,21 @@ pub fn blocking_check() -> anyhow::Result<Option<fastframe_update::Release>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inno_updates_keep_setup_and_checksums_not_msi() {
+        let raw = br#"{"assets":[{"name":"atlas.msi"},{"name":"atlas-setup.exe"},{"name":"checksums.txt"}]}"#;
+        let filtered: serde_json::Value =
+            serde_json::from_slice(&without_msi_metadata(raw).unwrap()).unwrap();
+        let names: Vec<_> = filtered["assets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|asset| asset["name"].as_str())
+            .collect();
+        assert_eq!(names, ["atlas-setup.exe", "checksums.txt"]);
+        assert!(without_msi_metadata(b"{}").is_err());
+    }
 
     #[test]
     fn config_is_valid() {
