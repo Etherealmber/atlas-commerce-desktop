@@ -53,13 +53,15 @@ jobs:
       - name: Surface a small screenshot for API-only review
         if: success()
         run: |
-          convert visual-output/clients.png -resize 640x400 -quality 35 /tmp/fixture-review.jpg
-          base64 -w0 /tmp/fixture-review.jpg | fold -w 2500 > /tmp/fixture-review.parts
-          count=0
-          while IFS= read -r line || [ -n "$line" ]; do
-            printf '::notice title=FixtureImage%03d::%s\n' "$count" "$line"
-            count=$((count + 1))
-          done < /tmp/fixture-review.parts
+          for page in clients products vendors stock agent; do
+            convert "visual-output/$page.png" -resize 640x400 -quality 30 "/tmp/fixture-$page.jpg"
+            base64 -w0 "/tmp/fixture-$page.jpg" | fold -w 2500 > /tmp/fixture-review.parts
+            count=0
+            while IFS= read -r line || [ -n "$line" ]; do
+              printf '::notice title=FixtureImage-%s-%03d::%s\n' "$page" "$count" "$line"
+              count=$((count + 1))
+            done < /tmp/fixture-review.parts
+          done
       - name: Publish offline screenshots
         uses: actions/upload-artifact@v7
         with:
