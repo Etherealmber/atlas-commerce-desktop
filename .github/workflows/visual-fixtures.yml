@@ -37,6 +37,23 @@ jobs:
               import -window root "visual-output/$page.png"
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = client-editor ]; then
+                # Scroll the form independently, then cancel using the fixed footer.
+                xdotool mousemove 720 400 click --repeat 7 --delay 80 5
+                sleep 1
+                import -window root visual-output/client-editor-scrolled.png
+                changed=$(compare -metric AE "visual-output/client-editor.png" visual-output/client-editor-scrolled.png null: 2>&1 || true)
+                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 3000 ]; then
+                  echo "Client editor did not scroll: $changed"; kill "$pid"; exit 1
+                fi
+                xdotool mousemove 723 670 click 1
+                sleep 1
+                import -window root visual-output/client-editor-cancelled.png
+                changed=$(compare -metric AE "visual-output/client-editor-scrolled.png" visual-output/client-editor-cancelled.png null: 2>&1 || true)
+                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                  echo "Client editor cancel click did not close the dialog: $changed"; kill "$pid"; exit 1
+                fi
+              fi
               if [ "$page" = agent ]; then
                 # Click the visible close control in the 1280x800 fixture.
                 xdotool mousemove 1230 90 click 1
