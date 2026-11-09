@@ -4,6 +4,11 @@
 //! credential store. No token or account index is written to a local file.
 //! Operations are synchronous and must run off the interface thread.
 
+// keyring otherwise silently selects its non-persistent mock backend on an
+// unsupported target, which must never masquerade as a secure vault.
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+compile_error!("Atlas desktop v1 vault requires Windows, macOS, or Linux");
+
 use sha2::{Digest, Sha256};
 use url::Url;
 
