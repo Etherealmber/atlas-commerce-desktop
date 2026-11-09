@@ -168,8 +168,8 @@ macOS universel (lipo, DMG, signature conditionnelle), des paquets Linux
 ## Identité de marque et icônes
 
 Le logo est le symbole soleil accompagné du mot-symbole « Atlas ». Deux
-variantes sont fournies : encre noire sur fond blanc et encre blanche sur
-fond noir.
+variantes sont fournies sur fond transparent : encre sombre pour le thème
+clair et encre claire pour le thème sombre.
 
 - `crates/ui/assets/branding/atlas-mark.mask` et `atlas-wordmark.mask` :
   masques de couverture 8 bits (en-tête `u32` largeur, `u32` hauteur, puis
@@ -181,7 +181,7 @@ fond noir.
 - `packaging/icons/atlas-commerce-desktop.svg`,
   `packaging/macos/icon-1024.png` et
   `packaging/windows/atlas-commerce-desktop.ico` : icône applicative
-  (tuile noir mat `#0a0a0a` et symbole papier `#fafafa`).
+  (symbole sombre sur fond transparent).
 
 Tous ces fichiers se régénèrent depuis les masques avec :
 

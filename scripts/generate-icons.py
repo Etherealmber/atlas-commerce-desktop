@@ -96,14 +96,13 @@ def render_app_icon(size: int, mark: Image.Image) -> Image.Image:
 
 
 def render_wordmark(mask: Image.Image, dark_background: bool, out: Path) -> None:
-    """Trimmed lockup with a calm margin, on its native background."""
-    background = (0, 0, 0) if dark_background else (255, 255, 255)
+    """Trimmed lockup with a calm, transparent margin for README themes."""
     ink = (250, 250, 250) if dark_background else (10, 10, 10)
     pad = round(mask.height * 0.18)
-    canvas = Image.new("RGB", (mask.width + 2 * pad, mask.height + 2 * pad), background)
+    canvas = Image.new("RGBA", (mask.width + 2 * pad, mask.height + 2 * pad), (0, 0, 0, 0))
     artwork = Image.new("RGBA", mask.size, (*ink, 0))
     artwork.putalpha(mask)
-    canvas.paste(artwork, (pad, pad), artwork)
+    canvas.alpha_composite(artwork, (pad, pad))
     canvas.save(out)
     print(f"wrote {out.relative_to(ROOT)}")
 
