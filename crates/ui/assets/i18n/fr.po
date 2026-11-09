@@ -1366,3 +1366,6 @@ msgstr "Clients chargés"
 
 msgid "Welcome"
 msgstr "Bienvenue"
+
+msgid "Sign in inside Atlas"
+msgstr "Se connecter dans Atlas"

@@ -832,13 +832,21 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                     crate::browser_auth::cancel(app);
                 }
-            } else if primary_button(
-                ui,
-                t!(app.locale, "Sign in with your browser"),
-                palette,
-                !app.login.busy,
-            ) {
-                crate::browser_auth::start(app);
+            } else {
+                #[cfg(target_os = "windows")]
+                if primary_button(
+                    ui,
+                    t!(app.locale, "Sign in inside Atlas"),
+                    palette,
+                    !app.login.busy,
+                ) {
+                    crate::browser_auth::start_embedded(app);
+                }
+                if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
+                    && !app.login.busy
+                {
+                    crate::browser_auth::start(app);
+                }
             }
             ui.add_space(10.0);
             let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
@@ -1711,4 +1719,40 @@ mod browser_approval_tests {
             assert!(browser_approval_url(base, url, "abc").is_none(), "{url}");
         }
     }
+}
+
+/// Native chrome remains outside the remote login page and shows the v1
+/// comparison code and a cancellation control without exposing proofs.
+#[cfg(target_os = "windows")]
+pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            let server = app
+                .server_store
+                .selected_url()
+                .map(atlas_core::ServerUrl::host)
+                .unwrap_or_default();
+            ui.label(
+                RichText::new(format!("{} : {}", t!(app.locale, "Server"), server))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if let Some(code) = &app.browser_login.pairing_code {
+                ui.label(
+                    RichText::new(format!(
+                        "{} {}",
+                        t!(app.locale, "Compare this code with your browser:"),
+                        code
+                    ))
+                    .color(palette.secondary),
+                );
+            }
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                crate::browser_auth::cancel(app);
+            }
+        });
+    });
 }

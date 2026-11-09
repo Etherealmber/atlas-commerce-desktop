@@ -1308,6 +1308,10 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
+        #[cfg(target_os = "windows")]
+        if self.browser_login.embedded {
+            crate::browser_auth::cancel(self);
+        }
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
@@ -1352,6 +1356,8 @@ impl Resident for AtlasApp {
 pub struct EframeShell {
     pub held: Held<AtlasApp>,
     first_frame: bool,
+    #[cfg(target_os = "windows")]
+    login_view: Option<crate::webview_auth::LoginView>,
 }
 
 impl EframeShell {
@@ -1379,6 +1385,8 @@ impl EframeShell {
         Self {
             held,
             first_frame: true,
+            #[cfg(target_os = "windows")]
+            login_view: None,
         }
     }
 }
@@ -1397,7 +1405,9 @@ impl eframe::App for EframeShell {
             .unwrap_or_else(|| egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32())
     }
 
-    fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+        #[cfg(not(target_os = "windows"))]
+        let _ = &frame;
         if self.first_frame {
             log::info!("Startup: first window logic frame");
             self.first_frame = false;
@@ -1452,6 +1462,39 @@ impl eframe::App for EframeShell {
         }
 
         self.held.poll_background(ctx);
+        #[cfg(target_os = "windows")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else if let Some(window) = frame.winit_window() {
+                let size = window.inner_size();
+                let geometry = (size.width, size.height, window.scale_factor());
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    match crate::webview_auth::LoginView::open(
+                        window.as_ref(),
+                        geometry,
+                        &url,
+                        &server,
+                        &self.held.paths.dirs.cache,
+                    ) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if let Some(view) = &self.login_view {
+                    view.resize(geometry.0, geometry.1, geometry.2);
+                }
+            }
+        }
         // Unlike viewport.visible(), this also handles minimized, occluded,
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
@@ -1523,6 +1566,19 @@ impl eframe::App for EframeShell {
                         },
                     );
                 });
+        }
+        #[cfg(target_os = "windows")]
+        if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::NONE
+                        .fill(palette.window)
+                        .inner_margin(egui::Margin::symmetric(16, 0)),
+                )
+                .show(ui, |ui| {
+                    screens::auth::draw_embedded_header(&mut self.held, ui, &palette)
+                });
+            return;
         }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it

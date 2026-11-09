@@ -23,6 +23,10 @@ pub(crate) struct BrowserLogin {
     server: Option<String>,
     pub(crate) pairing_code: Option<String>,
     pub(crate) active: bool,
+    #[cfg(target_os = "windows")]
+    pub(crate) embedded: bool,
+    #[cfg(target_os = "windows")]
+    pub(crate) pending_url: Option<Url>,
 }
 
 struct Event {
@@ -426,6 +430,17 @@ async fn run(
 }
 
 pub(crate) fn start(app: &mut AtlasApp) {
+    start_with_mode(app, false);
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn start_embedded(app: &mut AtlasApp) {
+    start_with_mode(app, true);
+}
+
+fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
+    #[cfg(not(target_os = "windows"))]
+    let _ = embedded;
     if app.browser_login.active || app.login.busy {
         return;
     }
@@ -434,6 +449,10 @@ pub(crate) fn start(app: &mut AtlasApp) {
     };
     let fingerprint = app.identity.fingerprint().to_owned();
     app.browser_login.server = Some(base.clone());
+    #[cfg(target_os = "windows")]
+    {
+        app.browser_login.embedded = embedded;
+    }
     let cancelled = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
     app.qr = Default::default();
@@ -445,10 +464,27 @@ pub(crate) fn start(app: &mut AtlasApp) {
     app.browser_login.job = Some(app.runner.spawn(run(base, fingerprint, cancelled, tx)));
 }
 pub(crate) fn cancel(app: &mut AtlasApp) {
+    #[cfg(target_os = "windows")]
+    {
+        app.browser_login.pending_url = None;
+    }
     if let Some(flag) = &app.browser_login.cancel {
         flag.store(true, Ordering::Relaxed);
     }
 }
+#[cfg(target_os = "windows")]
+pub(crate) fn embedded_active(app: &AtlasApp) -> bool {
+    app.browser_login.active
+        && app.browser_login.embedded
+        && matches!(app.screen, Screen::Login)
+        && app.browser_login.server.as_deref() == app.server_store.selected_url()
+        && !app
+            .browser_login
+            .cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+}
+
 pub(crate) fn poll(app: &mut AtlasApp) {
     if !app.browser_login.active {
         return;
@@ -471,6 +507,14 @@ pub(crate) fn poll(app: &mut AtlasApp) {
             .is_some_and(|v| v.load(Ordering::Relaxed))
     {
         app.browser_login.pairing_code = Some(event.pairing_code);
+        #[cfg(target_os = "windows")]
+        if app.browser_login.embedded {
+            app.browser_login.pending_url = Some(event.url);
+        } else if open::that(event.url.as_str()).is_err() {
+            cancel(app);
+            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        }
+        #[cfg(not(target_os = "windows"))]
         if open::that(event.url.as_str()).is_err() {
             cancel(app);
             app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());

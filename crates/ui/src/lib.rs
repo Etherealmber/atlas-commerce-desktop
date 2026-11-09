@@ -23,6 +23,8 @@ pub mod state;
 pub mod theme;
 pub mod tray;
 pub mod update;
+#[cfg(target_os = "windows")]
+mod webview_auth;
 pub mod widgets;
 
 pub use app::EframeShell;
