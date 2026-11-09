@@ -736,6 +736,22 @@ mod tests {
     }
 
     #[test]
+    fn avatar_png_is_decoded_by_the_installed_image_loader() {
+        use base64::Engine as _;
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let bytes = base64::engine::general_purpose::STANDARD.decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        ).unwrap();
+        let uri = "bytes://test-avatar.png";
+        ctx.include_bytes(uri, bytes);
+        assert!(matches!(
+            ctx.try_load_image(uri, egui::load::SizeHint::default()),
+            Ok(egui::load::ImagePoll::Ready { .. })
+        ));
+    }
+
+    #[test]
     fn buttons_extend_instead_of_collapsing_in_narrow_rows() {
         // Each measurement gets its own headless frame: an overflowing
         // control must never widen the shared Ui seen by the other probe.

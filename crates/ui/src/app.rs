@@ -780,15 +780,15 @@ impl AtlasApp {
         screens::auth::poll_login_jobs(self);
         if let Some(result) = self.avatar_job.as_ref().and_then(|job| job.poll()) {
             self.avatar_job = None;
+            if let Some(old) = self.avatar_texture_uri.take() {
+                ctx.forget_image(&old);
+            }
             if let Some((uri, bytes)) = result {
-                if let Some(old) = self.avatar_texture_uri.take() {
-                    ctx.forget_image(&old);
-                }
                 ctx.forget_image(&uri);
                 ctx.include_bytes(uri.clone(), bytes);
                 self.avatar_texture_uri = Some(uri);
-                ctx.request_repaint();
             }
+            ctx.request_repaint();
         }
 
         // Caches.

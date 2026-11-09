@@ -28,6 +28,9 @@ url.workspace = true
 egui.workspace = true
 eframe.workspace = true
 egui_extras.workspace = true
+# egui_extras does not enable raster decoders by itself. Profile pictures
+# from the same-origin avatar proxy need these formats at runtime.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 
 fastframe-fonts.workspace = true
 fastframe-text.workspace = true
