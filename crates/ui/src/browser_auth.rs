@@ -468,7 +468,8 @@ fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
 /// the host before this call; it never comes from a navigation event.
 /// Policy failures must not be opened in the browser: only host failures
 /// fall back. Both messages are produced before any hosted page is loaded.
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+/// Linux reports its own startup failure explicitly instead.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 pub(crate) fn fallback_allowed(message: &str) -> bool {
     !matches!(
         message,
