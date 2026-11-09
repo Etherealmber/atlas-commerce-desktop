@@ -755,7 +755,8 @@ mod tests {
                 {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-                other => panic!("Avatar decoding failed: {other:?}"),
+                Ok(egui::load::ImagePoll::Pending { .. }) => panic!("Avatar decoding timed out"),
+                Err(error) => panic!("Avatar decoding failed: {error:?}"),
             }
         }
     }
