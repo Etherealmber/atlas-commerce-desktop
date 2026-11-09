@@ -78,8 +78,18 @@ fn collect(
                 blocks.push(ReportBlock::Text(content));
             }
         } else {
-            for child in children {
-                collect(child, blocks, row_sel, cell_sel);
+            // Mixed text and inline elements occur in detail headers (e.g.
+            // "TTC 100 · Payé 20 · <strong>Reste 80</strong>"). Keep
+            // the text nodes in order rather than silently dropping totals.
+            for child in element.children() {
+                if let Some(child) = ElementRef::wrap(child) {
+                    collect(child, blocks, row_sel, cell_sel);
+                } else if let Some(node) = child.value().as_text() {
+                    let content = node.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if !content.is_empty() {
+                        blocks.push(ReportBlock::Text(content));
+                    }
+                }
             }
         }
     }
@@ -189,11 +199,13 @@ mod tests {
     use super::*;
     #[test]
     fn parses_server_amounts_without_executing_or_including_scripts() {
-        let html = r#"<div class="sheet"><div class="actions">Imprimer</div><div class="hdr"><h1>Situation client — Exemple</h1></div><div class="stat"><div>Reste dû</div><div>123 MAD</div></div><h2>Pièces</h2><table><tr><th>N°</th><th>Reste</th></tr><tr><td>FA-1</td><td>123<script>secret()</script></td></tr></table><h2>Reçus</h2><table><tr><td>Aucun reçu</td></tr></table><script>secret()</script></div>"#;
+        let html = r#"<div class="sheet"><div class="actions">Imprimer</div><div class="hdr"><h1>Situation client — Exemple</h1></div><div class="stat"><div>Reste dû</div><div>123 MAD</div></div><h2>Pièces</h2><table><tr><th>N°</th><th>Reste</th></tr><tr><td>FA-1</td><td>123<script>secret()</script></td></tr></table><div>TTC 100 · Payé 20 · <strong>Reste 80</strong></div><h2>Reçus</h2><table><tr><td>Aucun reçu</td></tr></table><script>secret()</script></div>"#;
         let report = parse_report(html).unwrap();
         let dump = format!("{:?}", report.blocks);
         assert!(dump.contains("123 MAD"));
         assert!(dump.contains("FA-1"));
+        assert!(dump.contains("TTC 100 · Payé 20"));
+        assert!(dump.contains("Reste 80"));
         assert!(!dump.contains("secret()"));
         assert!(!dump.contains("Imprimer"));
         assert!(parse_report("<html><h1>Connexion</h1></html>").is_err());
