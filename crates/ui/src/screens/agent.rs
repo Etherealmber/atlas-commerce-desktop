@@ -9,7 +9,9 @@ use crate::icons::Icon;
 use crate::state::{AtlasApp, ChatMessage};
 use crate::t;
 use crate::theme::Palette;
-use crate::widgets::{card, empty_state, fab, icon, info_banner, page_title, pill, primary_button};
+use crate::widgets::{
+    card, empty_state, icon, info_banner, page_title, pill, primary_button, secondary_button,
+};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // Load the policy once per shell session; a failed attempt waits out the
@@ -92,7 +94,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .as_ref()
         .is_some_and(|policy| policy.blocked);
     ui.horizontal(|ui| {
-        let draft_width = ui.available_width() - 150.0;
+        let draft_width = (ui.available_width() - 100.0).max(40.0);
         let response = ui.add_sized(
             [draft_width, crate::theme::TARGET_MIN_HEIGHT],
             egui::TextEdit::singleline(&mut app.agent.draft)
@@ -112,17 +114,8 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         }
     });
 
-    // Android-style floating action button: start a fresh conversation.
-    // It floats over the bottom-right corner regardless of scroll position.
-    let new_chat = fab(
-        ui.ctx(),
-        palette,
-        Icon::Plus,
-        "agent-new-conversation",
-        &t!(app.locale, "New conversation"),
-        app.settings.reduced_motion,
-    );
-    if new_chat.clicked() && !app.agent.busy {
+    let new_chat = secondary_button(ui, t!(app.locale, "New conversation"), palette);
+    if new_chat && !app.agent.busy {
         app.agent.messages.clear();
         app.agent.thread_id = format!(
             "desktop-{}",

@@ -16,7 +16,7 @@ pub const SLUG: &str = "atlas-commerce-desktop";
 /// Reverse-domain identifier used for the single-instance slot and autostart.
 pub const APP_ID: &str = "com.etherealmber.AtlasCommerceDesktop";
 /// The human name shown by the desktop, the tray and notifications.
-pub const APP_NAME: &str = "Atlas Commerce Desktop";
+pub const APP_NAME: &str = "Atlas Commerce";
 
 /// The fastframe folder description, shared by the whole process.
 pub const DIRS: App = App {

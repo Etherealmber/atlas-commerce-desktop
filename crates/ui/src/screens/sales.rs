@@ -51,10 +51,14 @@ impl QuickSaleDraft {
 
     fn valid(&self) -> bool {
         !self.client_name.trim().is_empty()
-            && self
-                .lines
-                .iter()
-                .any(|line| line.quantity.parse::<f64>().is_ok_and(|qty| qty > 0.0))
+            && !self.lines.is_empty()
+            && self.lines.iter().all(|line| {
+                line.quantity
+                    .parse::<f64>()
+                    .is_ok_and(|qty| qty.is_finite() && qty > 0.0)
+                    && line.unit_price.is_finite()
+                    && line.unit_price >= 0.0
+            })
     }
 }
 
@@ -72,20 +76,28 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    ui.horizontal_top(|ui| {
-        card(palette).show(ui, |ui| {
-            ui.set_width((ui.available_width() * 0.55).max(300.0));
-            ui.vertical(|ui| {
-                invoice_history(app, ui, palette);
-            });
-        });
+    if ui.available_width() < 760.0 {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.vertical(|ui| {
+            invoice_history(app, ui, palette);
+        });
+        ui.add_space(12.0);
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            quick_sale_form(app, ui, palette);
+        });
+    } else {
+        ui.horizontal_top(|ui| {
+            card(palette).show(ui, |ui| {
+                ui.set_width((ui.available_width() * 0.55).max(300.0));
+                invoice_history(app, ui, palette);
+            });
+            card(palette).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 quick_sale_form(app, ui, palette);
             });
         });
-    });
+    }
 }
 
 fn poll_sale_job(app: &mut AtlasApp) {
@@ -202,6 +214,15 @@ fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .color(palette.text)
             .strong()
             .size(15.0),
+    );
+    ui.add_space(8.0);
+    widgets::info_banner(
+        ui,
+        t!(
+            app.locale,
+            "Recording a quick sale does not confirm payment."
+        ),
+        palette,
     );
     ui.add_space(8.0);
 
@@ -368,6 +389,16 @@ fn submit_quick_sale(app: &mut AtlasApp) {
     let Some(draft) = app.quick_sale.as_mut() else {
         return;
     };
+    if draft.saving || !draft.valid() {
+        draft.error = Some(
+            t!(
+                app.locale,
+                "Enter a client and a valid positive quantity for every line."
+            )
+            .into_owned(),
+        );
+        return;
+    }
     let items: Vec<QuickSaleItem> = draft
         .lines
         .iter()
@@ -415,4 +446,36 @@ fn submit_quick_sale(app: &mut AtlasApp) {
     draft.saving = true;
     draft.error = None;
     draft.job = Some(job);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{QuickSaleDraft, QuickSaleLine};
+
+    fn line(quantity: &str) -> QuickSaleLine {
+        QuickSaleLine {
+            product_id: 1,
+            name: "Produit".into(),
+            quantity: quantity.into(),
+            unit_price: 10.0,
+        }
+    }
+
+    #[test]
+    fn every_line_must_have_a_finite_positive_quantity() {
+        let mut draft = QuickSaleDraft {
+            client_name: "Client".into(),
+            lines: vec![line("1"), line("0")],
+            ..Default::default()
+        };
+        assert!(!draft.valid());
+        draft.lines[1].quantity = "NaN".into();
+        assert!(!draft.valid());
+        draft.lines[1].quantity = "inf".into();
+        assert!(!draft.valid());
+        draft.lines[1].quantity = "2".into();
+        assert!(draft.valid());
+        draft.lines[0].unit_price = f64::NAN;
+        assert!(!draft.valid());
+    }
 }

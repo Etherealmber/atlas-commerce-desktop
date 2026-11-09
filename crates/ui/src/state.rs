@@ -134,6 +134,63 @@ pub enum Screen {
     Shell(Route),
 }
 
+/// Client-side presentation policy derived from the web role helpers.
+/// It is not an authorization boundary: the server remains authoritative.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RolePolicy {
+    office: bool,
+    admin: bool,
+    stock: bool,
+    signed_in: bool,
+}
+
+impl RolePolicy {
+    fn from_role(role: Option<&str>) -> Self {
+        let role = role.unwrap_or("").to_ascii_lowercase();
+        Self {
+            office: matches!(role.as_str(), "owner" | "admin" | "secretaire"),
+            admin: matches!(role.as_str(), "owner" | "admin"),
+            stock: role == "stock",
+            signed_in: !role.is_empty(),
+        }
+    }
+
+    pub(crate) fn allows_route(self, route: Route) -> bool {
+        self.signed_in
+            && match route {
+                Route::Products | Route::Settings | Route::Agent => true,
+                Route::Dashboard => !self.stock,
+                Route::Clients
+                | Route::Vendors
+                | Route::Expenses
+                | Route::DeliveryNotes
+                | Route::Sales
+                | Route::Catalog
+                | Route::Notifications => self.office,
+            }
+    }
+
+    pub(crate) fn can_manage_stock(self) -> bool {
+        self.office || self.stock
+    }
+
+    pub(crate) fn can_edit_prices(self) -> bool {
+        self.office
+    }
+
+    pub(crate) fn show_prices(self) -> bool {
+        !self.stock
+    }
+
+    pub(crate) fn initial_route(self) -> Route {
+        if self.stock {
+            Route::Products
+        } else {
+            Route::Dashboard
+        }
+    }
+}
+
 /// QR pairing state for the PC side.
 #[derive(Default)]
 pub struct QrPairing {
@@ -186,6 +243,8 @@ pub struct LoginState {
 /// Self-update state.
 #[derive(Default)]
 pub struct UpdateState {
+    /// Most recently fetched release notes, even when this build is current.
+    pub release_notes: Option<UpdateManifest>,
     pub last_manifest: Option<UpdateManifest>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
@@ -291,6 +350,8 @@ pub enum SettingsFocus {
     About,
 }
 
+type AvatarJob = Job<Option<(String, Vec<u8>)>>;
+
 /// The whole application.
 pub struct AtlasApp {
     // ── services ──
@@ -350,6 +411,8 @@ pub struct AtlasApp {
     /// context (sign-out or profile-picture change). State cannot touch the
     /// egui context itself, so the app loop drains this each frame.
     pub avatar_evict: Option<String>,
+    pub avatar_texture_uri: Option<String>,
+    pub avatar_job: Option<AvatarJob>,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -362,6 +425,7 @@ pub struct AtlasApp {
     pub top_search: String,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
+    pub agent_drawer_open: bool,
     /// Ctrl+K command palette overlay.
     pub palette_open: bool,
     /// Palette filter text, reset every time the palette opens.
@@ -406,11 +470,15 @@ pub struct AtlasApp {
     pub clients: Cache<Vec<Client>>,
     pub client_search: String,
     pub selected_client: Option<i64>,
+    pub client_invoice_id: Option<i64>,
+    pub client_invoices: Cache<Vec<Invoice>>,
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
     pub expenses: Cache<Vec<Expense>>,
     pub expense_search: String,
+    pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
+    pub(crate) bills_open: bool,
     pub expense_editor: Option<ExpenseEditor>,
     pub delivery_notes: Cache<Vec<DeliveryNote>>,
     pub delivery_note_editor: Option<DeliveryNoteEditor>,
@@ -518,6 +586,8 @@ impl AtlasApp {
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
             avatar_evict: None,
+            avatar_texture_uri: None,
+            avatar_job: None,
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             requires_password: false,
@@ -542,6 +612,7 @@ impl AtlasApp {
             route_entered_at: Instant::now(),
             top_search: String::new(),
             profile_menu_open: false,
+            agent_drawer_open: false,
             palette_open: false,
             palette_query: String::new(),
             palette_selected: 0,
@@ -552,11 +623,15 @@ impl AtlasApp {
             clients: Cache::default(),
             client_search: String::new(),
             selected_client: None,
+            client_invoice_id: None,
+            client_invoices: Cache::default(),
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
             expenses: Cache::default(),
             expense_search: String::new(),
+            bills: Cache::default(),
+            bills_open: false,
             expense_editor: None,
             delivery_notes: Cache::default(),
             delivery_note_editor: None,
@@ -690,8 +765,19 @@ impl AtlasApp {
 
     // ── navigation ───────────────────────────────────────────────────────
 
+    pub(crate) fn role_policy(&self) -> RolePolicy {
+        RolePolicy::from_role(self.session.as_ref().map(|session| session.role.as_str()))
+    }
+
     /// Opens a shell route, recording the current one for the back button.
     pub fn go(&mut self, route: Route) {
+        if !self.role_policy().allows_route(route) {
+            return;
+        }
+        if route == Route::Agent {
+            self.agent_drawer_open = true;
+            return;
+        }
         if let Screen::Shell(current) = self.screen
             && current != route
         {
@@ -716,7 +802,13 @@ impl AtlasApp {
 
     /// Browser-style back. Returns false when no history is available.
     pub fn go_back(&mut self) -> bool {
-        let Some(previous) = self.nav_back.pop() else {
+        let policy = self.role_policy();
+        let Some(previous) = self
+            .nav_back
+            .iter()
+            .rposition(|route| policy.allows_route(*route))
+            .map(|index| self.nav_back.remove(index))
+        else {
             return false;
         };
         if let Screen::Shell(current) = self.screen {
@@ -730,7 +822,13 @@ impl AtlasApp {
 
     /// Browser-style forward.
     pub fn go_forward(&mut self) -> bool {
-        let Some(next) = self.nav_forward.pop() else {
+        let policy = self.role_policy();
+        let Some(next) = self
+            .nav_forward
+            .iter()
+            .rposition(|route| policy.allows_route(*route))
+            .map(|index| self.nav_forward.remove(index))
+        else {
             return false;
         };
         if let Screen::Shell(current) = self.screen {
@@ -768,6 +866,9 @@ impl AtlasApp {
     /// by the rail click and the command palette so the two entry points can
     /// never drift apart.
     pub fn ensure_route_data(&mut self, route: Route) {
+        if !self.role_policy().allows_route(route) {
+            return;
+        }
         match route {
             // Products was preloaded by startup before lazy loading; keep
             // its first-visit fetch here so the rail does not open an empty
@@ -789,7 +890,14 @@ impl AtlasApp {
                     self.load_units();
                 }
             }
-            Route::Sales if self.invoices.data.is_none() => self.load_invoices(),
+            Route::Sales => {
+                if self.invoices.data.is_none() && !self.invoices.loading {
+                    self.load_invoices();
+                }
+                if self.products.data.is_none() && !self.products.loading {
+                    self.load_products();
+                }
+            }
             Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
             // Settings aggregates four independent caches; load each once,
             // leaving the in-screen Retry action in charge of failed loads.
@@ -803,7 +911,10 @@ impl AtlasApp {
                 if self.devices.data.is_none() && !self.devices.loading {
                     self.load_devices();
                 }
-                if self.api_keys.data.is_none() && !self.api_keys.loading {
+                if self.role_policy().admin
+                    && self.api_keys.data.is_none()
+                    && !self.api_keys.loading
+                {
                     self.load_api_keys();
                 }
                 if self.assist.data.is_none() && !self.assist.loading {
@@ -840,7 +951,9 @@ impl AtlasApp {
             Route::Settings => {
                 self.load_profile();
                 self.load_devices();
-                self.load_api_keys();
+                if self.role_policy().admin {
+                    self.load_api_keys();
+                }
             }
         }
     }
@@ -859,6 +972,7 @@ impl AtlasApp {
             || self.category_editor.is_some()
             || self.unit_editor.is_some()
             || self.stock_dialog.is_some()
+            || self.scan.quick.is_some()
             // The quick-sale draft is an inline screen form, not a modal:
             // counting it here would block global shortcuts and hide the
             // FAB for the whole Sales screen. Escape still clears it via
@@ -880,6 +994,14 @@ impl AtlasApp {
         }
         if self.profile_menu_open {
             self.profile_menu_open = false;
+            return true;
+        }
+        if self.scan.quick.is_some() {
+            if self.scan.create_job.is_none() {
+                self.scan.quick = None;
+                self.scan.duplicate = false;
+                self.scan.error = None;
+            }
             return true;
         }
         // The stock dialog paints above the product editor, so Escape must
@@ -912,6 +1034,10 @@ impl AtlasApp {
         {
             return true;
         }
+        if self.agent_drawer_open {
+            self.agent_drawer_open = false;
+            return true;
+        }
         false
     }
 
@@ -920,6 +1046,9 @@ impl AtlasApp {
     pub fn run_palette_target(&mut self, target: crate::shortcuts::PaletteTarget) -> bool {
         use crate::shortcuts::PaletteTarget;
         self.close_palette();
+        if !crate::shortcuts::target_allowed(self.role_policy(), target) {
+            return false;
+        }
         match target {
             PaletteTarget::Route(route) => {
                 self.go(route);
@@ -984,10 +1113,14 @@ impl AtlasApp {
 
     pub fn sign_out(&mut self) {
         self.transient_session = false;
+        self.avatar_job = None;
+        if let Some(uri) = self.avatar_texture_uri.take() {
+            self.avatar_evict = Some(uri);
+        }
         if let Some(session) = self.session.take() {
             // Evict the user's cached avatar texture so a later account does
             // not keep the previous picture resident in the texture cache.
-            if !session.avatar_url.trim().is_empty() {
+            if self.avatar_evict.is_none() && !session.avatar_url.trim().is_empty() {
                 self.avatar_evict = Some(session.avatar_url.clone());
             }
             self.account_store.remove(&session);
@@ -1013,6 +1146,8 @@ impl AtlasApp {
         self.clients = Cache::default();
         self.client_search = String::new();
         self.selected_client = None;
+        self.client_invoice_id = None;
+        self.client_invoices = Cache::default();
         self.client_editor = None;
         self.vendors = Cache::default();
         self.vendor_search = String::new();
@@ -1020,6 +1155,8 @@ impl AtlasApp {
         self.vendor_editor = None;
         self.expenses = Cache::default();
         self.expense_search = String::new();
+        self.bills = Cache::default();
+        self.bills_open = false;
         self.expense_editor = None;
         self.delivery_notes = Cache::default();
         self.delivery_note_editor = None;
@@ -1048,6 +1185,7 @@ impl AtlasApp {
         self.nav_back.clear();
         self.nav_forward.clear();
         self.profile_menu_open = false;
+        self.agent_drawer_open = false;
         self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
@@ -1082,4 +1220,46 @@ pub fn persist_private(path: std::path::PathBuf, bytes: Vec<u8>) {
             log::warn!("could not write {}: {error}", path.display());
         }
     });
+}
+
+#[cfg(test)]
+mod role_policy_tests {
+    use super::{RolePolicy, Route};
+
+    #[test]
+    fn stock_is_routed_away_from_financial_views() {
+        let stock = RolePolicy::from_role(Some("stock"));
+        assert_eq!(stock.initial_route(), Route::Products);
+        assert!(stock.allows_route(Route::Products));
+        assert!(stock.can_manage_stock());
+        assert!(!stock.show_prices());
+        assert!(!stock.can_edit_prices());
+        for route in [
+            Route::Dashboard,
+            Route::Sales,
+            Route::Expenses,
+            Route::Clients,
+            Route::Vendors,
+            Route::DeliveryNotes,
+            Route::Catalog,
+            Route::Notifications,
+        ] {
+            assert!(!stock.allows_route(route));
+        }
+    }
+
+    #[test]
+    fn office_and_regular_roles_do_not_gain_extra_actions() {
+        for role in ["owner", "admin", "secretaire"] {
+            let policy = RolePolicy::from_role(Some(role));
+            assert!(policy.allows_route(Route::Sales));
+            assert!(policy.can_edit_prices());
+        }
+        let user = RolePolicy::from_role(Some("user"));
+        assert!(user.allows_route(Route::Products));
+        assert!(user.allows_route(Route::Dashboard));
+        assert!(!user.allows_route(Route::Sales));
+        assert!(!user.can_manage_stock());
+        assert!(!RolePolicy::from_role(None).allows_route(Route::Products));
+    }
 }

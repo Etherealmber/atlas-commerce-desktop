@@ -60,6 +60,24 @@ pub enum PaletteTarget {
     SignOut,
 }
 
+/// Filter presentation and execution with the same policy. The backend is
+/// still responsible for enforcing permissions on every request.
+pub(crate) fn target_allowed(policy: crate::state::RolePolicy, target: PaletteTarget) -> bool {
+    match target {
+        PaletteTarget::Route(route) => policy.allows_route(route),
+        PaletteTarget::NewProduct => policy.can_edit_prices(),
+        PaletteTarget::NewClient => policy.allows_route(Route::Clients),
+        PaletteTarget::NewVendor => policy.allows_route(Route::Vendors),
+        PaletteTarget::NewExpense => policy.allows_route(Route::Expenses),
+        PaletteTarget::NewDelivery => policy.allows_route(Route::DeliveryNotes),
+        PaletteTarget::Refresh
+        | PaletteTarget::FocusSearch
+        | PaletteTarget::SettingsProfile
+        | PaletteTarget::SettingsGeneral
+        | PaletteTarget::SignOut => true,
+    }
+}
+
 /// One row of the palette: an action, its French label and an optional
 /// right-aligned key hint ("Ctrl+R").
 #[derive(Clone, Debug)]
@@ -69,14 +87,20 @@ pub struct PaletteEntry {
     pub hint: Option<&'static str>,
 }
 
-/// The nine rail sections in display order — exactly what Ctrl+1…9 reaches.
-/// Notifications and Réglages live in the title bar, not the rail.
+/// The visible rail sections in display order for Ctrl+1…9.
 #[must_use]
 pub fn rail_route_at(index: usize) -> Option<Route> {
-    Route::ALL
-        .into_iter()
-        .filter(|route| !matches!(route, Route::Notifications | Route::Settings))
-        .nth(index)
+    [
+        Route::Dashboard,
+        Route::Products,
+        Route::Clients,
+        Route::Sales,
+        Route::Vendors,
+        Route::Expenses,
+        Route::DeliveryNotes,
+    ]
+    .get(index)
+    .copied()
 }
 
 /// Builds the full entry list for a locale. Routes first (rail order, then
@@ -84,10 +108,11 @@ pub fn rail_route_at(index: usize) -> Option<Route> {
 #[must_use]
 pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
     let mut list = Vec::with_capacity(24);
-    for (index, route) in Route::ALL.into_iter().enumerate() {
+    for route in Route::ALL {
         let (_, label) = route_meta(locale, route);
-        let hint = rail_route_at(index).and_then(|rail| {
-            (rail == route).then_some(match index {
+        let hint = (0..7)
+            .find(|index| rail_route_at(*index) == Some(route))
+            .map(|index| match index {
                 0 => "Ctrl+1",
                 1 => "Ctrl+2",
                 2 => "Ctrl+3",
@@ -97,8 +122,7 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
                 6 => "Ctrl+7",
                 7 => "Ctrl+8",
                 _ => "Ctrl+9",
-            })
-        });
+            });
         list.push(PaletteEntry {
             target: PaletteTarget::Route(route),
             label,
@@ -383,7 +407,8 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
     ui.painter()
         .rect_filled(screen, 0.0, Color32::from_black_alpha(140));
 
-    let entries = entries(app.locale);
+    let mut entries = entries(app.locale);
+    entries.retain(|entry| target_allowed(app.role_policy(), entry.target));
     let matches = filter_entries(&app.palette_query, &entries);
     if app.palette_selected >= matches.len() {
         app.palette_selected = matches.len().saturating_sub(1);
@@ -531,12 +556,14 @@ mod tests {
     use crate::i18n::Locale;
 
     #[test]
-    fn rail_has_exactly_nine_keyboard_sections() {
+    fn rail_shortcuts_follow_visible_sections() {
         let routes: Vec<Route> = (0..9).flat_map(rail_route_at).collect();
-        assert_eq!(routes.len(), 9);
+        assert_eq!(routes.len(), 7);
         // The title-bar sections are not in the rail's digit range.
         assert!(!routes.contains(&Route::Notifications));
         assert!(!routes.contains(&Route::Settings));
+        assert!(!routes.contains(&Route::Agent));
+        assert!(!routes.contains(&Route::Catalog));
         assert_eq!(rail_route_at(0), Some(Route::Dashboard));
         assert_eq!(rail_route_at(9), None);
     }

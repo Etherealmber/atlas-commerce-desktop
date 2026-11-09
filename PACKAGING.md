@@ -10,7 +10,7 @@ shared tool is [native-packages](https://github.com/crmne/native-packages)
 | Path | Purpose |
 |---|---|
 | `packaging/applications/atlas-commerce-desktop.desktop` | Freedesktop entry, registers the `atlascommerce://` MIME type and `StartupWMClass`. |
-| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon: the white sunburst on the near-black rounded tile. |
+| `packaging/icons/atlas-commerce-desktop.svg` | hicolor scalable icon: a dark sunburst on a transparent background. |
 | `packaging/icons` + `packaging/macos/icon-1024.png` | Sources for the Windows `.ico` and the macOS `.icns`. |
 | `crates/ui/assets/branding/*.mask` | In-app sunburst and wordmark coverage masks, tinted with the active theme. |
 | `packaging/branding/atlas-wordmark-{light,dark}.png` | Documentation wordmarks for the light and dark README themes. |

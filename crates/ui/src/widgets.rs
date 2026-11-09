@@ -149,11 +149,9 @@ pub fn card(palette: &Palette) -> egui::Frame {
         .inner_margin(egui::Margin::same(16))
 }
 
-/// A card that floats above the chrome (menus, popovers): same surface as
-/// [`card`] but carrying the shared elevation token (invisible in dark
-/// mode, where the web shadow rule is `--ac-shadow: none`).
+/// A floating menu card with a crisp border rather than a blurred halo.
 pub fn pop_card(palette: &Palette) -> egui::Frame {
-    card(palette).shadow(crate::theme::elevation_shadow(palette))
+    card(palette)
 }
 
 /// A banner showing a verbatim worker error (or a local message).
@@ -261,7 +259,6 @@ pub fn dialog_frame(palette: &Palette) -> egui::Frame {
         .fill(palette.overlay)
         .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(crate::theme::RADIUS_LARGE as f32)
-        .shadow(crate::theme::elevation_shadow(palette))
         .inner_margin(egui::Margin::same(22))
 }
 
@@ -495,7 +492,7 @@ fn paint_circle_photo(
     painter.circle_stroke(center, radius, egui::Stroke::new(1.0, ring));
 }
 
-/// An Android-style switch with an animated knob. Returns the click response;
+/// A high-contrast switch. Returns the click response;
 /// the caller owns the bool.
 pub fn switch(
     ui: &mut egui::Ui,
@@ -516,12 +513,8 @@ pub fn switch(
     }
     let track_rect =
         egui::Rect::from_center_size(rect.center(), egui::vec2(TRACK_WIDTH, TRACK_HEIGHT));
-    let t = ui.ctx().animate_bool_with_time_and_easing(
-        response.id,
-        *value,
-        crate::motion::duration(crate::motion::FAST, reduced_motion),
-        crate::motion::standard,
-    );
+    let _ = reduced_motion;
+    let t = if *value { 1.0 } else { 0.0 };
     let track_off = palette.surface_active;
     let track = track_off.lerp_to_gamma(palette.accent, t);
     ui.painter()
@@ -529,8 +522,15 @@ pub fn switch(
     let knob_radius = TRACK_HEIGHT / 2.0 - 3.0;
     let x = track_rect.left() + knob_radius + 3.0 + t * (TRACK_WIDTH - 2.0 * (knob_radius + 3.0));
     let knob_center = egui::pos2(x, track_rect.center().y);
-    ui.painter()
-        .circle_filled(knob_center, knob_radius, egui::Color32::WHITE);
+    ui.painter().circle_filled(
+        knob_center,
+        knob_radius,
+        if *value {
+            palette.on_accent
+        } else {
+            palette.text
+        },
+    );
     response
 }
 
@@ -577,7 +577,7 @@ pub fn setting_row<R>(
     inner.inner
 }
 
-/// A title/description row with an animated switch on the right. Returns
+/// A title/description row with a switch on the right. Returns
 /// whether the value changed this frame.
 pub fn switch_row(
     ui: &mut egui::Ui,
@@ -691,9 +691,12 @@ pub fn fab(
                 egui::Rect::from_center_size(center, egui::Vec2::splat(26.0)),
                 |ui| icon(ui, which, palette.on_accent, 24.0),
             );
-            response.on_hover_text(tooltip)
+            // Register the hit target after the icon child: the child must
+            // not swallow clicks in the centre of the floating button.
+            ui.interact(rect, id.with("click"), Sense::click())
+                .on_hover_text(tooltip)
         })
-        .response
+        .inner
 }
 
 #[cfg(test)]

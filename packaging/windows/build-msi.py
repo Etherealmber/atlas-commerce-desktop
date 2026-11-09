@@ -109,13 +109,13 @@ def wxs(payload: Path, version: str) -> str:
     # folder while the helper relaunched the untouched old executable —
     # the app closed and reopened on the same version ("flicker").
     return f"""<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="Atlas Commerce Desktop"
+  <Package Name="Atlas Commerce"
            Manufacturer="Etherealmber"
            Version="{version}"
            UpgradeCode="{UPGRADE_CODE}"
            Scope="perUser"
            Compressed="yes">
-    <MajorUpgrade DowngradeErrorMessage="Une version plus récente d'Atlas Commerce Desktop est déjà installée." />
+    <MajorUpgrade DowngradeErrorMessage="Une version plus récente d'Atlas Commerce est déjà installée." />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="LocalAppDataFolder">
@@ -130,7 +130,7 @@ def wxs(payload: Path, version: str) -> str:
 
     <ComponentGroup Id="Shortcuts" Directory="ProgramMenuDir">
       <Component Id="StartMenuShortcut" Guid="{stable_guid('start-menu')}">
-        <Shortcut Id="StartMenuShortcut" Name="Atlas Commerce Desktop"
+        <Shortcut Id="StartMenuShortcut" Name="Atlas Commerce"
                   Target="[INSTALLFOLDER]atlas-commerce-desktop.exe"
                   WorkingDirectory="INSTALLFOLDER" Advertise="no" />
         <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop"
@@ -154,7 +154,7 @@ def wxs(payload: Path, version: str) -> str:
                        Name="AtlasCommerceDesktop" Type="string"
                        Value="Software\\Etherealmber\\AtlasCommerceDesktop\\Capabilities" KeyPath="yes" />
         <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop\\Capabilities"
-                       Name="ApplicationName" Type="string" Value="Atlas Commerce Desktop" />
+                       Name="ApplicationName" Type="string" Value="Atlas Commerce" />
         <RegistryValue Root="HKMU" Key="Software\\Etherealmber\\AtlasCommerceDesktop\\Capabilities"
                        Name="ApplicationDescription" Type="string"
                        Value="Client natif pour la plateforme Atlas Commerce" />
@@ -163,7 +163,7 @@ def wxs(payload: Path, version: str) -> str:
       </Component>
     </ComponentGroup>
 
-    <Feature Id="Main" Title="Atlas Commerce Desktop" Level="1">
+    <Feature Id="Main" Title="Atlas Commerce" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentGroupRef Id="Shortcuts" />
       <ComponentGroupRef Id="Protocol" />

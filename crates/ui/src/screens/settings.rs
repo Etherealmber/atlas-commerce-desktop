@@ -138,10 +138,7 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             // Preview the saved picture only: fetching every intermediate
             // URL while typing would spam the HTTP loader (and arbitrary
             // hosts). The new URL appears here once the profile is saved.
-            let avatar_url = app
-                .session
-                .as_ref()
-                .map(|session| session.avatar_url.as_str());
+            let avatar_url = app.avatar_texture_uri.as_deref();
             avatar(
                 ui,
                 avatar_url,
@@ -1052,6 +1049,22 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .size(13.0),
                 );
             });
+        }
+        if app.update.last_manifest.is_none()
+            && let Some(manifest) = &app.update.release_notes
+            && !manifest.notes.trim().is_empty()
+        {
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new(format!(
+                    "{} · v{}",
+                    t!(app.locale, "Release notes"),
+                    manifest.version
+                ))
+                .color(palette.text)
+                .strong(),
+            );
+            crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
         }
         if let Some(error) = app.update.error.clone() {
             ui.add_space(8.0);

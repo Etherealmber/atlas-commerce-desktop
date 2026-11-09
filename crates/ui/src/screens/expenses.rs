@@ -111,6 +111,19 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Supplier bills"), palette) {
+            app.bills_open = !app.bills_open;
+            if app.bills_open && app.bills.data.is_none() && !app.bills.loading {
+                app.load_bills();
+            }
+        }
+    });
+    if app.bills_open {
+        ui.add_space(10.0);
+        draw_bills(app, ui, palette);
+        ui.add_space(12.0);
+    }
     draw_totals(app, ui, palette);
     ui.add_space(12.0);
 
@@ -250,6 +263,76 @@ fn expense_row(
             });
         },
     );
+}
+
+/// Read-only supplier bills from the worker. Creating, paying, cancelling,
+/// and reconciling bills remain separate workflows and are not inferred.
+fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Supplier bills"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_bills();
+            }
+        });
+        if app.bills.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.bills.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(bills) = &app.bills.data else {
+            return;
+        };
+        if bills.is_empty() {
+            ui.label(RichText::new(t!(app.locale, "No supplier bills.")).color(palette.secondary));
+            return;
+        }
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD");
+        for bill in bills {
+            ui.separator();
+            ui.label(
+                RichText::new(
+                    bill.number
+                        .clone()
+                        .unwrap_or_else(|| format!("#{}", bill.id)),
+                )
+                .color(palette.text)
+                .strong(),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} · {} · {}",
+                    bill.vendor_name.as_deref().unwrap_or("—"),
+                    bill.issue_date.as_deref().unwrap_or("—"),
+                    bill.status.as_deref().unwrap_or("—")
+                ))
+                .color(palette.secondary),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} : {} · {} : {}",
+                    t!(app.locale, "Total"),
+                    money(bill.total, currency),
+                    t!(app.locale, "Paid"),
+                    money(bill.amount_paid.unwrap_or(0.0), currency)
+                ))
+                .color(palette.text),
+            );
+        }
+    });
 }
 
 fn draw_totals(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {

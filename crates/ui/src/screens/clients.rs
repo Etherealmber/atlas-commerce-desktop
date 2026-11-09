@@ -133,20 +133,28 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
-    ui.horizontal_top(|ui| {
-        card(palette).show(ui, |ui| {
-            ui.set_width((ui.available_width() * 0.55).max(300.0));
-            ui.vertical(|ui| {
-                client_list(app, ui, palette);
-            });
-        });
+    if ui.available_width() < 860.0 {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.vertical(|ui| {
+            client_list(app, ui, palette);
+        });
+        ui.add_space(12.0);
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            client_detail(app, ui, palette);
+        });
+    } else {
+        ui.horizontal_top(|ui| {
+            card(palette).show(ui, |ui| {
+                ui.set_width(ui.available_width() * 0.50);
+                client_list(app, ui, palette);
+            });
+            card(palette).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 client_detail(app, ui, palette);
             });
         });
-    });
+    }
 
     if app.client_editor.is_some() {
         draw_editor(app, ui, palette);
@@ -208,6 +216,10 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
         }
         if response.clicked() {
+            if app.selected_client != Some(client.id) {
+                app.client_invoice_id = None;
+                app.client_invoices = Default::default();
+            }
             app.selected_client = Some(client.id);
         }
         widgets::overlay_at(
@@ -287,28 +299,25 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .unwrap_or("MAD")
         .to_owned();
 
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(client.name.clone())
-                .color(palette.text)
-                .font(crate::fonts::semibold(17.0)),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if secondary_button(ui, t!(app.locale, "Edit"), palette) {
-                app.client_editor = Some(ClientEditor::for_client(client));
-            }
-            // Web parity: the printable situation report opens in the system
-            // browser through a short-lived report ticket (never the JWT).
-            if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
-                app.open_client_situation(client, true);
-            }
-            if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-                app.open_client_situation(client, false);
-            }
-            if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
-                app.open_client_invoices(client);
-            }
-        });
+    ui.label(
+        RichText::new(client.name.clone())
+            .color(palette.text)
+            .font(crate::fonts::semibold(17.0)),
+    );
+    ui.add_space(8.0);
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
+            app.open_client_invoices(client);
+        }
+        if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+            app.open_client_situation(client, false);
+        }
+        if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
+            app.open_client_situation(client, true);
+        }
+        if secondary_button(ui, t!(app.locale, "Edit"), palette) {
+            app.client_editor = Some(ClientEditor::for_client(client));
+        }
     });
     ui.add_space(10.0);
 
@@ -357,6 +366,66 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
+    if app.client_invoice_id == Some(client.id) {
+        ui.add_space(14.0);
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Invoices"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.open_client_invoices(client);
+            }
+            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) {
+                app.open_client_invoices_in_browser(client);
+            }
+        });
+        if app.client_invoices.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.client_invoices.error {
+            error_banner(ui, error, palette);
+        } else if let Some(invoices) = &app.client_invoices.data {
+            if invoices.is_empty() {
+                ui.label(
+                    RichText::new(t!(app.locale, "No invoice for this client."))
+                        .color(palette.secondary),
+                );
+            }
+            for invoice in invoices {
+                ui.separator();
+                ui.label(
+                    RichText::new(
+                        invoice
+                            .number
+                            .clone()
+                            .unwrap_or_else(|| format!("#{}", invoice.id)),
+                    )
+                    .color(palette.text)
+                    .strong(),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {}",
+                        invoice.issue_date.as_deref().unwrap_or("—"),
+                        invoice.status.as_deref().unwrap_or("—")
+                    ))
+                    .color(palette.secondary),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} : {} · {} : {}",
+                        t!(app.locale, "Total"),
+                        money(invoice.total, &currency),
+                        t!(app.locale, "Remaining"),
+                        money(invoice.remaining(), &currency)
+                    ))
+                    .color(palette.text),
+                );
+            }
+        }
+    }
 }
 
 fn blank(value: &str) -> &str {

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Atlas Commerce Desktop
+Name=Atlas Commerce
 GenericName=Stock Management
 Comment=Client natif pour la plateforme Atlas Commerce
 Exec=atlas-commerce-desktop %u

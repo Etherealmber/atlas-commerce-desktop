@@ -87,7 +87,6 @@ impl AtlasApp {
             self.save_accounts();
         }
         self.rebuild_client();
-        self.screen = Screen::Shell(Route::Dashboard);
         self.bootstrap_shell();
     }
 
@@ -99,11 +98,21 @@ impl AtlasApp {
     /// when a chrome surface needs it (bell badge, profile popover). The
     /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
-        self.load_dashboard();
+        self.load_profile();
+        self.load_avatar();
+        let route = self.role_policy().initial_route();
+        self.screen = Screen::Shell(route);
+        if route == Route::Dashboard {
+            self.load_dashboard();
+        } else {
+            self.ensure_route_data(route);
+        }
         // Native stock toasts need alert data even if the user never opens
         // the Notifications screen; only spend the request when the
         // persisted setting is enabled.
-        if self.settings.notifications_enabled {
+        if self.settings.notifications_enabled
+            && self.role_policy().allows_route(Route::Notifications)
+        {
             self.load_alerts();
         }
         if self.settings.update_check_on_start {
@@ -146,6 +155,19 @@ impl AtlasApp {
         };
         let job = self.runner.spawn(async move { client.vendors().await });
         self.vendors.start(job);
+    }
+
+    pub(crate) fn load_bills(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.bills.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_bills(&client).await }),
+        );
     }
 
     pub fn load_expenses(&mut self) {
@@ -213,6 +235,9 @@ impl AtlasApp {
     /// rate-limited by [`crate::state::NAV_BADGES_RETRY_BACKOFF`] so a
     /// persistently failing endpoint cannot trigger one request per frame.
     pub fn ensure_nav_badges(&mut self) {
+        if !self.role_policy().allows_route(Route::Notifications) {
+            return;
+        }
         let backoff_open = self
             .nav_badges_retry_at
             .is_none_or(|at| Instant::now() >= at);
@@ -236,6 +261,68 @@ impl AtlasApp {
     }
 
     // ── Profile / integrations ───────────────────────────────────────────
+
+    /// Loads the current account's picture from the documented same-server
+    /// proxy. No third-party avatar URL receives the bearer token.
+    fn load_avatar(&mut self) {
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Some(token) = client.token() else {
+            return;
+        };
+        let base = client.base_url().to_owned();
+        let fingerprint = client.fingerprint().to_owned();
+        self.avatar_job = Some(self.runner.spawn(async move {
+            let http = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(15))
+                .build()
+                .ok()?;
+            let mut response = http
+                .get(format!("{base}/api/me/avatar"))
+                .bearer_auth(token)
+                .header("X-Atlas-Client", "native")
+                .header("X-Device-Fingerprint", fingerprint)
+                .send()
+                .await
+                .ok()?
+                .error_for_status()
+                .ok()?;
+            let mime = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)?
+                .to_str()
+                .ok()?
+                .split(';')
+                .next()?
+                .trim();
+            let extension = match mime {
+                "image/png" => "png",
+                "image/jpeg" => "jpg",
+                "image/webp" => "webp",
+                "image/gif" => "gif",
+                "image/svg+xml" => "svg",
+                _ => return None,
+            };
+            let uri = format!("bytes://atlas-profile-avatar.{extension}");
+            const LIMIT: usize = 4 * 1024 * 1024;
+            if response
+                .content_length()
+                .is_some_and(|size| size > LIMIT as u64)
+            {
+                return None;
+            }
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.ok()? {
+                if bytes.len().saturating_add(chunk.len()) > LIMIT {
+                    return None;
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Some((uri, bytes))
+        }));
+    }
 
     pub fn load_profile(&mut self) {
         let Some(client) = self.client.clone() else {
@@ -295,10 +382,22 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
-    /// Open the web app's filtered invoice list for one client in the system
-    /// browser. The browser keeps its own web session (same route the web
-    /// client navigates to from its Clients table).
+    /// Load the server-filtered list into the native client detail panel.
     pub fn open_client_invoices(&mut self, client: &atlas_api::models::Client) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let id = client.id;
+        self.client_invoice_id = Some(id);
+        self.client_invoices = Default::default();
+        self.client_invoices.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch(&api, id).await }),
+        );
+    }
+
+    /// Optional system-browser link to the web client's filtered list.
+    pub fn open_client_invoices_in_browser(&mut self, client: &atlas_api::models::Client) {
         let Some(api) = self.client.clone() else {
             return;
         };
@@ -430,6 +529,7 @@ impl AtlasApp {
                         session.email = merged.email.clone().unwrap_or_default();
                     }
                     self.save_session();
+                    self.load_avatar();
                     self.notice(t!(self.locale, "Profile updated.").into_owned());
                 }
                 Err(error) => self.notice(error.message),
@@ -585,6 +685,7 @@ impl AtlasApp {
     }
 
     fn apply_manifest(&mut self, manifest: UpdateManifest) {
+        self.update.release_notes = Some(manifest.clone());
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
             UpdateDecision::UpToDate => {
@@ -621,7 +722,7 @@ impl AtlasApp {
                 }
                 TrayCommand::QuickStats => {
                     if self.session.is_some() {
-                        self.screen = Screen::Shell(Route::Dashboard);
+                        self.go(Route::Dashboard);
                         self.show_requested = true;
                     }
                 }
@@ -677,6 +778,18 @@ impl AtlasApp {
             ctx.forget_image(&uri);
         }
         screens::auth::poll_login_jobs(self);
+        if let Some(result) = self.avatar_job.as_ref().and_then(|job| job.poll()) {
+            self.avatar_job = None;
+            if let Some((uri, bytes)) = result {
+                if let Some(old) = self.avatar_texture_uri.take() {
+                    ctx.forget_image(&old);
+                }
+                ctx.forget_image(&uri);
+                ctx.include_bytes(uri.clone(), bytes);
+                self.avatar_texture_uri = Some(uri);
+                ctx.request_repaint();
+            }
+        }
 
         // Caches.
         if self.dashboard.poll() {
@@ -688,10 +801,16 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.client_invoices.poll() {
+            ctx.request_repaint();
+        }
         if self.vendors.poll() {
             ctx.request_repaint();
         }
         if self.expenses.poll() {
+            ctx.request_repaint();
+        }
+        if self.bills.poll() {
             ctx.request_repaint();
         }
         if self.delivery_notes.poll() {
@@ -921,15 +1040,19 @@ impl AtlasApp {
             || self.server_form.probe_job.is_some()
             || self.dashboard.loading
             || self.products.loading
+            || self.client_invoices.loading
+            || self.bills.loading
             || self.invoices.loading
             || self.alerts.loading
             || self.devices.loading
             || self.profile.loading
+            || self.avatar_job.is_some()
             || self.api_keys.loading
             || self.assist.loading
             || self.profile_save_job.is_some()
             || self.key_create_job.is_some()
             || self.agent.busy
+            || self.agent.job_policy.is_some()
             || self.update.checking
             || self.update.progress.is_some()
     }

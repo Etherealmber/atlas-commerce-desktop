@@ -26,7 +26,7 @@
   #error OutputDir must be defined on the ISCC command line
 #endif
 
-#define AppName "Atlas Commerce Desktop"
+#define AppName "Atlas Commerce"
 #define AppExeName "atlas-commerce-desktop.exe"
 #define AppIdentity "AtlasCommerceDesktop"
 
@@ -35,13 +35,13 @@
 AppId={{E74305A7-4960-45B6-93C9-CEA8D83B1517}
 AppName={#AppName}
 AppVersion={#Version}
-AppVerName={#AppName} {#Version}
+AppVerName={#AppName}
 AppPublisher=Etherealmber
 AppCopyright=© 2026 loxdpsy/Etherealmber
 AppPublisherURL=https://github.com/Etherealmber/atlas-commerce-desktop
 AppSupportURL=https://github.com/Etherealmber/atlas-commerce-desktop/issues
 AppUpdatesURL=https://github.com/Etherealmber/atlas-commerce-desktop/releases
-DefaultDirName={localappdata}\Programs\{#AppName}
+DefaultDirName={localappdata}\Programs\Atlas Commerce Desktop
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -88,6 +88,12 @@ Source: "{#BinaryArm64}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Check: Is
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "atlas-commerce-desktop-installer.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+; Remove the old product-named shortcuts when this same Inno AppId is
+; upgraded. The stable AppId and install directory remain unchanged.
+[InstallDelete]
+Type: files; Name: "{autoprograms}\Atlas Commerce Desktop.lnk"
+Type: files; Name: "{autodesktop}\Atlas Commerce Desktop.lnk"; Tasks: desktopicon
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
@@ -160,10 +166,10 @@ begin
     end;
     if UninstallSilent then
       Exit;
-    case SuppressibleTaskDialogMsgBox('Atlas Commerce Desktop ne peut pas encore être supprimé.',
-      'Son fichier programme est utilisé ou inaccessible. Quittez Atlas Commerce Desktop et réessayez, ou fermez-le ici pour continuer.' + #13#10#13#10 +
-      'Fermer Atlas Commerce Desktop termine le processus immédiatement.',
-      mbError, MB_YESNOCANCEL, ['Réessayer', 'Fermer Atlas Commerce Desktop'], 0, IDCANCEL) of
+    case SuppressibleTaskDialogMsgBox('Atlas Commerce ne peut pas encore être supprimé.',
+      'Son fichier programme est utilisé ou inaccessible. Quittez Atlas Commerce et réessayez, ou fermez-le ici pour continuer.' + #13#10#13#10 +
+      'Fermer Atlas Commerce termine le processus immédiatement.',
+      mbError, MB_YESNOCANCEL, ['Réessayer', 'Fermer Atlas Commerce'], 0, IDCANCEL) of
       IDYES: ;
       IDNO: begin
         CloseInstalledApp;

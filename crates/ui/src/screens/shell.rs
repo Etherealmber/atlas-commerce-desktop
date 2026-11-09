@@ -102,6 +102,34 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             draw_rail(app, ui, palette, rail_collapsed);
         });
 
+    if app.agent_drawer_open {
+        egui::Panel::right(egui::Id::new("agent-drawer"))
+            .exact_size(
+                (viewport_width * 0.42)
+                    .clamp(280.0, 440.0)
+                    .min((viewport_width - rail_width - 32.0).max(1.0)),
+            )
+            .resizable(false)
+            .frame(
+                egui::Frame::NONE
+                    .fill(palette.panel)
+                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                    .inner_margin(egui::Margin::same(12)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                        app.agent_drawer_open = false;
+                    }
+                });
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        super::agent::draw(app, ui, palette);
+                    });
+            });
+    }
+
     egui::CentralPanel::no_frame()
         .frame(
             egui::Frame::NONE
@@ -115,10 +143,7 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Global agent entry point, mirroring the web's floating Atlas Agent:
     // one FAB on every shell screen except the agent itself (which carries
     // its own new-conversation FAB). Hidden behind modal overlays.
-    if let Screen::Shell(route) = app.screen
-        && !matches!(route, Route::Agent)
-        && !app.modal_open()
-    {
+    if !app.agent_drawer_open && !app.modal_open() && !app.palette_open && !app.profile_menu_open {
         let fab = widgets::fab(
             ctx,
             palette,
@@ -128,7 +153,7 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             app.settings.reduced_motion,
         );
         if fab.clicked() {
-            app.go(Route::Agent);
+            app.agent_drawer_open = true;
         }
     }
 
@@ -158,7 +183,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
     // Keep an identifiable workspace at the start of the otherwise empty
     // caption row; reserve its space before laying out search and controls.
-    let brand_width = if rect.width() >= 950.0 { 190.0 } else { 0.0 };
+    let brand_width = if rect.width() >= 950.0 { 190.0 } else { 40.0 };
     if brand_width > 0.0 {
         let brand = egui::Rect::from_min_size(
             egui::pos2(rect.left() + left_inset, rect.top()),
@@ -167,12 +192,14 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
         widgets::overlay_at(ui, brand, |ui| {
             ui.horizontal_centered(|ui| {
                 crate::branding::mark(ui, palette, 26.0);
-                ui.add_space(8.0);
-                ui.label(
-                    RichText::new("Atlas Commerce")
-                        .color(palette.text)
-                        .font(crate::fonts::semibold(14.0)),
-                );
+                if brand_width > 40.0 {
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new("Atlas Commerce")
+                            .color(palette.text)
+                            .font(crate::fonts::semibold(14.0)),
+                    );
+                }
             });
         });
     }
@@ -201,10 +228,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 .unwrap_or('A')
                 .to_uppercase()
                 .collect::<String>();
-            let avatar_url = app
-                .session
-                .as_ref()
-                .map(|session| session.avatar_url.as_str());
+            let avatar_url = app.avatar_texture_uri.as_deref();
             // Fallback disk uses the primary accent so the initials stay
             // readable in both themes: paper-white disk with near-black ink
             // in dark mode, the inverse in light mode. The account menu the
@@ -224,15 +248,17 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 app.profile_menu_open = !app.profile_menu_open;
             }
 
-            let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
-            let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
-                badges.products_low + badges.invoices_unpaid + badges.vr_open
-            });
-            if alert_count > 0 {
-                paint_titlebar_badge(ui, &bell, palette, alert_count);
-            }
-            if bell.clicked() {
-                app.go(Route::Notifications);
+            if app.role_policy().allows_route(Route::Notifications) {
+                let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
+                    badges.products_low + badges.invoices_unpaid + badges.vr_open
+                });
+                if alert_count > 0 {
+                    paint_titlebar_badge(ui, &bell, palette, alert_count);
+                }
+                if bell.clicked() {
+                    app.go(Route::Notifications);
+                }
             }
 
             // While a release is downloading, surface a live progress pill
@@ -246,32 +272,8 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             // The pill takes the room left by the action cluster and the
             // navigation arrows, clamped to a readable range.
-            let search_width =
-                (ui.available_width() - 2.0 * crate::theme::TARGET_MIN_HEIGHT - 18.0)
-                    .clamp(120.0, 420.0);
+            let search_width = ui.available_width().clamp(80.0, 420.0);
             draw_search_pill(app, ui, palette, search_width);
-
-            ui.add_space(8.0);
-            // The bundled Lucide set ships chevrons but no arrow-right, so the
-            // navigation pair uses the matching chevron set.
-            let forward = widgets::icon_circle_button(
-                ui,
-                palette,
-                Icon::ChevronRight,
-                !app.nav_forward.is_empty(),
-            );
-            if forward.clicked() {
-                app.go_forward();
-            }
-            let back = widgets::icon_circle_button(
-                ui,
-                palette,
-                Icon::ChevronLeft,
-                !app.nav_back.is_empty(),
-            );
-            if back.clicked() {
-                app.go_back();
-            }
         });
     });
 
@@ -314,8 +316,20 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     }
 }
 
-/// The global search pill: Enter jumps to the products page with the query
-/// applied, reusing its server-side search.
+/// Recognize page shortcuts; other text remains a product search.
+fn search_destination(query: &str) -> Option<Route> {
+    match crate::shortcuts::normalize(query.trim()).as_str() {
+        "facture" | "factures" | "invoice" | "invoices" | "ventes" | "sales" => Some(Route::Sales),
+        "situation" | "client" | "clients" => Some(Route::Clients),
+        "produit" | "produits" | "products" => Some(Route::Products),
+        "depense" | "depenses" | "expenses" => Some(Route::Expenses),
+        "parametres" | "reglages" | "settings" => Some(Route::Settings),
+        "agent" => Some(Route::Agent),
+        _ => None,
+    }
+}
+
+/// Search offers page shortcuts and falls back to product search.
 fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, width: f32) {
     egui::Frame::NONE
         .fill(palette.surface)
@@ -334,7 +348,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         egui::TextEdit::singleline(&mut app.top_search)
                             .id(egui::Id::new("titlebar-search"))
                             .frame(egui::Frame::NONE)
-                            .hint_text(t!(app.locale, "Search a product…"))
+                            .hint_text(t!(app.locale, "Search pages or products…"))
                             .desired_width(width - 42.0)
                             .clip_text(true),
                     );
@@ -342,9 +356,13 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         && ui.input(|input| input.key_pressed(egui::Key::Enter));
                     if enter && !app.top_search.trim().is_empty() {
                         let query = app.top_search.trim().to_owned();
-                        app.product_search = query;
-                        app.go(Route::Products);
-                        app.load_products();
+                        if let Some(route) = search_destination(&query) {
+                            app.go(route);
+                        } else {
+                            app.product_search = query;
+                            app.go(Route::Products);
+                            app.load_products();
+                        }
                     }
                 },
             );
@@ -466,7 +484,7 @@ fn draw_profile_menu(
                             .to_string();
                             widgets::avatar(
                                 ui,
-                                Some(session.avatar_url.as_str()),
+                                app.avatar_texture_uri.as_deref(),
                                 &initial,
                                 34.0,
                                 palette.accent,
@@ -518,9 +536,8 @@ fn draw_profile_menu(
                         app.server_form.verified_selected = None;
                         app.screen = Screen::ServerSetup;
                     }
-                    // Web parity (profile dropdown): release notes open on
-                    // GitHub in the browser, About jumps to the settings
-                    // section that carries version and repository links.
+                    // Release notes are shown in the application; a browser
+                    // link remains available in the settings section.
                     let whats_new = menu_row(
                         ui,
                         palette,
@@ -530,8 +547,10 @@ fn draw_profile_menu(
                     .clicked();
                     if whats_new {
                         app.profile_menu_open = false;
-                        if let Err(error) = open::that(crate::screens::settings::RELEASES_URL) {
-                            log::warn!("could not open releases: {error}");
+                        app.settings_focus = crate::state::SettingsFocus::About;
+                        app.go(Route::Settings);
+                        if app.update.release_notes.is_none() && !app.update.checking {
+                            app.check_for_updates(false);
                         }
                     }
                     let about =
@@ -623,25 +642,11 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         Screen::Shell(route) => Some(route),
         _ => None,
     };
-    // The Panel owns the fixed width and frame; contents just fill it.
-    // Brand lockup on top: the full sunburst + “Atlas” artwork while the
-    // rail is expanded, the square symbol alone when it collapses to 72 px.
-    if collapsed {
-        ui.vertical_centered(|ui| {
-            crate::branding::mark(ui, palette, 30.0);
-        });
-        ui.add_space(12.0);
-    } else {
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            ui.add_space(6.0);
-            crate::branding::lockup(ui, palette, 22.0);
-        });
-        ui.add_space(16.0);
-    }
+    // The title bar already carries the brand; avoid a duplicate logo.
+    ui.add_space(8.0);
     // Only destinations implemented by the native client are listed; no
     // placeholder routes or unverified worker endpoints are introduced.
-    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 7] = [
+    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 6] = [
         (t!(app.locale, "Overview"), &[Route::Dashboard]),
         (t!(app.locale, "Catalog"), &[Route::Products]),
         (t!(app.locale, "Customer relations"), &[Route::Clients]),
@@ -651,10 +656,15 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
             t!(app.locale, "Finance"),
             &[Route::Expenses, Route::DeliveryNotes],
         ),
-        (t!(app.locale, "Assistant"), &[Route::Agent]),
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (heading, routes) in groups {
+            if !routes
+                .iter()
+                .any(|route| app.role_policy().allows_route(*route))
+            {
+                continue;
+            }
             if !collapsed {
                 ui.add_space(8.0);
                 ui.label(
@@ -664,6 +674,9 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                 );
             }
             for &route in routes {
+                if !app.role_policy().allows_route(route) {
+                    continue;
+                }
                 let (which, label) = route_meta(app.locale, route);
                 let response =
                     rail_row(ui, palette, which, &label, active == Some(route), collapsed);
@@ -922,5 +935,18 @@ fn run_confirm_action(app: &mut AtlasApp, action: ConfirmAction) {
             app.notice(t!(app.locale, "Device revoked.").into_owned());
         }
         ConfirmAction::RevokeApiKey(id) => app.revoke_api_key(id),
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::{Route, search_destination};
+
+    #[test]
+    fn recognizes_navigation_but_leaves_product_queries_intact() {
+        assert_eq!(search_destination(" Factures "), Some(Route::Sales));
+        assert_eq!(search_destination("Réglages"), Some(Route::Settings));
+        assert_eq!(search_destination("Situation"), Some(Route::Clients));
+        assert_eq!(search_destination("café 1kg"), None);
     }
 }

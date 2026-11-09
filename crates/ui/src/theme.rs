@@ -286,13 +286,11 @@ fn apply_to_style(style: &mut Style, palette: &Palette, reduced_motion: bool) {
     };
     visuals.selection.stroke = Stroke::NONE;
     visuals.window_stroke = Stroke::new(1.0, palette.outline);
-    // One elevation token across windows, popups and menus: the web's
-    // `0 1px 2px rgba(15,23,42,0.04)`, invisible in dark mode where
-    // `--ac-shadow: none`.
+    // Crisp outlined windows and popups: no blurred halo in either theme.
     visuals.window_corner_radius = CornerRadius::same(RADIUS_LARGE);
     visuals.menu_corner_radius = CornerRadius::same(RADIUS_CONTROL);
-    visuals.window_shadow = elevation_shadow(palette);
-    visuals.popup_shadow = elevation_shadow(palette);
+    visuals.window_shadow = egui::Shadow::NONE;
+    visuals.popup_shadow = egui::Shadow::NONE;
     visuals.striped = false;
     // A 2 px accent caret reads better than the default 1 px muted bar.
     visuals.text_cursor.stroke = Stroke::new(2.0, palette.accent);
@@ -326,7 +324,7 @@ fn apply_to_style(style: &mut Style, palette: &Palette, reduced_motion: bool) {
     visuals.widgets.open.bg_fill = palette.surface_hover;
     visuals.widgets.open.fg_stroke = Stroke::new(1.0, palette.text);
     // Open popups (combo boxes) must not paint a second box outline around
-    // their trigger; the popup shadow already separates them.
+    // their trigger; the popup border separates them.
     visuals.widgets.open.bg_stroke = Stroke::NONE;
 
     // No egui hover "grow": expansion makes every button and row look like

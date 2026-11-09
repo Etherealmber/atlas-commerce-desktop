@@ -5,6 +5,37 @@
 contrat d'API, et `src/pages/` pour les écrans. Le client desktop ne consomme
 que ces endpoints — aucun contrat n'est deviné.
 
+## Audit fonctionnel web de référence
+
+L'audit fourni par l'utilisateur porte sur le web au commit
+`cf951397553dc8749f15c96b33abf02d4a360e35` (analyse statique, sans captures
+ni test natif). Il complète l'inventaire d'endpoints ci-dessous ; ses
+recommandations P0–P2 ne sont pas des comportements observés du web.
+
+- Une vente rapide créée n'est pas nécessairement encaissée : le desktop
+  l'indique et vérifie chaque ligne avant l'envoi. L'encaissement séparé n'est
+  pas encore implémenté dans l'écran natif.
+- Le web déclenche le bon de livraison depuis une facture. Le desktop garde
+  son écran et son créateur de BL autonome existants : ce n'est pas une parité
+  du parcours facture → BL.
+- Les dépenses sont une section de « Solde & mouvements » sur le web ; le
+  desktop conserve actuellement son écran distinct. Notifications restent une
+  page native ; l'agent s'ouvre désormais dans un panneau latéral droit.
+- Les rôles web `owner`, `admin` et `secretaire` ont accès aux tâches bureau ;
+  `stock` est orienté produits/scan et ne voit pas les montants. Le desktop
+  masque les vues financières et les prix aux magasiniers, y compris dans la
+  palette et les raccourcis. Par prudence, les formulaires de création produit
+  natifs contenant des prix leur sont masqués ; l'ajustement du stock reste
+  disponible. Les contrôles d'interface ne remplacent jamais les permissions
+  côté serveur ; des tests sur serveur réel restent nécessaires.
+- Les réglages desktop restent des cartes, pas les 13 onglets web. L'audit
+  recommande une gestion cohérente des dialogues (focus, superposition,
+  brouillons et opérations en cours), mais ces garanties ne sont pas encore
+  généralisées à tous les formulaires natifs.
+
+Les chiffres de couverture ci-dessous reflètent l'inventaire à sa date de
+rédaction, pas une nouvelle mesure effectuée lors de cet audit.
+
 ## Couverture actuelle
 
 - **328 endpoints** uniques côté worker (méthode + chemin, identifiants
@@ -83,8 +114,8 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Quotes` | Non (devis) |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Non (reçus) |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` ouvre la page web filtrée par identifiant client (session navigateur), et `Situation` (synthèse / détail complet) ouvre le rapport imprimable via ticket `link-ticket` ; manque prix par client, imports et suppressions OTP |
-| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; les factures fournisseurs (`Bills`) restent à couvrir |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche une liste filtrée par identifiant dans l'application avec option navigateur. `Situation` ouvre encore le rapport imprimable via ticket `link-ticket` ; manque détail de facture, prix par client, imports et suppressions OTP |
+| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; liste des factures fournisseurs en lecture seule dans Dépenses. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Non (RH et pointage) |
 | `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
@@ -95,7 +126,7 @@ que ces endpoints — aucun contrat n'est deviné.
 | `Actions` | Non (file d'actions mobile) |
 | `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
 | `AccessPage` | Non (administration des utilisateurs) |
-| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version GitHub au navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
+| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version dans les réglages, option navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
 
 ## Exclusions proposées (non transposables au desktop)
 

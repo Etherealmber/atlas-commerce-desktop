@@ -112,8 +112,14 @@ fn config_for(locale: Locale) -> Config {
 #[must_use]
 pub fn window_icon() -> egui::IconData {
     const SIZE: usize = 256;
+    let mut rgba = draw_icon(SIZE);
+    // The tray icon is recoloured by the OS; the window icon is not.
+    // Use the dark brand ink with the same transparent coverage mask.
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        pixel[..3].fill(10);
+    }
     egui::IconData {
-        rgba: draw_icon(SIZE),
+        rgba,
         width: SIZE as u32,
         height: SIZE as u32,
     }
@@ -164,6 +170,14 @@ pub fn draw_icon(size: usize) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn window_icon_is_a_transparent_dark_mark() {
+        let icon = super::window_icon();
+        let pixels = icon.rgba.as_chunks::<4>().0;
+        assert_eq!(pixels[0][3], 0);
+        assert!(pixels.iter().any(|pixel| pixel[3] > 200 && pixel[0] == 10));
+    }
+
     #[test]
     fn draw_icon_keeps_the_tile_silhouette_only() {
         let size = 64_usize;
