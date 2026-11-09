@@ -459,7 +459,7 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                         }
                         ui.separator();
                         for (index, value) in row.cells.iter().enumerate() {
-                            let label = headings.and_then(|h| h.get(index)).map_or_else(
+                            let label = headings.filter(|h| h.len() == row.cells.len()).and_then(|h| h.get(index)).map_or_else(
                                 || value.clone(),
                                 |name| format!("{name} : {value}"),
                             );
