@@ -360,7 +360,7 @@ jobs:
             echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
             # Include a compact base64 copy for API-only environments where
             # artifact storage is blocked and Docker emits carriage returns.
-            echo "::error title=OSV-log-base64::$(base64 -w0 "$LOG_DIR/osv.log" | head -c 20000)"
+            echo "::error title=OSV-log-base64::$(tail -c 2200 "$LOG_DIR/osv.log" | base64 -w0)"
             # Surface the scanner's advisory lines when artifact storage is
             # unreachable. This contains package metadata, not application data.
             sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' "$LOG_DIR/osv.log" | head -100 | while IFS= read -r line || [ -n "$line" ]; do
