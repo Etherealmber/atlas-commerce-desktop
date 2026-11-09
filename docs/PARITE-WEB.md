@@ -19,8 +19,8 @@ recommandations P0–P2 ne sont pas des comportements observés du web.
   son écran et son créateur de BL autonome existants : ce n'est pas une parité
   du parcours facture → BL.
 - Les dépenses sont une section de « Solde & mouvements » sur le web ; le
-  desktop conserve actuellement son écran distinct. Notifications et agent
-  restent également des pages natives, pas encore un popover et un tiroir.
+  desktop conserve actuellement son écran distinct. Notifications restent une
+  page native ; l'agent s'ouvre désormais dans un panneau latéral droit.
 - Les rôles web `owner`, `admin` et `secretaire` ont accès aux tâches bureau ;
   `stock` est orienté produits/scan et ne voit pas les montants. Le desktop
   masque les vues financières et les prix aux magasiniers, y compris dans la
@@ -114,8 +114,8 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Quotes` | Non (devis) |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Non (reçus) |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` ouvre la page web filtrée par identifiant client (session navigateur), et `Situation` (synthèse / détail complet) ouvre le rapport imprimable via ticket `link-ticket` ; manque prix par client, imports et suppressions OTP |
-| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; les factures fournisseurs (`Bills`) restent à couvrir |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche une liste filtrée par identifiant dans l'application avec option navigateur. `Situation` ouvre encore le rapport imprimable via ticket `link-ticket` ; manque détail de facture, prix par client, imports et suppressions OTP |
+| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; liste des factures fournisseurs en lecture seule dans Dépenses. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Non (RH et pointage) |
 | `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
@@ -126,7 +126,7 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Actions` | Non (file d'actions mobile) |
 | `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
 | `AccessPage` | Non (administration des utilisateurs) |
-| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version GitHub au navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
+| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version dans les réglages, option navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
 
 ## Exclusions proposées (non transposables au desktop)
 
