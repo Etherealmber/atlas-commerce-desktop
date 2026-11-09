@@ -6,7 +6,7 @@ use std::time::Instant;
 use egui::RichText;
 
 use crate::icons::Icon;
-use crate::state::{AtlasApp, ChatMessage};
+use crate::state::{AtlasApp, ChatMessage, Route};
 use crate::t;
 use crate::theme::Palette;
 use crate::widgets::{card, empty_state, info_banner, pill, primary_button, secondary_button};
@@ -64,7 +64,41 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         }
     }
 
-    ui.add_space(12.0);
+    ui.add_space(8.0);
+    if app.agent.messages.is_empty() {
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(t!(app.locale, "Welcome"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            ui.label(
+                RichText::new(t!(app.locale, "How can I help with your shop?"))
+                    .color(palette.secondary),
+            );
+            ui.horizontal_wrapped(|ui| {
+                if app.role_policy().allows_route(Route::Clients)
+                    && secondary_button(ui, t!(app.locale, "New client"), palette)
+                {
+                    app.go(Route::Clients);
+                    app.client_editor = Some(super::clients::ClientEditor::new());
+                }
+                if app.role_policy().allows_route(Route::Expenses)
+                    && secondary_button(ui, t!(app.locale, "New expense"), palette)
+                {
+                    app.go(Route::Expenses);
+                    app.expense_editor = Some(super::expenses::ExpenseEditor::new());
+                }
+                if secondary_button(ui, t!(app.locale, "Daily report"), palette) {
+                    app.agent.draft = t!(app.locale, "Summarize today's sales.").into_owned();
+                }
+            });
+        });
+        ui.add_space(8.0);
+    }
+
+    ui.add_space(4.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let transcript_height = (ui.available_height() - 145.0).max(100.0);

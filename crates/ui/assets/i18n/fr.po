@@ -1237,3 +1237,12 @@ msgstr "Je suis là pour vous aider sur Atlas Commerce."
 
 msgid "Current page"
 msgstr "Page actuelle"
+
+msgid "How can I help with your shop?"
+msgstr "Comment puis-je vous aider avec votre boutique ?"
+
+msgid "Daily report"
+msgstr "Rapport du jour"
+
+msgid "Summarize today's sales."
+msgstr "Résume les ventes du jour."
