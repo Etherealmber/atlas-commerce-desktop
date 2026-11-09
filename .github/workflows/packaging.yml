@@ -14,6 +14,7 @@ on:
       - packaging/**
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
+      - tests/windows-inno-upgrade.ps1
       - .github/workflows/packaging.yml
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - packaging/**
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
+      - tests/windows-inno-upgrade.ps1
       - .github/workflows/packaging.yml
   workflow_dispatch:
 
@@ -152,6 +154,18 @@ jobs:
             exit $LASTEXITCODE
           }
           Get-ChildItem "$env:RUNNER_TEMP\inno-check" | Tee-Object -Append packaging-windows.log
+      - name: Exercise a real per-user Inno upgrade
+        if: steps.inno.outcome == 'success'
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup is required for the upgrade test' }
+          $setups = @(Get-ChildItem "$env:RUNNER_TEMP\inno-check\*-setup.exe")
+          if ($setups.Count -ne 1) { throw 'Expected exactly one current setup' }
+          ./tests/windows-inno-upgrade.ps1 -Compiler $iscc `
+            -Binary "$PWD\target\release\atlas-commerce-desktop.exe" `
+            -CurrentSetup $setups[0].FullName
       - name: WiX MSI generator builds a real package
         id: msi
         shell: pwsh
