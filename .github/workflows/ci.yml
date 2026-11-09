@@ -360,6 +360,18 @@ jobs:
             echo "::error title=vulnerability scan::Éléments signalés par OSV — voir l'artefact vulnerability-logs et le résumé du job."
             exit 1
           fi
+      - name: Publier les résultats du scan
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          head_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          sed 's/\x1b\[[0-9;]*m//g' "$LOG_DIR/osv.log" | head -c 60000 > /tmp/osv-diagnostics.txt
+          gh api -X POST "repos/${{ github.repository }}/check-runs" \
+            -f name="vulnerability diagnostics" -f head_sha="$head_sha" \
+            -f status=completed -f conclusion=neutral \
+            -F "output[title]=Résultats OSV" -F "output[summary]=Journal du scan OSV" \
+            -F "output[text]=@/tmp/osv-diagnostics.txt" || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:

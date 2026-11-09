@@ -353,6 +353,12 @@ pub enum SettingsFocus {
 type AvatarJob = Job<Option<(String, Vec<u8>)>>;
 
 /// The whole application.
+type VaultRestore = (
+    String,
+    Instant,
+    std::sync::mpsc::Receiver<Result<Option<SessionRecord>, atlas_core::vault_worker::Failure>>,
+);
+
 pub struct AtlasApp {
     // ── services ──
     pub paths: AppPaths,
@@ -446,11 +452,7 @@ pub struct AtlasApp {
     pub transient_session: bool,
     pub(crate) browser_login: crate::browser_auth::BrowserLogin,
     pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
-    pub(crate) vault_restore: Option<(
-        String,
-        Instant,
-        std::sync::mpsc::Receiver<Result<Option<SessionRecord>, atlas_core::vault_worker::Failure>>,
-    )>,
+    pub(crate) vault_restore: Option<VaultRestore>,
     pub(crate) vault_saves:
         Vec<std::sync::mpsc::Receiver<Result<bool, atlas_core::vault_worker::Failure>>>,
     pub(crate) vault_removals:
