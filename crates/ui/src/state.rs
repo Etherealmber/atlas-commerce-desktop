@@ -348,9 +348,9 @@ pub enum SettingsFocus {
     About,
 }
 
-/// The whole application.
 type AvatarJob = Job<Option<(String, Vec<u8>)>>;
 
+/// The whole application.
 pub struct AtlasApp {
     // ── services ──
     pub paths: AppPaths,
