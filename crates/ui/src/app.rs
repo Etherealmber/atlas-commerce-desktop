@@ -507,6 +507,24 @@ impl AtlasApp {
         }
     }
 
+    /// Load the server's report as inert native text and tables.
+    pub(crate) fn load_client_report(&mut self, client: &atlas_api::models::Client, full: bool) {
+        if !self.role_policy().allows_route(Route::Clients) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.client_report_id = Some(client.id);
+        self.client_report_full = full;
+        self.client_report = Default::default();
+        let client = client.clone();
+        self.client_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch(&api, &client, full).await }),
+        );
+    }
+
     /// Mint a 30-minute report ticket and open the printable client
     /// situation report (`Synthèse` or `Détail complet`) in the browser.
     pub fn open_client_situation(&mut self, client: &atlas_api::models::Client, full: bool) {
@@ -887,6 +905,9 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.client_report.poll() {
+            ctx.request_repaint();
+        }
         if self.client_invoices.poll() {
             ctx.request_repaint();
         }
@@ -1142,6 +1163,7 @@ impl AtlasApp {
             || self.dashboard.loading
             || self.products.loading
             || self.client_invoices.loading
+            || self.client_report.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading

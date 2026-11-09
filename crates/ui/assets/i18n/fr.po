@@ -1351,3 +1351,9 @@ msgstr "Aucune facture fournisseur correspondante."
 
 msgid "Products: first 200 server matches; other categories: first 40 matches. Delivery notes: latest 100 only."
 msgstr "Produits : 200 premiers résultats du serveur ; autres catégories : 40 premiers résultats. Bons de livraison : 100 plus récents seulement."
+
+msgid "Client situation"
+msgstr "Situation client"
+
+msgid "Native text view of the server report; formatting and printing are available in the browser."
+msgstr "Vue texte native du rapport serveur ; mise en page et impression disponibles dans le navigateur."

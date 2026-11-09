@@ -11,6 +11,7 @@ pub mod branding;
 mod browser_auth;
 mod business_search;
 mod client_invoices;
+mod client_report;
 pub mod dialogs;
 pub mod fonts;
 pub mod i18n;

@@ -212,6 +212,8 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 app.client_invoices = Default::default();
                 app.invoice_detail_id = None;
                 app.invoice_detail = Default::default();
+                app.client_report_id = None;
+                app.client_report = Default::default();
             }
             app.selected_client = Some(client.id);
         }
@@ -302,10 +304,10 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             app.open_client_invoices(client);
         }
         if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-            app.open_client_situation(client, false);
+            app.load_client_report(client, false);
         }
         if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
-            app.open_client_situation(client, true);
+            app.load_client_report(client, true);
         }
         if secondary_button(ui, t!(app.locale, "Edit"), palette) {
             app.client_editor = Some(ClientEditor::for_client(client));
@@ -358,6 +360,10 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
+    if app.client_report_id == Some(client.id) {
+        ui.add_space(14.0);
+        draw_client_report(app, ui, palette, client);
+    }
     if app.client_invoice_id == Some(client.id) {
         ui.add_space(14.0);
         ui.separator();
@@ -425,6 +431,37 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             super::sales::draw_invoice_detail(app, ui, palette);
         }
     }
+}
+
+fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, client: &Client) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Client situation")).strong().color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) { app.load_client_report(client, app.client_report_full); }
+            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) { app.open_client_situation(client, app.client_report_full); }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) { app.client_report_id = None; app.client_report = Default::default(); }
+        });
+        ui.label(RichText::new(t!(app.locale, "Native text view of the server report; formatting and printing are available in the browser.")).color(palette.secondary));
+        if app.client_report.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.client_report.error { error_banner(ui, error, palette); return; }
+        let Some(report) = &app.client_report.data else { return; };
+        for block in &report.blocks {
+            match block {
+                crate::client_report::ReportBlock::Text(value) => { ui.label(RichText::new(value).color(palette.text)); }
+                crate::client_report::ReportBlock::Table(rows) => {
+                    ui.add_space(4.0);
+                    for row in rows {
+                        ui.separator();
+                        ui.horizontal_wrapped(|ui| {
+                            for cell in row { ui.label(RichText::new(cell).color(palette.text)); ui.add_space(8.0); }
+                        });
+                    }
+                    ui.add_space(4.0);
+                }
+            }
+        }
+    });
 }
 
 fn blank(value: &str) -> &str {

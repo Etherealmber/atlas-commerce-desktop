@@ -464,6 +464,9 @@ pub struct AtlasApp {
     /// In-flight report link: mints a short-lived ticket and resolves to the
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
+    pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) client_report_id: Option<i64>,
+    pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
 
     // ── commerce caches ──
@@ -621,6 +624,9 @@ impl AtlasApp {
             created_key: None,
             key_create_job: None,
             report_job: None,
+            client_report: Cache::default(),
+            client_report_id: None,
+            client_report_full: false,
             assist: Cache::default(),
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
@@ -1229,6 +1235,9 @@ impl AtlasApp {
         self.created_key = None;
         self.key_create_job = None;
         self.report_job = None;
+        self.client_report = Cache::default();
+        self.client_report_id = None;
+        self.client_report_full = false;
         self.assist = Cache::default();
         self.nav_back.clear();
         self.nav_forward.clear();
