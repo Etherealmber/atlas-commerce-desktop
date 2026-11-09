@@ -440,6 +440,7 @@ mod tests {
     #[test]
     fn metric_rows_do_not_expand_a_narrow_dashboard() {
         let ctx = egui::Context::default();
+        ctx.set_fonts(crate::fonts::definitions());
         let mut measured_width = 0.0;
         let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
