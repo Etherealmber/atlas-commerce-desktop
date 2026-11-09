@@ -298,13 +298,22 @@ fn draw_bank_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Pal
         ui.set_width(ui.available_width());
         ui.label(RichText::new(t!(app.locale, "Bank reconciliation")).color(palette.text).strong());
         ui.label(RichText::new(t!(app.locale, "Paste a CSV: date;description;amount. Results are suggestions, not confirmed entries.")).color(palette.secondary));
-        ui.add(egui::TextEdit::multiline(&mut app.bank_csv).desired_width(ui.available_width()).desired_rows(5).char_limit(1_000_000));
+        let editing = ui.add_enabled(
+            !app.bank_reconciliation.loading,
+            egui::TextEdit::multiline(&mut app.bank_csv).desired_width(ui.available_width()).desired_rows(5).char_limit(1_000_000),
+        );
+        if editing.changed() {
+            // A previous proposal belongs to the previous statement only.
+            app.bank_reconciliation = Default::default();
+        }
         ui.horizontal_wrapped(|ui| {
             if primary_button(ui, t!(app.locale, "Find matches"), palette, !app.bank_reconciliation.loading && !app.bank_csv.trim().is_empty() && app.bank_csv.len() <= 1024 * 1024) { app.reconcile_bank_csv(); }
-            if secondary_button(ui, t!(app.locale, "Clear"), palette) {
-                app.bank_csv.clear();
-                app.bank_reconciliation = Default::default();
-            }
+            ui.add_enabled_ui(!app.bank_reconciliation.loading, |ui| {
+                if secondary_button(ui, t!(app.locale, "Clear"), palette) {
+                    app.bank_csv.clear();
+                    app.bank_reconciliation = Default::default();
+                }
+            });
         });
         if app.bank_reconciliation.loading { super::centered_spinner(ui, palette); return; }
         if let Some(error) = &app.bank_reconciliation.error { error_banner(ui, error, palette); return; }
