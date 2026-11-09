@@ -119,6 +119,22 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     });
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Ledger reconciliation"), palette) {
+            app.ledger_reconciliation_open = !app.ledger_reconciliation_open;
+            if app.ledger_reconciliation_open
+                && app.ledger_reconciliation.data.is_none()
+                && !app.ledger_reconciliation.loading
+            {
+                app.load_ledger_reconciliation();
+            }
+        }
+    });
+    if app.ledger_reconciliation_open {
+        ui.add_space(10.0);
+        draw_ledger_reconciliation(app, ui, palette);
+        ui.add_space(12.0);
+    }
     if app.bills_open {
         ui.add_space(10.0);
         draw_bills(app, ui, palette);
@@ -263,6 +279,65 @@ fn expense_row(
             });
         },
     );
+}
+
+/// Shows the server's diagnostic without making repairs or equating this
+/// ledger check with bank statement reconciliation.
+fn draw_ledger_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Ledger reconciliation"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_ledger_reconciliation();
+            }
+        });
+        if app.ledger_reconciliation.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.ledger_reconciliation.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(data) = &app.ledger_reconciliation.data else {
+            return;
+        };
+        let has_discrepancies = !data.summary.ok || !data.paid_without_receipt.is_empty();
+        ui.label(
+            RichText::new(&data.summary.message).color(if has_discrepancies {
+                palette.warning
+            } else {
+                palette.secondary
+            }),
+        );
+        ui.horizontal_wrapped(|ui| {
+            for (label, value) in [
+                (t!(app.locale, "Invoice payments"), data.payments_count),
+                (t!(app.locale, "Ledger receipts"), data.ledger_income_count),
+                (t!(app.locale, "Receipts"), data.receipts_count),
+                (
+                    t!(app.locale, "Unmatched payments"),
+                    data.unmatched_payments.len() as u64,
+                ),
+                (
+                    t!(app.locale, "Orphan ledger entries"),
+                    data.orphan_ledger.len() as u64,
+                ),
+                (
+                    t!(app.locale, "Paid without receipt"),
+                    data.paid_without_receipt.len() as u64,
+                ),
+            ] {
+                ui.label(RichText::new(format!("{label} : {value}")).color(palette.text));
+                ui.add_space(12.0);
+            }
+        });
+    });
 }
 
 /// Read-only supplier bills from the worker. Creating, paying, cancelling,

@@ -1252,3 +1252,24 @@ msgstr "Rechercher par numéro ou nom de client"
 
 msgid "No matching invoice."
 msgstr "Aucune facture correspondante."
+
+msgid "Ledger reconciliation"
+msgstr "Rapprochement comptable"
+
+msgid "Invoice payments"
+msgstr "Paiements factures"
+
+msgid "Ledger receipts"
+msgstr "Encaissements solde"
+
+msgid "Receipts"
+msgstr "Reçus"
+
+msgid "Unmatched payments"
+msgstr "Paiements sans solde"
+
+msgid "Orphan ledger entries"
+msgstr "Solde orphelin"
+
+msgid "Paid without receipt"
+msgstr "Payées sans reçu"

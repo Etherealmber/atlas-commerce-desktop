@@ -43,6 +43,31 @@ pub(crate) async fn fetch_bills(api: &ApiClient) -> Result<Vec<Bill>, ApiError> 
     fetch_path(api, "/api/bills").await
 }
 
+/// Read-only reconciliation returned by GET /api/ledger/reconcile.
+/// Discrepancy arrays are retained only to count them, not to infer repairs.
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct LedgerReconciliation {
+    pub payments_count: u64,
+    pub ledger_income_count: u64,
+    pub receipts_count: u64,
+    pub unmatched_payments: Vec<serde_json::Value>,
+    pub orphan_ledger: Vec<serde_json::Value>,
+    pub paid_without_receipt: Vec<serde_json::Value>,
+    pub summary: LedgerSummary,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct LedgerSummary {
+    pub ok: bool,
+    pub message: String,
+}
+
+pub(crate) async fn fetch_ledger_reconciliation(
+    api: &ApiClient,
+) -> Result<LedgerReconciliation, ApiError> {
+    fetch_path(api, "/api/ledger/reconcile").await
+}
+
 async fn fetch_path<T: serde::de::DeserializeOwned>(
     api: &ApiClient,
     path: &str,
@@ -83,9 +108,22 @@ async fn fetch_path<T: serde::de::DeserializeOwned>(
         }
         bytes.extend_from_slice(&chunk);
     }
+    if !(200..300).contains(&status) {
+        // A proxy or gateway can return HTML; preserve the HTTP status rather
+        // than turning a 401 into a misleading JSON parse failure.
+        let message = serde_json::from_slice::<Envelope<serde_json::Value>>(&bytes)
+            .ok()
+            .and_then(|body| body.error)
+            .unwrap_or_else(|| format!("Requête refusée ({status})."));
+        return Err(ApiError {
+            status,
+            code: None,
+            message,
+        });
+    }
     let envelope: Envelope<T> = serde_json::from_slice(&bytes)
-        .map_err(|_| ApiError::client("Réponse des factures illisible."))?;
-    if !(200..300).contains(&status) || !envelope.success {
+        .map_err(|_| ApiError::client("Réponse du serveur illisible."))?;
+    if !envelope.success {
         return Err(ApiError {
             status,
             code: None,
@@ -101,7 +139,7 @@ async fn fetch_path<T: serde::de::DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use super::{Bill, Envelope};
+    use super::{Bill, Envelope, LedgerReconciliation};
     use atlas_api::models::Invoice;
 
     #[test]
@@ -121,5 +159,17 @@ mod tests {
         assert_eq!(bill.id, 7);
         assert_eq!(bill.total - bill.amount_paid.unwrap(), 90.0);
         assert_eq!(bill.status.as_deref(), Some("partial"));
+    }
+    #[test]
+    fn reconciliation_does_not_hide_paid_invoices_without_receipts() {
+        let reply: Envelope<LedgerReconciliation> = serde_json::from_str(r#"{"success":true,"data":{"payments_count":1,"ledger_income_count":1,"receipts_count":0,"unmatched_payments":[],"orphan_ledger":[],"paid_without_receipt":[{"id":12}],"summary":{"ok":true,"message":"Des écarts de rapprochement ont été détectés."}}}"#).unwrap();
+        let data = reply.data.unwrap();
+        assert!(data.summary.ok);
+        assert_eq!(data.paid_without_receipt.len(), 1);
+        assert!(!data.summary.message.is_empty());
+        assert!(
+            serde_json::from_str::<Envelope<LedgerReconciliation>>(r#"{"success":true,"data":{}}"#)
+                .is_err()
+        );
     }
 }

@@ -157,6 +157,19 @@ impl AtlasApp {
         self.vendors.start(job);
     }
 
+    pub(crate) fn load_ledger_reconciliation(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.ledger_reconciliation
+            .start(self.runner.spawn(async move {
+                crate::client_invoices::fetch_ledger_reconciliation(&client).await
+            }));
+    }
+
     pub(crate) fn load_bills(&mut self) {
         if !self.role_policy().allows_route(Route::Expenses) {
             return;
@@ -813,6 +826,9 @@ impl AtlasApp {
         if self.bills.poll() {
             ctx.request_repaint();
         }
+        if self.ledger_reconciliation.poll() {
+            ctx.request_repaint();
+        }
         if self.delivery_notes.poll() {
             ctx.request_repaint();
         }
@@ -1042,6 +1058,7 @@ impl AtlasApp {
             || self.products.loading
             || self.client_invoices.loading
             || self.bills.loading
+            || self.ledger_reconciliation.loading
             || self.invoices.loading
             || self.alerts.loading
             || self.devices.loading
