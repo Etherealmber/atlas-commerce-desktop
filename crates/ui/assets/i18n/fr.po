@@ -1330,3 +1330,9 @@ msgstr "Recherche indisponible pour"
 
 msgid "No results."
 msgstr "Aucun résultat."
+
+msgid "View invoice"
+msgstr "Voir la facture"
+
+msgid "No matching receipt."
+msgstr "Aucun reçu correspondant."

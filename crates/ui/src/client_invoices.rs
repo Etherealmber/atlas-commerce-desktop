@@ -73,6 +73,24 @@ pub(crate) async fn fetch_bills(api: &ApiClient) -> Result<Vec<Bill>, ApiError> 
     fetch_path(api, "/api/bills", None).await
 }
 
+/// Receipt from GET /api/receipts; a receipt is not itself a new payment.
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct Receipt {
+    pub id: i64,
+    pub number: String,
+    pub client_name: String,
+    pub amount: f64,
+    pub issue_date: Option<String>,
+    pub payment_method: Option<String>,
+    pub invoice_id: Option<i64>,
+    #[serde(default)]
+    pub invoice_number: Option<String>,
+}
+
+pub(crate) async fn fetch_receipts(api: &ApiClient) -> Result<Vec<Receipt>, ApiError> {
+    fetch_path(api, "/api/receipts", None).await
+}
+
 /// Read-only reconciliation returned by GET /api/ledger/reconcile.
 /// Discrepancy arrays are retained only to count them, not to infer repairs.
 #[derive(Clone, Debug, Deserialize)]
@@ -221,7 +239,7 @@ async fn fetch_path<T: serde::de::DeserializeOwned>(
 
 #[cfg(test)]
 mod tests {
-    use super::{BankReconciliation, Bill, Envelope, InvoiceDetail, LedgerReconciliation};
+    use super::{BankReconciliation, Bill, Envelope, InvoiceDetail, LedgerReconciliation, Receipt};
     use atlas_api::models::Invoice;
 
     #[test]
@@ -253,6 +271,14 @@ mod tests {
         assert_eq!(bill.id, 7);
         assert_eq!(bill.total - bill.amount_paid.unwrap(), 90.0);
         assert_eq!(bill.status.as_deref(), Some("partial"));
+    }
+    #[test]
+    fn decodes_receipts_with_optional_invoice_link() {
+        let data: Envelope<Vec<Receipt>> = serde_json::from_str(r#"{"success":true,"data":[{"id":1,"number":"REC-1","client_name":"Client","amount":100,"issue_date":"2026-01-01","payment_method":"cash","invoice_id":null}]}"#).unwrap();
+        let receipts = data.data.unwrap();
+        assert_eq!(receipts[0].number, "REC-1");
+        assert!(receipts[0].invoice_id.is_none());
+        assert!(receipts[0].invoice_number.is_none());
     }
     #[test]
     fn reconciliation_does_not_hide_paid_invoices_without_receipts() {

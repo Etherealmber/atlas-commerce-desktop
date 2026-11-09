@@ -242,6 +242,19 @@ impl AtlasApp {
         self.invoices.start(job);
     }
 
+    pub(crate) fn load_receipts(&mut self) {
+        if !self.role_policy().allows_route(Route::Sales) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.receipts.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_receipts(&client).await }),
+        );
+    }
+
     pub fn load_alerts(&mut self) {
         let Some(client) = self.client.clone() else {
             return;
@@ -901,6 +914,9 @@ impl AtlasApp {
         if self.units.poll() {
             ctx.request_repaint();
         }
+        if self.receipts.poll() {
+            ctx.request_repaint();
+        }
         if self.invoices.poll() {
             ctx.request_repaint();
         }
@@ -1126,6 +1142,7 @@ impl AtlasApp {
             || self.ledger_reconciliation.loading
             || self.bank_reconciliation.loading
             || self.invoices.loading
+            || self.receipts.loading
             || self.alerts.loading
             || self.devices.loading
             || self.profile.loading

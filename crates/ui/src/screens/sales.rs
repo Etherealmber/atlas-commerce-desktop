@@ -76,6 +76,18 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
+    if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
+        app.receipts_open = !app.receipts_open;
+        if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
+            app.load_receipts();
+        }
+    }
+    if app.receipts_open {
+        ui.add_space(12.0);
+        receipt_list(app, ui, palette);
+        ui.add_space(12.0);
+    }
+
     // Full-width content avoids starving the history or quick-sale form in
     // horizontal layouts and follows the web's stacked page structure.
     card(palette).show(ui, |ui| {
@@ -90,6 +102,101 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         quick_sale_form(app, ui, palette);
+    });
+}
+
+/// Existing receipts, read-only; creating/deleting/printing remains separate.
+fn receipt_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Receipts"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_receipts();
+            }
+        });
+        let width = ui.available_width();
+        widgets::search_field(
+            ui,
+            &mut app.receipt_search,
+            t!(app.locale, "Search by number or client"),
+            width,
+        );
+        if app.receipts.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.receipts.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(receipts) = app.receipts.data.clone() else {
+            return;
+        };
+        let query = crate::shortcuts::normalize(app.receipt_search.trim());
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD")
+            .to_owned();
+        let mut found = false;
+        for receipt in receipts.into_iter().filter(|r| {
+            crate::shortcuts::normalize(&format!(
+                "{} {} {}",
+                r.number,
+                r.client_name,
+                r.invoice_number.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+        }) {
+            found = true;
+            ui.separator();
+            ui.label(
+                RichText::new(format!(
+                    "{} · {} · {}",
+                    receipt.number,
+                    receipt.client_name,
+                    money(receipt.amount, &currency)
+                ))
+                .color(palette.text)
+                .strong(),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} · {}",
+                    receipt.issue_date.as_deref().unwrap_or("—"),
+                    receipt.payment_method.as_deref().unwrap_or("—")
+                ))
+                .color(palette.secondary),
+            );
+            if let Some(id) = receipt.invoice_id.filter(|id| *id > 0) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new(
+                            receipt
+                                .invoice_number
+                                .clone()
+                                .unwrap_or_else(|| format!("#{}", id)),
+                        )
+                        .color(palette.secondary),
+                    );
+                    if secondary_button(ui, t!(app.locale, "View invoice"), palette) {
+                        app.open_invoice_detail(id);
+                    }
+                });
+            }
+        }
+        if !found {
+            ui.label(
+                RichText::new(t!(app.locale, "No matching receipt.")).color(palette.secondary),
+            );
+        }
     });
 }
 

@@ -500,6 +500,9 @@ pub struct AtlasApp {
     pub unit_editor: Option<UnitEditor>,
     pub invoices: Cache<Vec<Invoice>>,
     pub invoice_search: String,
+    pub(crate) receipts: Cache<Vec<crate::client_invoices::Receipt>>,
+    pub(crate) receipts_open: bool,
+    pub(crate) receipt_search: String,
     pub alerts: Cache<Vec<Alert>>,
     pub nav_badges: Cache<NavBadges>,
     /// Backoff gate for the lazy title-bar badge fetch: set each time a
@@ -662,6 +665,9 @@ impl AtlasApp {
             catalog_tab: CatalogTab::default(),
             invoices: Cache::default(),
             invoice_search: String::new(),
+            receipts: Cache::default(),
+            receipts_open: false,
+            receipt_search: String::new(),
             alerts: Cache::default(),
             nav_badges: Cache::default(),
             nav_badges_retry_at: None,
@@ -1199,6 +1205,9 @@ impl AtlasApp {
         self.category_editor = None;
         self.unit_editor = None;
         self.invoices = Cache::default();
+        self.receipts = Cache::default();
+        self.receipts_open = false;
+        self.receipt_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
         self.nav_badges_retry_at = None;
