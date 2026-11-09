@@ -21,6 +21,8 @@ tokio.workspace = true
 fastframe-dirs.workspace = true
 fastframe-file.workspace = true
 fastframe-log.workspace = true
+# OS keychains only. Never fall back to keyring's in-memory mock in production.
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
 
 [dev-dependencies]
 serde_json.workspace = true
