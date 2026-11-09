@@ -349,6 +349,8 @@ pub enum SettingsFocus {
 }
 
 /// The whole application.
+type AvatarJob = Job<Option<(String, Vec<u8>)>>;
+
 pub struct AtlasApp {
     // ── services ──
     pub paths: AppPaths,
@@ -408,7 +410,7 @@ pub struct AtlasApp {
     /// egui context itself, so the app loop drains this each frame.
     pub avatar_evict: Option<String>,
     pub avatar_texture_uri: Option<String>,
-    pub avatar_job: Option<Job<Option<(String, Vec<u8>)>>>,
+    pub avatar_job: Option<AvatarJob>,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
