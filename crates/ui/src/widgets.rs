@@ -745,10 +745,19 @@ mod tests {
         ).unwrap();
         let uri = "bytes://test-avatar.png";
         ctx.include_bytes(uri, bytes);
-        assert!(matches!(
-            ctx.try_load_image(uri, egui::load::SizeHint::default()),
-            Ok(egui::load::ImagePoll::Ready { .. })
-        ));
+        // The native loader decodes on a background thread.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match ctx.try_load_image(uri, egui::load::SizeHint::default()) {
+                Ok(egui::load::ImagePoll::Ready { .. }) => break,
+                Ok(egui::load::ImagePoll::Pending { .. })
+                    if std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                other => panic!("Avatar decoding failed: {other:?}"),
+            }
+        }
     }
 
     #[test]
