@@ -20,15 +20,18 @@ pub(crate) struct SearchResults {
 fn contains(query: &str, fields: &str) -> bool {
     crate::shortcuts::normalize(fields).contains(query)
 }
+pub(crate) struct SearchAccess {
+    pub products: bool,
+    pub clients: bool,
+    pub sales: bool,
+    pub vendors: bool,
+    pub delivery: bool,
+    pub bills: bool,
+}
 pub(crate) async fn search(
     api: &ApiClient,
     query: String,
-    products: bool,
-    clients: bool,
-    sales: bool,
-    vendors: bool,
-    delivery: bool,
-    bills: bool,
+    access: SearchAccess,
 ) -> Result<SearchResults, ApiError> {
     let needle = crate::shortcuts::normalize(query.trim());
     if needle.is_empty() {
@@ -36,49 +39,49 @@ pub(crate) async fn search(
     }
     let (p, c, i, v, r, d, b) = tokio::join!(
         async {
-            if products {
+            if access.products {
                 Some(api.products(&query, 200).await)
             } else {
                 None
             }
         },
         async {
-            if clients {
+            if access.clients {
                 Some(api.clients().await)
             } else {
                 None
             }
         },
         async {
-            if sales {
+            if access.sales {
                 Some(api.invoices("all").await)
             } else {
                 None
             }
         },
         async {
-            if vendors {
+            if access.vendors {
                 Some(api.vendors().await)
             } else {
                 None
             }
         },
         async {
-            if sales {
+            if access.sales {
                 Some(crate::client_invoices::fetch_receipts(api).await)
             } else {
                 None
             }
         },
         async {
-            if delivery {
+            if access.delivery {
                 Some(api.delivery_notes().await)
             } else {
                 None
             }
         },
         async {
-            if bills {
+            if access.bills {
                 Some(crate::client_invoices::fetch_bills(api).await)
             } else {
                 None
