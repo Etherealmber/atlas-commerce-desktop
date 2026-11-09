@@ -98,6 +98,8 @@ impl AtlasApp {
     /// when a chrome surface needs it (bell badge, profile popover). The
     /// update check stays, gated by its own setting.
     pub fn bootstrap_shell(&mut self) {
+        self.load_profile();
+        self.load_avatar();
         let route = self.role_policy().initial_route();
         self.screen = Screen::Shell(route);
         if route == Route::Dashboard {
@@ -246,6 +248,68 @@ impl AtlasApp {
     }
 
     // ── Profile / integrations ───────────────────────────────────────────
+
+    /// Loads the current account's picture from the documented same-server
+    /// proxy. No third-party avatar URL receives the bearer token.
+    fn load_avatar(&mut self) {
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Some(token) = client.token() else {
+            return;
+        };
+        let base = client.base_url().to_owned();
+        let fingerprint = client.fingerprint().to_owned();
+        self.avatar_job = Some(self.runner.spawn(async move {
+            let http = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(15))
+                .build()
+                .ok()?;
+            let mut response = http
+                .get(format!("{base}/api/me/avatar"))
+                .bearer_auth(token)
+                .header("X-Atlas-Client", "native")
+                .header("X-Device-Fingerprint", fingerprint)
+                .send()
+                .await
+                .ok()?
+                .error_for_status()
+                .ok()?;
+            let mime = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)?
+                .to_str()
+                .ok()?
+                .split(';')
+                .next()?
+                .trim();
+            let extension = match mime {
+                "image/png" => "png",
+                "image/jpeg" => "jpg",
+                "image/webp" => "webp",
+                "image/gif" => "gif",
+                "image/svg+xml" => "svg",
+                _ => return None,
+            };
+            let uri = format!("bytes://atlas-profile-avatar.{extension}");
+            const LIMIT: usize = 4 * 1024 * 1024;
+            if response
+                .content_length()
+                .is_some_and(|size| size > LIMIT as u64)
+            {
+                return None;
+            }
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response.chunk().await.ok()? {
+                if bytes.len().saturating_add(chunk.len()) > LIMIT {
+                    return None;
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Some((uri, bytes))
+        }));
+    }
 
     pub fn load_profile(&mut self) {
         let Some(client) = self.client.clone() else {
@@ -440,6 +504,7 @@ impl AtlasApp {
                         session.email = merged.email.clone().unwrap_or_default();
                     }
                     self.save_session();
+                    self.load_avatar();
                     self.notice(t!(self.locale, "Profile updated.").into_owned());
                 }
                 Err(error) => self.notice(error.message),
@@ -687,6 +752,18 @@ impl AtlasApp {
             ctx.forget_image(&uri);
         }
         screens::auth::poll_login_jobs(self);
+        if let Some(result) = self.avatar_job.as_ref().and_then(|job| job.poll()) {
+            self.avatar_job = None;
+            if let Some((uri, bytes)) = result {
+                if let Some(old) = self.avatar_texture_uri.take() {
+                    ctx.forget_image(&old);
+                }
+                ctx.forget_image(&uri);
+                ctx.include_bytes(uri.clone(), bytes);
+                self.avatar_texture_uri = Some(uri);
+                ctx.request_repaint();
+            }
+        }
 
         // Caches.
         if self.dashboard.poll() {
@@ -935,11 +1012,13 @@ impl AtlasApp {
             || self.alerts.loading
             || self.devices.loading
             || self.profile.loading
+            || self.avatar_job.is_some()
             || self.api_keys.loading
             || self.assist.loading
             || self.profile_save_job.is_some()
             || self.key_create_job.is_some()
             || self.agent.busy
+            || self.agent.job_policy.is_some()
             || self.update.checking
             || self.update.progress.is_some()
     }

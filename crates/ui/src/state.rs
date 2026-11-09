@@ -407,6 +407,8 @@ pub struct AtlasApp {
     /// context (sign-out or profile-picture change). State cannot touch the
     /// egui context itself, so the app loop drains this each frame.
     pub avatar_evict: Option<String>,
+    pub avatar_texture_uri: Option<String>,
+    pub avatar_job: Option<Job<Option<(String, Vec<u8>)>>>,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -419,6 +421,7 @@ pub struct AtlasApp {
     pub top_search: String,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
+    pub agent_drawer_open: bool,
     /// Ctrl+K command palette overlay.
     pub palette_open: bool,
     /// Palette filter text, reset every time the palette opens.
@@ -575,6 +578,8 @@ impl AtlasApp {
             started_at: Instant::now(),
             pending_deep_links: Vec::new(),
             avatar_evict: None,
+            avatar_texture_uri: None,
+            avatar_job: None,
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             requires_password: false,
@@ -599,6 +604,7 @@ impl AtlasApp {
             route_entered_at: Instant::now(),
             top_search: String::new(),
             profile_menu_open: false,
+            agent_drawer_open: false,
             palette_open: false,
             palette_query: String::new(),
             palette_selected: 0,
@@ -754,6 +760,10 @@ impl AtlasApp {
     /// Opens a shell route, recording the current one for the back button.
     pub fn go(&mut self, route: Route) {
         if !self.role_policy().allows_route(route) {
+            return;
+        }
+        if route == Route::Agent {
+            self.agent_drawer_open = true;
             return;
         }
         if let Screen::Shell(current) = self.screen
@@ -1012,6 +1022,10 @@ impl AtlasApp {
         {
             return true;
         }
+        if self.agent_drawer_open {
+            self.agent_drawer_open = false;
+            return true;
+        }
         false
     }
 
@@ -1087,10 +1101,14 @@ impl AtlasApp {
 
     pub fn sign_out(&mut self) {
         self.transient_session = false;
+        self.avatar_job = None;
+        if let Some(uri) = self.avatar_texture_uri.take() {
+            self.avatar_evict = Some(uri);
+        }
         if let Some(session) = self.session.take() {
             // Evict the user's cached avatar texture so a later account does
             // not keep the previous picture resident in the texture cache.
-            if !session.avatar_url.trim().is_empty() {
+            if self.avatar_evict.is_none() && !session.avatar_url.trim().is_empty() {
                 self.avatar_evict = Some(session.avatar_url.clone());
             }
             self.account_store.remove(&session);
@@ -1151,6 +1169,7 @@ impl AtlasApp {
         self.nav_back.clear();
         self.nav_forward.clear();
         self.profile_menu_open = false;
+        self.agent_drawer_open = false;
         self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;

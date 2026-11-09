@@ -90,7 +90,7 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::QrCode, palette.secondary, 18.0);
-            let field_width = (ui.available_width() - 220.0).max(160.0);
+            let field_width = (ui.available_width() - 8.0).max(40.0);
             let code_response = widgets::search_field(
                 ui,
                 &mut app.scan.code,
@@ -100,6 +100,9 @@ pub fn draw_scan_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if code_response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 start_lookup(app);
             }
+        });
+        ui.add_space(8.0);
+        ui.horizontal_wrapped(|ui| {
             let busy = app.scan.lookup_job.is_some();
             if primary_button(ui, t!(app.locale, "Search"), palette, !busy) {
                 start_lookup(app);

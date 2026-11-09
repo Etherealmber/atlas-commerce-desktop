@@ -1210,3 +1210,6 @@ msgstr "Enregistrer une vente rapide ne confirme pas son encaissement."
 
 msgid "Enter a client and a valid positive quantity for every line."
 msgstr "Indiquez un client et une quantité positive valide pour chaque ligne."
+
+msgid "Search pages or products…"
+msgstr "Rechercher une page ou un produit…"

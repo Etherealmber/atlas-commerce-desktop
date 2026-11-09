@@ -133,20 +133,28 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
-    ui.horizontal_top(|ui| {
-        card(palette).show(ui, |ui| {
-            ui.set_width((ui.available_width() * 0.55).max(300.0));
-            ui.vertical(|ui| {
-                client_list(app, ui, palette);
-            });
-        });
+    if ui.available_width() < 860.0 {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.vertical(|ui| {
+            client_list(app, ui, palette);
+        });
+        ui.add_space(12.0);
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            client_detail(app, ui, palette);
+        });
+    } else {
+        ui.horizontal_top(|ui| {
+            card(palette).show(ui, |ui| {
+                ui.set_width(ui.available_width() * 0.50);
+                client_list(app, ui, palette);
+            });
+            card(palette).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 client_detail(app, ui, palette);
             });
         });
-    });
+    }
 
     if app.client_editor.is_some() {
         draw_editor(app, ui, palette);
@@ -287,28 +295,25 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .unwrap_or("MAD")
         .to_owned();
 
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(client.name.clone())
-                .color(palette.text)
-                .font(crate::fonts::semibold(17.0)),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if secondary_button(ui, t!(app.locale, "Edit"), palette) {
-                app.client_editor = Some(ClientEditor::for_client(client));
-            }
-            // Web parity: the printable situation report opens in the system
-            // browser through a short-lived report ticket (never the JWT).
-            if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
-                app.open_client_situation(client, true);
-            }
-            if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-                app.open_client_situation(client, false);
-            }
-            if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
-                app.open_client_invoices(client);
-            }
-        });
+    ui.label(
+        RichText::new(client.name.clone())
+            .color(palette.text)
+            .font(crate::fonts::semibold(17.0)),
+    );
+    ui.add_space(8.0);
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
+            app.open_client_invoices(client);
+        }
+        if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+            app.open_client_situation(client, false);
+        }
+        if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
+            app.open_client_situation(client, true);
+        }
+        if secondary_button(ui, t!(app.locale, "Edit"), palette) {
+            app.client_editor = Some(ClientEditor::for_client(client));
+        }
     });
     ui.add_space(10.0);
 

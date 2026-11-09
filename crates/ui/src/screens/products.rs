@@ -161,11 +161,12 @@ fn draw_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 18.0);
+            let field_width = (ui.available_width() - 130.0).clamp(40.0, 320.0);
             let response = widgets::search_field(
                 ui,
                 &mut app.product_search,
                 t!(app.locale, "Search by name, SKU or barcode"),
-                320.0,
+                field_width,
             );
             if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 app.load_products();
@@ -182,7 +183,7 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     for product in products {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
+            ui.horizontal(|ui| {
                 icon(
                     ui,
                     Icon::Package,
@@ -205,40 +206,29 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         ui.label(RichText::new(subtitle).color(palette.dim).size(12.0));
                     }
                 });
-                // No-wrap scopes: the name/subtitle column is the only
-                // flexible element and may wrap; the price/pill/button
-                // columns keep their natural width so the button label
-                // never collapses to one character per line.
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                    widgets::no_wrap_scope(ui, |ui| {
-                        ui.vertical(|ui| {
-                            if app.role_policy().show_prices() {
-                                ui.label(
-                                    RichText::new(atlas_core::format::money(
-                                        product.price,
-                                        app.dashboard
-                                            .data
-                                            .as_ref()
-                                            .map(|d| d.currency())
-                                            .unwrap_or("MAD"),
-                                    ))
-                                    .color(palette.text)
-                                    .strong()
-                                    .size(13.5),
-                                );
-                            }
-                            stock_pill(ui, app.locale, palette, &product);
-                        });
-                        ui.vertical(|ui| {
-                            ui.add_space(2.0);
-                            if app.role_policy().can_manage_stock()
-                                && secondary_button(ui, t!(app.locale, "Adjust stock"), palette)
-                            {
-                                app.stock_dialog = Some(StockDialog::new(&product));
-                            }
-                        });
-                    });
-                });
+            });
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                if app.role_policy().show_prices() {
+                    let currency = app
+                        .dashboard
+                        .data
+                        .as_ref()
+                        .map(|d| d.currency())
+                        .unwrap_or("MAD");
+                    ui.label(
+                        RichText::new(atlas_core::format::money(product.price, currency))
+                            .color(palette.text)
+                            .strong()
+                            .size(13.5),
+                    );
+                }
+                stock_pill(ui, app.locale, palette, &product);
+                if app.role_policy().can_manage_stock()
+                    && secondary_button(ui, t!(app.locale, "Adjust stock"), palette)
+                {
+                    app.stock_dialog = Some(StockDialog::new(&product));
+                }
             });
         });
         ui.add_space(8.0);

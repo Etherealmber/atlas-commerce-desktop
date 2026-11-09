@@ -138,10 +138,7 @@ fn profile_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             // Preview the saved picture only: fetching every intermediate
             // URL while typing would spam the HTTP loader (and arbitrary
             // hosts). The new URL appears here once the profile is saved.
-            let avatar_url = app
-                .session
-                .as_ref()
-                .map(|session| session.avatar_url.as_str());
+            let avatar_url = app.avatar_texture_uri.as_deref();
             avatar(
                 ui,
                 avatar_url,
