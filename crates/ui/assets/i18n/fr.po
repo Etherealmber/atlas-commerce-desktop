@@ -1357,3 +1357,9 @@ msgstr "Situation client"
 
 msgid "Native text view of the server report; formatting and printing are available in the browser."
 msgstr "Vue texte native du rapport serveur ; mise en page et impression disponibles dans le navigateur."
+
+msgid "Due balance of loaded clients"
+msgstr "Solde dû des clients chargés"
+
+msgid "Loaded clients"
+msgstr "Clients chargés"

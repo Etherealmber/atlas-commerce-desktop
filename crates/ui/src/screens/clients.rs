@@ -133,6 +133,34 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
+    if let Some(clients) = &app.clients.data {
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD");
+        let total: f64 = clients.iter().map(|client| client.balance_due).sum();
+        let count = clients.len();
+        ui.horizontal_wrapped(|ui| {
+            let width = ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(180.0);
+            for (label, value) in [
+                (
+                    t!(app.locale, "Due balance of loaded clients"),
+                    money(total, currency),
+                ),
+                (t!(app.locale, "Loaded clients"), count.to_string()),
+            ] {
+                card(palette).show(ui, |ui| {
+                    ui.set_width(width - 32.0);
+                    ui.label(RichText::new(label).color(palette.secondary).size(11.0));
+                    ui.label(RichText::new(value).color(palette.text).strong().size(18.0));
+                });
+            }
+        });
+        ui.add_space(12.0);
+    }
+
     // Full-width list, like the web page. The former horizontal card layout
     // allowed the first card to consume the remaining width, squeezing rows.
     card(palette).show(ui, |ui| {
