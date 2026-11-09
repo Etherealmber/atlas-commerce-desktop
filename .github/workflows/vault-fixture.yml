@@ -1,0 +1,40 @@
+name: Offline system-vault fixture
+on:
+  pull_request:
+    paths:
+      - 'crates/core/**'
+      - '.github/workflows/vault-fixture.yml'
+      - 'Cargo.toml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  secret-service:
+    name: Isolated Linux Secret Service
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Install temporary keyring
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dbus-x11 gnome-keyring libdbus-1-dev
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        with:
+          key: vault-fixture
+      - name: Build vault fixture
+        run: cargo build -p atlas-core --example vault_fixture
+      - name: Save, restart process, restore and delete fictional session
+        run: |
+          mkdir -p "$RUNNER_TEMP/atlas-vault-home" "$RUNNER_TEMP/atlas-vault-runtime"
+          chmod 700 "$RUNNER_TEMP/atlas-vault-runtime"
+          export HOME="$RUNNER_TEMP/atlas-vault-home"
+          export XDG_DATA_HOME="$HOME/data"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/atlas-vault-runtime"
+          dbus-run-session -- bash -euo pipefail -c '
+            printf "%s\\n" "fictional-ci-keyring-password" | gnome-keyring-daemon --unlock --components=secrets > /dev/null
+            target/debug/examples/vault_fixture save
+            target/debug/examples/vault_fixture load
+            target/debug/examples/vault_fixture remove
+          '
