@@ -119,6 +119,32 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     });
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Ledger reconciliation"), palette) {
+            app.ledger_reconciliation_open = !app.ledger_reconciliation_open;
+            if app.ledger_reconciliation_open
+                && app.ledger_reconciliation.data.is_none()
+                && !app.ledger_reconciliation.loading
+            {
+                app.load_ledger_reconciliation();
+            }
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Bank reconciliation"), palette) {
+            app.bank_reconciliation_open = !app.bank_reconciliation_open;
+        }
+    });
+    if app.bank_reconciliation_open {
+        ui.add_space(10.0);
+        draw_bank_reconciliation(app, ui, palette);
+        ui.add_space(12.0);
+    }
+    if app.ledger_reconciliation_open {
+        ui.add_space(10.0);
+        draw_ledger_reconciliation(app, ui, palette);
+        ui.add_space(12.0);
+    }
     if app.bills_open {
         ui.add_space(10.0);
         draw_bills(app, ui, palette);
@@ -265,6 +291,108 @@ fn expense_row(
     );
 }
 
+/// Submit a user-provided CSV to the documented matching endpoint and show
+/// proposals. No matching is confirmed, persisted or automatically repaired.
+fn draw_bank_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(t!(app.locale, "Bank reconciliation")).color(palette.text).strong());
+        ui.label(RichText::new(t!(app.locale, "Paste a CSV: date;description;amount. Results are suggestions, not confirmed entries.")).color(palette.secondary));
+        let editing = ui.add_enabled(
+            !app.bank_reconciliation.loading,
+            egui::TextEdit::multiline(&mut app.bank_csv).desired_width(ui.available_width()).desired_rows(5).char_limit(1_000_000),
+        );
+        if editing.changed() {
+            // A previous proposal belongs to the previous statement only.
+            app.bank_reconciliation = Default::default();
+        }
+        ui.horizontal_wrapped(|ui| {
+            if primary_button(ui, t!(app.locale, "Find matches"), palette, !app.bank_reconciliation.loading && !app.bank_csv.trim().is_empty() && app.bank_csv.len() <= 1024 * 1024) { app.reconcile_bank_csv(); }
+            ui.add_enabled_ui(!app.bank_reconciliation.loading, |ui| {
+                if secondary_button(ui, t!(app.locale, "Clear"), palette) {
+                    app.bank_csv.clear();
+                    app.bank_reconciliation = Default::default();
+                }
+            });
+        });
+        if app.bank_reconciliation.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.bank_reconciliation.error { error_banner(ui, error, palette); return; }
+        let Some(result) = &app.bank_reconciliation.data else { return; };
+        ui.label(RichText::new(format!("{} : {} · {} : {} · {} : {}", t!(app.locale, "Lines read"), result.parsed, t!(app.locale, "Proposed matches"), result.matched, t!(app.locale, "Unmatched"), result.unmatched_count)).color(palette.text).strong());
+        for entry in &result.matches {
+            ui.separator();
+            ui.label(RichText::new(format!("#{} · {} · {} · {}", entry.bank.line, entry.bank.date, entry.bank.label, entry.bank.amount)).color(palette.text));
+            ui.label(RichText::new(format!("{} #{} · {} · {} {}", entry.candidate.kind, entry.candidate.id, entry.candidate.label, t!(app.locale, "Score"), entry.score)).color(palette.secondary));
+        }
+        for entry in &result.unmatched {
+            ui.separator();
+            ui.label(RichText::new(format!("{} · #{} · {} · {} · {}", t!(app.locale, "Unmatched"), entry.line, entry.date, entry.label, entry.amount)).color(palette.secondary));
+        }
+        if result.matched > result.matches.len() as u64 || result.unmatched_count > result.unmatched.len() as u64 {
+            ui.label(RichText::new(t!(app.locale, "Only the first 150 results of each kind are shown.")).color(palette.secondary));
+        }
+    });
+}
+
+/// Shows the server's diagnostic without making repairs or equating this
+/// ledger check with bank statement reconciliation.
+fn draw_ledger_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Ledger reconciliation"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_ledger_reconciliation();
+            }
+        });
+        if app.ledger_reconciliation.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.ledger_reconciliation.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(data) = &app.ledger_reconciliation.data else {
+            return;
+        };
+        let has_discrepancies = !data.summary.ok || !data.paid_without_receipt.is_empty();
+        ui.label(
+            RichText::new(&data.summary.message).color(if has_discrepancies {
+                palette.warning
+            } else {
+                palette.secondary
+            }),
+        );
+        ui.horizontal_wrapped(|ui| {
+            for (label, value) in [
+                (t!(app.locale, "Invoice payments"), data.payments_count),
+                (t!(app.locale, "Ledger receipts"), data.ledger_income_count),
+                (t!(app.locale, "Receipts"), data.receipts_count),
+                (
+                    t!(app.locale, "Unmatched payments"),
+                    data.unmatched_payments.len() as u64,
+                ),
+                (
+                    t!(app.locale, "Orphan ledger entries"),
+                    data.orphan_ledger.len() as u64,
+                ),
+                (
+                    t!(app.locale, "Paid without receipt"),
+                    data.paid_without_receipt.len() as u64,
+                ),
+            ] {
+                ui.label(RichText::new(format!("{label} : {value}")).color(palette.text));
+                ui.add_space(12.0);
+            }
+        });
+    });
+}
+
 /// Read-only supplier bills from the worker. Creating, paying, cancelling,
 /// and reconciling bills remain separate workflows and are not inferred.
 fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -280,6 +408,13 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 app.load_bills();
             }
         });
+        let width = ui.available_width();
+        widgets::search_field(
+            ui,
+            &mut app.bill_search,
+            t!(app.locale, "Search by number or vendor"),
+            width,
+        );
         if app.bills.loading {
             super::centered_spinner(ui, palette);
             return;
@@ -288,7 +423,7 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             error_banner(ui, error, palette);
             return;
         }
-        let Some(bills) = &app.bills.data else {
+        let Some(bills) = app.bills.data.clone() else {
             return;
         };
         if bills.is_empty() {
@@ -299,9 +434,21 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .dashboard
             .data
             .as_ref()
-            .map(|d| d.currency())
-            .unwrap_or("MAD");
+            .map(|d| d.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
+        let query = crate::shortcuts::normalize(app.bill_search.trim());
+        let mut found = false;
         for bill in bills {
+            if !crate::shortcuts::normalize(&format!(
+                "{} {}",
+                bill.number.as_deref().unwrap_or(""),
+                bill.vendor_name.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+            {
+                continue;
+            }
+            found = true;
             ui.separator();
             ui.label(
                 RichText::new(
@@ -325,11 +472,25 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 RichText::new(format!(
                     "{} : {} · {} : {}",
                     t!(app.locale, "Total"),
-                    money(bill.total, currency),
+                    money(bill.total, &currency),
                     t!(app.locale, "Paid"),
-                    money(bill.amount_paid.unwrap_or(0.0), currency)
+                    money(bill.amount_paid.unwrap_or(0.0), &currency)
                 ))
                 .color(palette.text),
+            );
+            ui.horizontal_wrapped(|ui| {
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/bills/{}/print", bill.id), &[]);
+                }
+                if secondary_button(ui, t!(app.locale, "PDF"), palette) {
+                    app.open_printable(&format!("/api/bills/{}/pdf", bill.id), &[]);
+                }
+            });
+        }
+        if !found {
+            ui.label(
+                RichText::new(t!(app.locale, "No matching supplier bill."))
+                    .color(palette.secondary),
             );
         }
     });

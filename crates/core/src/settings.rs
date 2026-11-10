@@ -42,8 +42,15 @@ pub struct Settings {
     pub autostart: bool,
     /// Start hidden in the tray when launched at login.
     pub start_hidden: bool,
-    /// Check for updates on launch.
+    /// Check for updates on launch and then periodically.
     pub update_check_on_start: bool,
+    /// Minimum delay between two automatic checks. GitHub's unauthenticated
+    /// API allows 60 requests per hour per address; 6 h leaves room for many
+    /// machines behind one shop connection while still reacting same-day.
+    pub update_check_interval_hours: u64,
+    /// Download an available update in the background, then install it on
+    /// the next restart. Checks stay rate-limit aware either way.
+    pub update_auto_download: bool,
     pub update_channel: UpdateChannel,
     /// Background polling interval in seconds (dashboard, alerts…).
     pub poll_interval_secs: u64,
@@ -67,6 +74,8 @@ impl Default for Settings {
             autostart: false,
             start_hidden: true,
             update_check_on_start: true,
+            update_check_interval_hours: 6,
+            update_auto_download: true,
             update_channel: UpdateChannel::Stable,
             poll_interval_secs: 120,
             notifications_enabled: true,

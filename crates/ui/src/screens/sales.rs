@@ -76,28 +76,239 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    if ui.available_width() < 760.0 {
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            invoice_history(app, ui, palette);
-        });
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
+            app.receipts_open = !app.receipts_open;
+            if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
+                app.load_receipts();
+            }
+        }
+        if secondary_button(ui, t!(app.locale, "Refunds"), palette) {
+            app.refunds_open = !app.refunds_open;
+            if app.refunds_open && app.invoices.data.is_none() && !app.invoices.loading {
+                app.load_invoices();
+            }
+        }
+    });
+    if app.receipts_open {
         ui.add_space(12.0);
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            quick_sale_form(app, ui, palette);
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            card(palette).show(ui, |ui| {
-                ui.set_width((ui.available_width() * 0.55).max(300.0));
-                invoice_history(app, ui, palette);
-            });
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                quick_sale_form(app, ui, palette);
-            });
-        });
+        receipt_list(app, ui, palette);
+        ui.add_space(12.0);
     }
+    if app.refunds_open {
+        ui.add_space(12.0);
+        refund_list(app, ui, palette);
+        ui.add_space(12.0);
+    }
+
+    if app.invoice_detail_id.is_some() {
+        ui.add_space(12.0);
+        draw_invoice_detail(app, ui, palette);
+    }
+    // Full-width content avoids starving the history or quick-sale form in
+    // horizontal layouts and follows the web's stacked page structure.
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        invoice_history(app, ui, palette);
+    });
+    ui.add_space(12.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        quick_sale_form(app, ui, palette);
+    });
+}
+
+/// Credit notes (`status`/`doc_kind` = `remboursement`) from the same
+/// `/api/invoices?kind=all` list. Read-only: creating or deleting a refund
+/// stays in the web app and is password-gated there.
+fn refund_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Refunds"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_invoices();
+            }
+            let width = (ui.available_width() - 220.0).clamp(160.0, 380.0);
+            widgets::search_field(
+                ui,
+                &mut app.refund_search,
+                t!(app.locale, "Number or client"),
+                width,
+            );
+        });
+        if app.invoices.loading && app.invoices.data.is_none() {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoices.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(invoices) = app.invoices.data.clone() else {
+            return;
+        };
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
+        let refunds: Vec<_> = invoices
+            .into_iter()
+            .filter(|invoice| {
+                invoice.status.as_deref() == Some("remboursement")
+                    || invoice.doc_kind.as_deref() == Some("remboursement")
+            })
+            .collect();
+        if refunds.is_empty() {
+            ui.label(RichText::new(t!(app.locale, "No refund recorded.")).color(palette.secondary));
+            return;
+        }
+        let query = crate::shortcuts::normalize(app.refund_search.trim());
+        let mut found = false;
+        for invoice in refunds {
+            let number = invoice
+                .number
+                .clone()
+                .unwrap_or_else(|| format!("#{}", invoice.id));
+            if !crate::shortcuts::normalize(&format!(
+                "{} {}",
+                number,
+                invoice.client_name.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+            {
+                continue;
+            }
+            found = true;
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.label(RichText::new(&number).color(palette.text).strong());
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        invoice.client_name.as_deref().unwrap_or("—"),
+                        invoice.issue_date.as_deref().unwrap_or("—"),
+                        money(invoice.total, &currency)
+                    ))
+                    .color(palette.secondary),
+                );
+                if secondary_button(ui, t!(app.locale, "Open"), palette) {
+                    app.open_invoice_detail(invoice.id);
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{}/print", invoice.id), &[]);
+                }
+            });
+        }
+        if !found {
+            ui.label(RichText::new(t!(app.locale, "No matching refund.")).color(palette.secondary));
+        }
+    });
+}
+
+/// Existing receipts, read-only; creating/deleting/printing remains separate.
+fn receipt_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Receipts"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_receipts();
+            }
+        });
+        let width = ui.available_width();
+        widgets::search_field(
+            ui,
+            &mut app.receipt_search,
+            t!(app.locale, "Search by number or client"),
+            width,
+        );
+        if app.receipts.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.receipts.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(receipts) = app.receipts.data.clone() else {
+            return;
+        };
+        let query = crate::shortcuts::normalize(app.receipt_search.trim());
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD")
+            .to_owned();
+        let mut found = false;
+        for receipt in receipts.into_iter().filter(|r| {
+            crate::shortcuts::normalize(&format!(
+                "{} {} {}",
+                r.number,
+                r.client_name,
+                r.invoice_number.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+        }) {
+            found = true;
+            ui.separator();
+            ui.label(
+                RichText::new(format!(
+                    "{} · {} · {}",
+                    receipt.number,
+                    receipt.client_name,
+                    money(receipt.amount, &currency)
+                ))
+                .color(palette.text)
+                .strong(),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} · {}",
+                    receipt.issue_date.as_deref().unwrap_or("—"),
+                    receipt.payment_method.as_deref().unwrap_or("—")
+                ))
+                .color(palette.secondary),
+            );
+            if let Some(id) = receipt.invoice_id.filter(|id| *id > 0) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new(
+                            receipt
+                                .invoice_number
+                                .clone()
+                                .unwrap_or_else(|| format!("#{}", id)),
+                        )
+                        .color(palette.secondary),
+                    );
+                    if secondary_button(ui, t!(app.locale, "View invoice"), palette) {
+                        app.open_invoice_detail(id);
+                    }
+                    if receipt.id > 0 && secondary_button(ui, t!(app.locale, "Print"), palette) {
+                        app.open_printable(&format!("/api/receipts/{}/print", receipt.id), &[]);
+                    }
+                });
+            }
+        }
+        if !found {
+            ui.label(
+                RichText::new(t!(app.locale, "No matching receipt.")).color(palette.secondary),
+            );
+        }
+    });
 }
 
 fn poll_sale_job(app: &mut AtlasApp) {
@@ -125,12 +336,20 @@ fn poll_sale_job(app: &mut AtlasApp) {
     }
 }
 
-fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.label(
         RichText::new(t!(app.locale, "Invoice history"))
             .color(palette.text)
             .strong()
             .size(15.0),
+    );
+    ui.add_space(8.0);
+    let width = ui.available_width();
+    widgets::search_field(
+        ui,
+        &mut app.invoice_search,
+        t!(app.locale, "Search by number or client"),
+        width,
     );
     ui.add_space(8.0);
     if app.invoices.loading && app.invoices.data.is_none() {
@@ -157,9 +376,19 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .data
         .as_ref()
         .map(|data| data.currency())
-        .unwrap_or("MAD");
-    for invoice in invoices {
+        .unwrap_or("MAD")
+        .to_owned();
+    let query = crate::shortcuts::normalize(app.invoice_search.trim());
+    let mut found = false;
+    for invoice in invoices
+        .into_iter()
+        .filter(|invoice| invoice_matches(invoice, &query))
+    {
+        found = true;
         ui.horizontal(|ui| {
+            if secondary_button(ui, t!(app.locale, "View"), palette) {
+                app.open_invoice_detail(invoice.id);
+            }
             // No full-width pin inside a horizontal row: the amount and
             // status pill on the right would be starved and overlap.
             icon(ui, Icon::Receipt, palette.secondary, 16.0);
@@ -191,7 +420,7 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
-                    RichText::new(money(invoice.total, currency))
+                    RichText::new(money(invoice.total, &currency))
                         .color(palette.text)
                         .strong()
                         .size(13.0),
@@ -203,6 +432,122 @@ fn invoice_history(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
         ui.separator();
     }
+    if !found {
+        ui.label(RichText::new(t!(app.locale, "No matching invoice.")).color(palette.secondary));
+    }
+}
+
+/// Detail is rendered natively from JSON; it is not the printable HTML/PDF.
+pub(crate) fn draw_invoice_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Invoice detail"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if let Some(id) = app.invoice_detail_id {
+                if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                    app.open_invoice_detail(id);
+                }
+                if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                    app.invoice_detail_id = None;
+                    app.invoice_detail = Default::default();
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{id}/print"), &[]);
+                }
+                if secondary_button(ui, t!(app.locale, "PDF"), palette) {
+                    app.open_printable(&format!("/api/invoices/{id}/pdf"), &[]);
+                }
+            }
+        });
+        if app.invoice_detail.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoice_detail.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(detail) = &app.invoice_detail.data else {
+            return;
+        };
+        let invoice = &detail.invoice;
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency())
+            .unwrap_or("MAD");
+        ui.label(
+            RichText::new(format!(
+                "{} · {} · {} · {}",
+                invoice
+                    .number
+                    .clone()
+                    .unwrap_or_else(|| format!("#{}", invoice.id)),
+                invoice.client_name.as_deref().unwrap_or("—"),
+                invoice.issue_date.as_deref().unwrap_or("—"),
+                invoice.status.as_deref().unwrap_or("—")
+            ))
+            .color(palette.text),
+        );
+        ui.label(
+            RichText::new(format!(
+                "{} : {} · {} : {}",
+                t!(app.locale, "Total"),
+                money(invoice.total, currency),
+                t!(app.locale, "Remaining"),
+                money(invoice.remaining(), currency)
+            ))
+            .color(palette.text)
+            .strong(),
+        );
+        if detail.items.is_empty() {
+            ui.label(
+                RichText::new(t!(app.locale, "No lines in this document."))
+                    .color(palette.secondary),
+            );
+        }
+        for line in &detail.items {
+            ui.separator();
+            ui.label(
+                RichText::new(line.product_name.as_deref().unwrap_or("—"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            let number = |v: Option<f64>| v.map_or_else(|| "—".to_owned(), |n| n.to_string());
+            let amount = |v: Option<f64>| v.map_or_else(|| "—".to_owned(), |n| money(n, currency));
+            ui.label(
+                RichText::new(format!(
+                    "{} : {} · {} : {} · {} : {} % · {} : {}",
+                    t!(app.locale, "Quantity"),
+                    number(line.quantity),
+                    t!(app.locale, "Unit price"),
+                    amount(line.unit_price),
+                    t!(app.locale, "Tax rate"),
+                    number(line.tax_rate),
+                    t!(app.locale, "Line total"),
+                    amount(line.line_total)
+                ))
+                .color(palette.secondary),
+            );
+        }
+    });
+}
+
+/// Filter only the invoices already returned by the server; this is not a
+/// server-wide search and does not change document kinds or payment state.
+fn invoice_matches(invoice: &atlas_api::models::Invoice, normalized_query: &str) -> bool {
+    normalized_query.is_empty()
+        || crate::shortcuts::normalize(&format!(
+            "{} {}",
+            invoice.number.as_deref().unwrap_or(""),
+            invoice.client_name.as_deref().unwrap_or("")
+        ))
+        .contains(normalized_query)
 }
 
 fn quick_sale_form(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -477,5 +822,23 @@ mod tests {
         assert!(draft.valid());
         draft.lines[0].unit_price = f64::NAN;
         assert!(!draft.valid());
+    }
+}
+
+#[cfg(test)]
+mod invoice_search_tests {
+    use super::invoice_matches;
+    use atlas_api::models::Invoice;
+
+    #[test]
+    fn matches_number_and_accent_folded_client_name() {
+        let invoice = Invoice {
+            number: Some("FA-128".into()),
+            client_name: Some("Élodie".into()),
+            ..Default::default()
+        };
+        assert!(invoice_matches(&invoice, "fa-128"));
+        assert!(invoice_matches(&invoice, "elodie"));
+        assert!(!invoice_matches(&invoice, "autre"));
     }
 }

@@ -324,21 +324,18 @@ pub fn empty_state(
         ui.add_space(28.0);
         icon(ui, which, palette.dim, 40.0);
         ui.add_space(10.0);
-        // The headline is chrome text and stays on one line; the hint below
-        // is descriptive prose and keeps normal wrapping for narrow windows.
-        no_wrap_scope(ui, |ui| {
-            ui.label(
+        // Both strings must wrap in narrow panes (especially the agent
+        // drawer); forcing one line can paint across adjacent panels.
+        ui.add(
+            egui::Label::new(
                 RichText::new(title.as_ref())
                     .color(palette.secondary)
                     .strong(),
-            );
-        });
+            )
+            .wrap(),
+        );
         ui.add_space(4.0);
-        // Empty states are chrome too: the hint never wraps mid-word in a
-        // narrow pane; centered content keeps the overflow readable.
-        no_wrap_scope(ui, |ui| {
-            ui.label(RichText::new(hint.as_ref()).color(palette.dim).size(13.0));
-        });
+        ui.add(egui::Label::new(RichText::new(hint.as_ref()).color(palette.dim).size(13.0)).wrap());
     });
 }
 
@@ -733,6 +730,32 @@ mod tests {
         output.textures_delta.set.clear();
         output.textures_delta.free.clear();
         result
+    }
+
+    #[test]
+    fn avatar_png_is_decoded_by_the_installed_image_loader() {
+        use base64::Engine as _;
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let bytes = base64::engine::general_purpose::STANDARD.decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+        ).unwrap();
+        let uri = "bytes://test-avatar.png";
+        ctx.include_bytes(uri, bytes);
+        // The native loader decodes on a background thread.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match ctx.try_load_image(uri, egui::load::SizeHint::default()) {
+                Ok(egui::load::ImagePoll::Ready { .. }) => break,
+                Ok(egui::load::ImagePoll::Pending { .. })
+                    if std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Ok(egui::load::ImagePoll::Pending { .. }) => panic!("Avatar decoding timed out"),
+                Err(error) => panic!("Avatar decoding failed: {error:?}"),
+            }
+        }
     }
 
     #[test]

@@ -17,6 +17,7 @@ serde_json.workspace = true
 sha2.workspace = true
 base64 = "0.22"
 getrandom = "0.3"
+scraper = { version = "0.25", default-features = false }
 log.workspace = true
 chrono.workspace = true
 qrcode.workspace = true
@@ -28,6 +29,9 @@ url.workspace = true
 egui.workspace = true
 eframe.workspace = true
 egui_extras.workspace = true
+# egui_extras does not enable raster decoders by itself. Profile pictures
+# from the same-origin avatar proxy need these formats at runtime.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 
 fastframe-fonts.workspace = true
 fastframe-text.workspace = true
@@ -46,3 +50,11 @@ fastframe-file.workspace = true
 
 [build-dependencies]
 fastframe-i18n = { workspace = true, features = ["build"] }
+
+# Windows uses the installed WebView2 runtime, never a bundled browser.
+[target.'cfg(windows)'.dependencies]
+wry = { version = "=0.56.1", default-features = false }
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+atlas-webview-macos = { path = "../webview-macos" }

@@ -14,6 +14,10 @@ pub mod servers;
 pub mod session;
 pub mod settings;
 pub mod update_feed;
+pub mod vault;
+pub mod vault_authority;
+pub mod vault_worker;
+pub mod webview_policy;
 
 pub use deep_link::{QrTokenParser, VerifyLink};
 pub use device::DeviceIdentity;

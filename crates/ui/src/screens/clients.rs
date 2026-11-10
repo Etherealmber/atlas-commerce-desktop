@@ -133,26 +133,47 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
-    if ui.available_width() < 860.0 {
-        card(palette).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            client_list(app, ui, palette);
+    if let Some(clients) = &app.clients.data {
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD");
+        let total: f64 = clients.iter().map(|client| client.balance_due).sum();
+        let count = clients.len();
+        ui.horizontal_wrapped(|ui| {
+            let width = ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(180.0);
+            for (label, value) in [
+                (
+                    t!(app.locale, "Due balance of loaded clients"),
+                    money(total, currency),
+                ),
+                (t!(app.locale, "Loaded clients"), count.to_string()),
+            ] {
+                card(palette).show(ui, |ui| {
+                    ui.set_width(width - 32.0);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new(label).color(palette.secondary).size(11.0));
+                        ui.label(RichText::new(value).color(palette.text).strong().size(18.0));
+                    });
+                });
+            }
         });
+        ui.add_space(12.0);
+    }
+
+    // Full-width list, like the web page. The former horizontal card layout
+    // allowed the first card to consume the remaining width, squeezing rows.
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        client_list(app, ui, palette);
+    });
+    if app.selected_client.is_some() {
         ui.add_space(12.0);
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             client_detail(app, ui, palette);
-        });
-    } else {
-        ui.horizontal_top(|ui| {
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width() * 0.50);
-                client_list(app, ui, palette);
-            });
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                client_detail(app, ui, palette);
-            });
         });
     }
 
@@ -219,53 +240,56 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if app.selected_client != Some(client.id) {
                 app.client_invoice_id = None;
                 app.client_invoices = Default::default();
+                app.invoice_detail_id = None;
+                app.invoice_detail = Default::default();
+                app.client_report_id = None;
+                app.client_report = Default::default();
             }
             app.selected_client = Some(client.id);
         }
-        widgets::overlay_at(
-            ui,
-            egui::Rect::from_min_size(rect.min + vec2(8.0, 0.0), rect.size() - vec2(16.0, 0.0)),
-            |ui| {
-                ui.horizontal_centered(|ui| {
-                    icon(ui, Icon::User, palette.secondary, 18.0);
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(client.name.clone())
-                                .color(palette.text)
-                                .strong()
-                                .size(13.5),
+        widgets::overlay_at(ui, rect.shrink2(vec2(8.0, 0.0)), |ui| {
+            // Explicit bounded columns keep long names from consuming the
+            // balance column or wrapping into a one-character-wide strip.
+            let width = ui.available_width();
+            ui.horizontal_centered(|ui| {
+                icon(ui, Icon::User, palette.secondary, 18.0);
+                let text_width = (width - 160.0).max(40.0);
+                ui.allocate_ui_with_layout(
+                    vec2(text_width, height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&client.name)
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(13.5),
+                            )
+                            .truncate(),
                         );
-                        let subline = [client.city.clone(), client.phone.clone()]
+                        let subline = [client.city.as_str(), client.phone.as_str()]
                             .into_iter()
                             .filter(|part| !part.is_empty())
                             .collect::<Vec<_>>()
                             .join(" · ");
-                        ui.label(
-                            RichText::new(if subline.is_empty() {
-                                "—".to_owned()
-                            } else {
-                                subline
-                            })
-                            .color(palette.dim)
-                            .size(11.5),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(if subline.is_empty() { "—" } else { &subline })
+                                    .color(palette.dim)
+                                    .size(11.5),
+                            )
+                            .truncate(),
                         );
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let tint = if client.balance_due > 0.001 {
-                            palette.text
-                        } else {
-                            palette.dim
-                        };
-                        ui.label(
-                            RichText::new(money(client.balance_due, currency))
-                                .color(tint)
-                                .strong()
-                                .size(12.5),
-                        );
-                    });
-                });
-            },
-        );
+                    },
+                );
+                ui.label(
+                    RichText::new(money(client.balance_due, currency))
+                        .color(palette.text)
+                        .strong()
+                        .size(12.5),
+                );
+            });
+        });
         ui.separator();
     }
 }
@@ -310,10 +334,10 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             app.open_client_invoices(client);
         }
         if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-            app.open_client_situation(client, false);
+            app.load_client_report(client, false);
         }
         if secondary_button(ui, t!(app.locale, "Full detail"), palette) {
-            app.open_client_situation(client, true);
+            app.load_client_report(client, true);
         }
         if secondary_button(ui, t!(app.locale, "Edit"), palette) {
             app.client_editor = Some(ClientEditor::for_client(client));
@@ -366,6 +390,10 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
+    if app.client_report_id == Some(client.id) {
+        ui.add_space(14.0);
+        draw_client_report(app, ui, palette, client);
+    }
     if app.client_invoice_id == Some(client.id) {
         ui.add_space(14.0);
         ui.separator();
@@ -386,7 +414,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             super::centered_spinner(ui, palette);
         } else if let Some(error) = &app.client_invoices.error {
             error_banner(ui, error, palette);
-        } else if let Some(invoices) = &app.client_invoices.data {
+        } else if let Some(invoices) = app.client_invoices.data.clone() {
             if invoices.is_empty() {
                 ui.label(
                     RichText::new(t!(app.locale, "No invoice for this client."))
@@ -395,6 +423,9 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
             for invoice in invoices {
                 ui.separator();
+                if secondary_button(ui, t!(app.locale, "View"), palette) {
+                    app.open_invoice_detail(invoice.id);
+                }
                 ui.label(
                     RichText::new(
                         invoice
@@ -425,7 +456,51 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             }
         }
+        if app.invoice_detail_id.is_some() {
+            ui.add_space(12.0);
+            super::sales::draw_invoice_detail(app, ui, palette);
+        }
     }
+}
+
+fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, client: &Client) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Client situation")).strong().color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) { app.load_client_report(client, app.client_report_full); }
+            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) { app.open_client_situation(client, app.client_report_full); }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) { app.client_report_id = None; app.client_report = Default::default(); }
+        });
+        ui.label(RichText::new(t!(app.locale, "Native text view of the server report; formatting and printing are available in the browser.")).color(palette.secondary));
+        if app.client_report.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.client_report.error { error_banner(ui, error, palette); return; }
+        let Some(report) = &app.client_report.data else { return; };
+        for block in &report.blocks {
+            match block {
+                crate::client_report::ReportBlock::Text(value) => { ui.label(RichText::new(value).color(palette.text)); }
+                crate::client_report::ReportBlock::Table(rows) => {
+                    ui.add_space(4.0);
+                    let mut headings: Option<&[String]> = None;
+                    for row in rows {
+                        if row.header {
+                            headings = Some(&row.cells);
+                            continue;
+                        }
+                        ui.separator();
+                        for (index, value) in row.cells.iter().enumerate() {
+                            let label = headings.filter(|h| h.len() == row.cells.len()).and_then(|h| h.get(index)).map_or_else(
+                                || value.clone(),
+                                |name| format!("{name} : {value}"),
+                            );
+                            ui.label(RichText::new(label).color(palette.text));
+                        }
+                    }
+                    ui.add_space(4.0);
+                }
+            }
+        }
+    });
 }
 
 fn blank(value: &str) -> &str {
@@ -461,9 +536,10 @@ fn detail_row(
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
+    let width = 520.0_f32.min((screen.width() - 32.0).max(1.0));
     let rect = egui::Rect::from_center_size(
         screen.center(),
-        vec2(520.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
+        vec2(width, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
         app.client_editor = None;
@@ -473,26 +549,26 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let locale = app.locale;
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width((width - 44.0).max(1.0));
+            let title = if app
+                .client_editor
+                .as_ref()
+                .is_some_and(|editor| editor.editing_id.is_some())
+            {
+                t!(locale, "Edit client")
+            } else {
+                t!(locale, "New client")
+            };
+            ui.label(
+                RichText::new(title)
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
+            ui.add_space(10.0);
             egui::ScrollArea::vertical()
-                .max_height((rect.height() - 46.0).max(1.0))
+                .max_height((rect.height() - 150.0).max(1.0))
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    ui.set_min_size(vec2(476.0, 0.0));
-                    let title = if app
-                        .client_editor
-                        .as_ref()
-                        .is_some_and(|editor| editor.editing_id.is_some())
-                    {
-                        t!(locale, "Edit client")
-                    } else {
-                        t!(locale, "New client")
-                    };
-                    ui.label(
-                        RichText::new(title)
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
-                    );
-                    ui.add_space(10.0);
-
                     if let Some(editor) = app.client_editor.as_mut() {
                         labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
                         ui.add_space(8.0);
@@ -539,23 +615,22 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         ui.add_space(8.0);
                         error_banner(ui, &error, palette);
                     }
-
-                    ui.add_space(12.0);
-                    widgets::dialog_actions(ui, |ui| {
-                        let saving = app
-                            .client_editor
-                            .as_ref()
-                            .is_some_and(|editor| editor.saving);
-                        let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                        if cancel {
-                            app.client_editor = None;
-                        }
-                        if save {
-                            submit_editor(app);
-                        }
-                    });
                 });
+            ui.add_space(12.0);
+            widgets::dialog_actions(ui, |ui| {
+                let saving = app
+                    .client_editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.saving);
+                let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
+                let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                if cancel {
+                    app.client_editor = None;
+                }
+                if save {
+                    submit_editor(app);
+                }
+            });
         });
     });
 }

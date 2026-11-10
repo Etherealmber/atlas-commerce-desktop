@@ -97,9 +97,30 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
             return;
         }
+        let width = ui.available_width();
+        widgets::search_field(
+            ui,
+            &mut app.delivery_search,
+            t!(app.locale, "Search by number or client"),
+            width,
+        );
+        let query = crate::shortcuts::normalize(app.delivery_search.trim());
+        let mut found = false;
         for note in &notes {
+            if !crate::shortcuts::normalize(&format!("{} {}", note.number, note.client_name))
+                .contains(&query)
+            {
+                continue;
+            }
+            found = true;
             note_row(ui, palette, app.locale, note);
             ui.separator();
+        }
+        if !found {
+            ui.label(
+                RichText::new(t!(app.locale, "No matching delivery note."))
+                    .color(palette.secondary),
+            );
         }
     });
 

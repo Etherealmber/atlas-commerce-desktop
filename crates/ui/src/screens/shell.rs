@@ -32,6 +32,7 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
         Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
         Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
+        Route::Employees => (Icon::Users, t!(locale, "Employees").into_owned()),
         Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
         Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
         Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
@@ -102,13 +103,26 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             draw_rail(app, ui, palette, rail_collapsed);
         });
 
-    if app.agent_drawer_open {
+    let agent_available = matches!(
+        app.screen,
+        Screen::Shell(
+            Route::Dashboard
+                | Route::Products
+                | Route::Clients
+                | Route::Vendors
+                | Route::Expenses
+                | Route::DeliveryNotes
+                | Route::Sales
+                | Route::Catalog
+        )
+    );
+    let drawer_visible = app.agent_drawer_open && agent_available;
+    let drawer_width = (viewport_width * 0.42)
+        .clamp(280.0, 440.0)
+        .min((viewport_width - rail_width - 32.0).max(1.0));
+    if drawer_visible {
         egui::Panel::right(egui::Id::new("agent-drawer"))
-            .exact_size(
-                (viewport_width * 0.42)
-                    .clamp(280.0, 440.0)
-                    .min((viewport_width - rail_width - 32.0).max(1.0)),
-            )
+            .exact_size(drawer_width)
             .resizable(false)
             .frame(
                 egui::Frame::NONE
@@ -118,32 +132,62 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             )
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    if secondary_button(ui, t!(app.locale, "Close"), palette) {
-                        app.agent_drawer_open = false;
-                    }
-                });
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        super::agent::draw(app, ui, palette);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new("Atlas Agent")
+                                .color(palette.text)
+                                .strong()
+                                .size(17.0),
+                        );
+                        ui.label(
+                            RichText::new(t!(app.locale, "Here to help with your shop."))
+                                .color(palette.secondary)
+                                .size(12.0),
+                        );
                     });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                            app.agent_drawer_open = false;
+                        }
+                    });
+                });
+                ui.separator();
+                super::agent::draw(app, ui, palette);
             });
     }
 
     egui::CentralPanel::no_frame()
         .frame(
-            egui::Frame::NONE
-                .fill(palette.window)
-                .inner_margin(egui::Margin::same(0)),
+            // The framebuffer already uses palette.window. An opaque panel
+            // frame can expand beyond its assigned bounds and cover the
+            // neighbouring drawer before the child clip is applied.
+            egui::Frame::NONE.inner_margin(egui::Margin::same(0)),
         )
         .show(ui, |ui| {
-            draw_content(app, ui, ctx, palette);
+            // Child widgets can request more than the central panel's width.
+            // Clip their painting to the space left after the right drawer is
+            // reserved, so they cannot paint across its controls.
+            let mut bounds = ui.max_rect();
+            if drawer_visible {
+                bounds.max.x = bounds.max.x.min(viewport_width - drawer_width);
+                ui.set_max_width(bounds.width().max(0.0));
+            }
+            ui.set_clip_rect(ui.clip_rect().intersect(bounds));
+            widgets::overlay_at(ui, bounds, |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(bounds));
+                draw_content(app, ui, ctx, palette);
+            });
         });
 
     // Global agent entry point, mirroring the web's floating Atlas Agent:
     // one FAB on every shell screen except the agent itself (which carries
     // its own new-conversation FAB). Hidden behind modal overlays.
-    if !app.agent_drawer_open && !app.modal_open() && !app.palette_open && !app.profile_menu_open {
+    if agent_available
+        && !app.agent_drawer_open
+        && !app.modal_open()
+        && !app.palette_open
+        && !app.profile_menu_open
+    {
         let fab = widgets::fab(
             ctx,
             palette,
@@ -248,6 +292,39 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 app.profile_menu_open = !app.profile_menu_open;
             }
 
+            // An available release is visible from every screen: the icon
+            // opens the update, and a dot means a copy is already staged and
+            // only needs a restart.
+            if app.update.progress.is_none()
+                && (app.update.last_manifest.is_some() || app.update.ready_version.is_some())
+            {
+                let update = widgets::icon_circle_button(ui, palette, Icon::Download, true);
+                if app.update.ready_version.is_some() {
+                    paint_update_dot(ui, &update, palette);
+                }
+                let tooltip = match &app.update.ready_version {
+                    Some(version) => format!(
+                        "{} · v{version}",
+                        t!(app.locale, "Update ready — restart to install")
+                    ),
+                    None => format!(
+                        "{} · v{}",
+                        t!(app.locale, "Update available"),
+                        app.update
+                            .last_manifest
+                            .as_ref()
+                            .map(|manifest| manifest.version.as_str())
+                            .unwrap_or("—")
+                    ),
+                };
+                let update = update.on_hover_text(tooltip);
+                if update.clicked() {
+                    // Reuses the staged copy when one exists; otherwise this
+                    // starts the verified download and then the hand-off.
+                    app.start_update_download();
+                }
+            }
+
             if app.role_policy().allows_route(Route::Notifications) {
                 let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
                 let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
@@ -316,20 +393,21 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     }
 }
 
-/// Recognize page shortcuts; other text remains a product search.
+/// Recognize page shortcuts; other text starts a business search.
 fn search_destination(query: &str) -> Option<Route> {
     match crate::shortcuts::normalize(query.trim()).as_str() {
         "facture" | "factures" | "invoice" | "invoices" | "ventes" | "sales" => Some(Route::Sales),
         "situation" | "client" | "clients" => Some(Route::Clients),
         "produit" | "produits" | "products" => Some(Route::Products),
         "depense" | "depenses" | "expenses" => Some(Route::Expenses),
+        "employe" | "employes" | "employees" | "equipe" | "rh" => Some(Route::Employees),
         "parametres" | "reglages" | "settings" => Some(Route::Settings),
         "agent" => Some(Route::Agent),
         _ => None,
     }
 }
 
-/// Search offers page shortcuts and falls back to product search.
+/// Search offers page shortcuts and searches business data on Enter.
 fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, width: f32) {
     egui::Frame::NONE
         .fill(palette.surface)
@@ -348,7 +426,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         egui::TextEdit::singleline(&mut app.top_search)
                             .id(egui::Id::new("titlebar-search"))
                             .frame(egui::Frame::NONE)
-                            .hint_text(t!(app.locale, "Search pages or products…"))
+                            .hint_text(t!(app.locale, "Search pages or business data…"))
                             .desired_width(width - 42.0)
                             .clip_text(true),
                     );
@@ -359,9 +437,7 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                         if let Some(route) = search_destination(&query) {
                             app.go(route);
                         } else {
-                            app.product_search = query;
-                            app.go(Route::Products);
-                            app.load_products();
+                            app.search_business(query);
                         }
                     }
                 },
@@ -394,6 +470,14 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
         galley,
         palette.on_badge,
     );
+}
+
+/// A small accent dot on the update icon: a verified copy is staged and the
+/// next restart installs it.
+fn paint_update_dot(ui: &egui::Ui, response: &egui::Response, palette: &Palette) {
+    let rect = response.rect;
+    let center = egui::pos2(rect.right() - 3.0, rect.top() + 3.0);
+    ui.painter().circle_filled(center, 4.0, palette.accent);
 }
 
 /// Compact live download indicator shown beside the notification bell while
@@ -528,8 +612,11 @@ fn draw_profile_menu(
                         app.settings_focus = crate::state::SettingsFocus::General;
                         app.go(Route::Settings);
                     }
-                    if menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
-                        .clicked()
+                    // The server is fixed by the installer and read-only in
+                    // Settings; only a reinstall can point elsewhere.
+                    if !app.server_store.is_locked()
+                        && menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
+                            .clicked()
                     {
                         app.profile_menu_open = false;
                         app.sign_out();
@@ -650,7 +737,7 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         (t!(app.locale, "Overview"), &[Route::Dashboard]),
         (t!(app.locale, "Catalog"), &[Route::Products]),
         (t!(app.locale, "Customer relations"), &[Route::Clients]),
-        (t!(app.locale, "Team"), &[Route::Sales]),
+        (t!(app.locale, "Team"), &[Route::Sales, Route::Employees]),
         (t!(app.locale, "Purchases"), &[Route::Vendors]),
         (
             t!(app.locale, "Finance"),
@@ -807,10 +894,15 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
     // horizontal scrollbar must never appear (content overflow would paint
     // under the rail instead of reflowing).
     egui::ScrollArea::vertical()
+        .max_width(ui.available_width())
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.set_opacity(entrance);
             ui.add_space(4.0 + (1.0 - entrance) * 18.0);
+            if app.business_search_open {
+                draw_business_search(app, ui, palette);
+                ui.add_space(12.0);
+            }
             match app.screen {
                 Screen::Shell(Route::Dashboard) => {
                     super::dashboard::draw(app, ui, palette);
@@ -836,6 +928,9 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 Screen::Shell(Route::Sales) => {
                     super::sales::draw(app, ui, palette);
                 }
+                Screen::Shell(Route::Employees) => {
+                    super::employees::draw(app, ui, palette);
+                }
                 Screen::Shell(Route::Agent) => {
                     super::agent::draw(app, ui, palette);
                 }
@@ -848,6 +943,51 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 _ => {}
             }
         });
+}
+
+/// Results are explicitly scoped: products are server-filtered (max 200),
+/// clients and documents are filtered from the current list endpoints.
+fn draw_business_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    widgets::card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(format!("{} : {}", t!(app.locale, "Business search"), app.business_search_query)).color(palette.text).strong());
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.business_search_open = false;
+                app.business_search = Default::default();
+            }
+        });
+        ui.label(RichText::new(t!(app.locale, "Products: first 200 server matches; other categories: first 40 matches. Delivery notes: latest 100 only.")).color(palette.secondary));
+        if app.business_search.loading { super::centered_spinner(ui, palette); return; }
+        if let Some(error) = &app.business_search.error { widgets::error_banner(ui, error, palette); return; }
+        let Some(result) = app.business_search.data.clone() else { return; };
+        if !result.failed.is_empty() {
+            let labels = result.failed.iter().map(|name| match *name { "Products" => t!(app.locale, "Products").into_owned(), "Clients" => t!(app.locale, "Clients").into_owned(), "Vendors" => t!(app.locale, "Vendors").into_owned(), "Receipts" => t!(app.locale, "Receipts").into_owned(), "Delivery notes" => t!(app.locale, "Delivery notes").into_owned(), "Supplier bills" => t!(app.locale, "Supplier bills").into_owned(), _ => t!(app.locale, "Sales").into_owned() }).collect::<Vec<_>>().join(", ");
+            ui.label(RichText::new(format!("{} : {labels}", t!(app.locale, "Search unavailable for"))).color(palette.warning));
+        }
+        if result.hits.is_empty() && result.failed.is_empty() { ui.label(t!(app.locale, "No results.")); }
+        for hit in result.hits {
+            let (_, route_category) = route_meta(app.locale, hit.route);
+            let category = if hit.receipt { t!(app.locale, "Receipts").into_owned() } else if hit.route == Route::Expenses { t!(app.locale, "Supplier bills").into_owned() } else { route_category };
+            ui.horizontal_wrapped(|ui| {
+                if secondary_button(ui, t!(app.locale, "View"), palette) {
+                    app.business_search_open = false;
+                    app.business_search = Default::default();
+                    match hit.route {
+                        Route::Products => { app.product_search = hit.label.clone(); app.go(Route::Products); app.load_products(); }
+                        Route::Clients => { app.client_search.clear(); app.selected_client = Some(hit.id); app.client_invoice_id = None; app.client_invoices = Default::default(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Clients); app.load_clients(); }
+                        Route::Vendors => { app.vendor_search.clear(); app.selected_vendor = Some(hit.id); app.go(Route::Vendors); app.load_vendors(); }
+                        Route::DeliveryNotes => { app.delivery_search = hit.label.clone(); app.go(Route::DeliveryNotes); app.load_delivery_notes(); }
+                        Route::Expenses => { app.bills_open = true; app.bill_search = hit.label.clone(); app.go(Route::Expenses); app.load_bills(); }
+                        Route::Sales if hit.receipt => { app.receipts_open = true; app.receipt_search = hit.label.clone(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Sales); app.load_receipts(); }
+                        Route::Sales => { app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
+                        _ => {}
+                    }
+                }
+                ui.label(RichText::new(format!("{category} · {} · {}", hit.label, hit.subtitle)).color(palette.text));
+            });
+        }
+    });
 }
 
 // ── Confirm dialog ─────────────────────────────────────────────────────────

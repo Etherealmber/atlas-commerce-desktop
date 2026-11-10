@@ -59,6 +59,8 @@ fn main() -> eframe::Result<()> {
         arguments: _,
         receipt,
         error: launch_error,
+        // The helper's diagnostic can contain local paths; do not log it.
+        failure: _,
     } = launch;
 
     // 2. Single instance. The running copy serves this slot on its own
@@ -131,12 +133,56 @@ fn main() -> eframe::Result<()> {
     // 4. Persisted state. No password is ever read here — only the token.
     let settings = Settings::load(&paths.settings_file());
     let locale = atlas_ui::i18n::Locale::from_tag(&settings.language);
-    let servers = ServerStore::load(&paths.servers_file());
+    let mut servers = ServerStore::load(&paths.servers_file());
+    // The Windows installer writes `server.json` beside the executable. It is
+    // imported once, locks the installation to that server, and is deleted.
+    // Setups without an installer prompt lock their first choice instead.
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(folder) = executable.parent()
+        && servers
+            .import_install_file(&folder.join("server.json"))
+            .is_some()
+    {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to save the installer's server choice: {error}");
+        }
+        log::info!("server fixed by the installer");
+    }
+    // Managed Linux/macOS deployments have no installer page: an
+    // environment variable provisioned by the package or MDM tooling fixes
+    // the address before first launch, exactly like the Windows wizard.
+    if servers.selected_url().is_none()
+        && let Ok(url) = std::env::var("ATLAS_SERVER_URL")
+        && servers.apply_install_choice(&url, "").is_some()
+    {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to save ATLAS_SERVER_URL: {error}");
+        }
+        log::info!("server fixed by ATLAS_SERVER_URL");
+    }
+    // Existing installations retain their configured server and no longer
+    // expose a server switch. Reprovisioning is an installer operation.
+    if !servers.is_locked() && servers.lock_current() {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to lock the existing server: {error}");
+        }
+        log::info!("existing installation locked to its saved server");
+    }
     let identity = DeviceIdentity::load_or_create(&paths.device_file());
     let accounts = AccountStore::load(&paths.accounts_file());
-    let session = servers
-        .selected_url()
-        .and_then(|base| load_session(&paths.session_file(), base));
+    let restore_mode = servers.selected_url().map(|base| {
+        atlas_core::vault_authority::restore_mode(&paths.browser_authority_file(), base)
+    });
+    let session = if matches!(
+        restore_mode,
+        Some(atlas_core::vault_authority::RestoreMode::Legacy)
+    ) {
+        servers
+            .selected_url()
+            .and_then(|base| load_session(&paths.session_file(), base))
+    } else {
+        None
+    };
 
     // 5. Process-wide services. The waker was created before the single-
     //    instance claim so the slot handler shares this exact instance.
@@ -180,6 +226,13 @@ fn main() -> eframe::Result<()> {
     let mut app = AtlasApp::new(
         paths, runner, identity, settings, servers, session, accounts, waker, power, incoming, tray,
     );
+    if matches!(
+        restore_mode,
+        Some(atlas_core::vault_authority::RestoreMode::Vault)
+    ) && let Some(server) = app.server_store.selected_url().map(str::to_owned)
+    {
+        app.begin_vault_restore(server);
+    }
     app.tray_available = tray_available;
     app.autostart_state = autostart_state;
     app.notifications = notifications;

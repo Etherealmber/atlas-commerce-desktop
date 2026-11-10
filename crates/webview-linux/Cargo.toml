@@ -1,0 +1,19 @@
+[package]
+name = "atlas-webview-linux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "atlas-commerce-webview"
+path = "src/main.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+atlas-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+gtk4 = { version = "=0.11.5", default-features = false, features = ["v4_10"] }
+webkit6 = "=0.6.1"

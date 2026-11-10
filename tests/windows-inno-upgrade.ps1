@@ -17,10 +17,18 @@ try {
     & $Compiler '/DVersion=0.0.1' "/DBinaryX64=$Binary" "/DBinaryArm64=$Binary" "/DOutputDir=$build" (Join-Path $repo 'packaging\windows\atlas-commerce-desktop.iss')
     if ($LASTEXITCODE -ne 0) { throw "Old setup build failed: $LASTEXITCODE" }
     $old = Join-Path $build 'atlas-commerce-desktop-v0.0.1-setup.exe'
+    $first = $true
     foreach ($setup in @($old, $CurrentSetup)) {
-        $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$install`"") -Wait -PassThru
+        $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$install`"")
+        if ($first) { $setupArgs += '/SERVERURL=https://shop.example.invalid' }
+        $process = Start-Process -FilePath $setup -ArgumentList $setupArgs -Wait -PassThru
         if ($process.ExitCode -ne 0) { throw "Setup failed: $($process.ExitCode)" }
         if (-not (Test-Path (Join-Path $install 'atlas-commerce-desktop.exe'))) { throw 'Installed executable missing' }
+        $choiceFile = Join-Path $install 'server.json'
+        if (-not (Test-Path $choiceFile)) { throw 'Installer did not provision a server' }
+        $choice = Get-Content -Raw $choiceFile | ConvertFrom-Json
+        if ($choice.url -ne 'https://shop.example.invalid') { throw "Server was changed by the upgrade: $($choice.url)" }
+        $first = $false
         if (-not (Test-Path $key)) { throw 'Stable Inno uninstall registration missing' }
         $entry = Get-ItemProperty $key
         if ($entry.DisplayName -ne 'Atlas Commerce') { throw "Unexpected display name: $($entry.DisplayName)" }

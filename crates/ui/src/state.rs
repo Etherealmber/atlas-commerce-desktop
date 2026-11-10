@@ -18,6 +18,7 @@ use crate::i18n::Locale;
 use crate::screens::catalog::{CatalogTab, CategoryEditor, UnitEditor};
 use crate::screens::clients::ClientEditor;
 use crate::screens::delivery_notes::DeliveryNoteEditor;
+use crate::screens::employees::{EmployeePayForm, EmployeeResignForm, NewEmployeeForm};
 use crate::screens::expenses::ExpenseEditor;
 use crate::screens::products::ProductEditor;
 use crate::screens::products::StockDialog;
@@ -101,13 +102,14 @@ pub enum Route {
     Expenses,
     DeliveryNotes,
     Sales,
+    Employees,
     Agent,
     Notifications,
     Settings,
 }
 
 impl Route {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Dashboard,
         Self::Products,
         Self::Catalog,
@@ -116,6 +118,7 @@ impl Route {
         Self::Expenses,
         Self::DeliveryNotes,
         Self::Sales,
+        Self::Employees,
         Self::Agent,
         Self::Notifications,
         Self::Settings,
@@ -165,6 +168,7 @@ impl RolePolicy {
                 | Route::Expenses
                 | Route::DeliveryNotes
                 | Route::Sales
+                | Route::Employees
                 | Route::Catalog
                 | Route::Notifications => self.office,
             }
@@ -248,13 +252,23 @@ pub struct UpdateState {
     pub last_manifest: Option<UpdateManifest>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
-    pub job: Option<Job<Result<Option<UpdateManifest>, String>>>,
+    pub job: Option<Job<Result<crate::update::UpdateCheck, String>>>,
     pub progress: Option<(u64, u64)>,
     pub stage: String,
     pub error: Option<String>,
     /// Set when a check answered that the current build is the newest, so
     /// the settings card can show an explicit "up to date" status.
     pub up_to_date_at: Option<Instant>,
+    /// ETag, last check and GitHub quota window, persisted between launches.
+    pub cache: crate::update::UpdateCache,
+    /// When the next automatic check is due; `None` disables the timer.
+    pub next_check_at: Option<Instant>,
+    /// A background download started by the auto-download setting, so the
+    /// interface can explain why bytes are moving on their own.
+    pub auto_download: bool,
+    /// Version already downloaded by the auto-download setting; the next
+    /// install reuses fastframe-update's staged copy instead of downloading.
+    pub ready_version: Option<String>,
 }
 
 /// Agent conversation.
@@ -352,6 +366,12 @@ pub enum SettingsFocus {
 
 type AvatarJob = Job<Option<(String, Vec<u8>)>>;
 
+type VaultRestore = (
+    String,
+    Instant,
+    std::sync::mpsc::Receiver<Result<Option<SessionRecord>, atlas_core::vault_worker::Failure>>,
+);
+
 /// The whole application.
 pub struct AtlasApp {
     // ── services ──
@@ -423,6 +443,9 @@ pub struct AtlasApp {
     pub route_entered_at: Instant,
     /// The top-bar search pill's text (submitted into the products search).
     pub top_search: String,
+    pub(crate) business_search_open: bool,
+    pub(crate) business_search_query: String,
+    pub(crate) business_search: Cache<crate::business_search::SearchResults>,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
     pub agent_drawer_open: bool,
@@ -442,6 +465,12 @@ pub struct AtlasApp {
     /// Browser-v1 tokens remain in memory until OS-vault storage is available.
     pub transient_session: bool,
     pub(crate) browser_login: crate::browser_auth::BrowserLogin,
+    pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
+    pub(crate) vault_restore: Option<VaultRestore>,
+    pub(crate) vault_saves:
+        Vec<std::sync::mpsc::Receiver<Result<bool, atlas_core::vault_worker::Failure>>>,
+    pub(crate) vault_removals:
+        Vec<std::sync::mpsc::Receiver<Result<(), atlas_core::vault_worker::Failure>>>,
     pub login: LoginState,
     pub qr: QrPairing,
     pub devices: Cache<Vec<TrustedDevice>>,
@@ -461,6 +490,9 @@ pub struct AtlasApp {
     /// In-flight report link: mints a short-lived ticket and resolves to the
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
+    pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) client_report_id: Option<i64>,
+    pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
 
     // ── commerce caches ──
@@ -472,15 +504,34 @@ pub struct AtlasApp {
     pub selected_client: Option<i64>,
     pub client_invoice_id: Option<i64>,
     pub client_invoices: Cache<Vec<Invoice>>,
+    pub(crate) invoice_detail_id: Option<i64>,
+    pub(crate) invoice_detail: Cache<crate::client_invoices::InvoiceDetail>,
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
+    pub employees: Cache<crate::employees::EmployeesList>,
+    pub employee_search: String,
+    pub employee_status: String,
+    pub employee_category: String,
+    pub employee_detail: Cache<crate::employees::EmployeeDetail>,
+    pub employee_detail_id: Option<i64>,
+    pub employee_new: Option<NewEmployeeForm>,
+    pub employee_pay: Option<EmployeePayForm>,
+    pub employee_resign: Option<EmployeeResignForm>,
+    pub(crate) employee_action: Option<Job<Result<crate::employees::Action, ApiError>>>,
     pub expenses: Cache<Vec<Expense>>,
     pub expense_search: String,
     pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
     pub(crate) bills_open: bool,
+    pub(crate) bill_search: String,
+    pub(crate) ledger_reconciliation: Cache<crate::client_invoices::LedgerReconciliation>,
+    pub(crate) ledger_reconciliation_open: bool,
+    pub(crate) bank_csv: String,
+    pub(crate) bank_reconciliation: Cache<crate::client_invoices::BankReconciliation>,
+    pub(crate) bank_reconciliation_open: bool,
     pub expense_editor: Option<ExpenseEditor>,
     pub delivery_notes: Cache<Vec<DeliveryNote>>,
+    pub(crate) delivery_search: String,
     pub delivery_note_editor: Option<DeliveryNoteEditor>,
     pub scan: ScanState,
     pub categories: Cache<Vec<Category>>,
@@ -489,6 +540,13 @@ pub struct AtlasApp {
     pub category_editor: Option<CategoryEditor>,
     pub unit_editor: Option<UnitEditor>,
     pub invoices: Cache<Vec<Invoice>>,
+    pub invoice_search: String,
+    pub(crate) receipts: Cache<Vec<crate::client_invoices::Receipt>>,
+    pub(crate) receipts_open: bool,
+    /// Public so the visual fixture can open the refunds panel.
+    pub refunds_open: bool,
+    pub(crate) refund_search: String,
+    pub(crate) receipt_search: String,
     pub alerts: Cache<Vec<Alert>>,
     pub nav_badges: Cache<NavBadges>,
     /// Backoff gate for the lazy title-bar badge fetch: set each time a
@@ -550,6 +608,8 @@ impl AtlasApp {
         incoming_links: Arc<Mutex<Vec<String>>>,
         tray: Option<crate::tray::TrayHandle>,
     ) -> Self {
+        let vault_worker =
+            atlas_core::vault_worker::VaultWorker::new(paths.browser_authority_file());
         let locale = Locale::from_tag(&settings.language);
         let screen = if session.is_some() {
             Screen::Splash
@@ -593,6 +653,10 @@ impl AtlasApp {
             requires_password: false,
             transient_session: false,
             browser_login: Default::default(),
+            vault_worker,
+            vault_restore: None,
+            vault_saves: Vec::new(),
+            vault_removals: Vec::new(),
             login: LoginState::default(),
             qr: QrPairing::default(),
             devices: Cache::default(),
@@ -605,12 +669,18 @@ impl AtlasApp {
             created_key: None,
             key_create_job: None,
             report_job: None,
+            client_report: Cache::default(),
+            client_report_id: None,
+            client_report_full: false,
             assist: Cache::default(),
             nav_back: Vec::new(),
             nav_forward: Vec::new(),
             anim_token: 0,
             route_entered_at: Instant::now(),
             top_search: String::new(),
+            business_search_open: false,
+            business_search_query: String::new(),
+            business_search: Cache::default(),
             profile_menu_open: false,
             agent_drawer_open: false,
             palette_open: false,
@@ -625,21 +695,46 @@ impl AtlasApp {
             selected_client: None,
             client_invoice_id: None,
             client_invoices: Cache::default(),
+            invoice_detail_id: None,
+            invoice_detail: Cache::default(),
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
+            employees: Cache::default(),
+            employee_search: String::new(),
+            employee_status: "active".to_owned(),
+            employee_category: String::new(),
+            employee_detail: Cache::default(),
+            employee_detail_id: None,
+            employee_new: None,
+            employee_pay: None,
+            employee_resign: None,
+            employee_action: None,
             expenses: Cache::default(),
             expense_search: String::new(),
             bills: Cache::default(),
             bills_open: false,
+            bill_search: String::new(),
+            ledger_reconciliation: Cache::default(),
+            ledger_reconciliation_open: false,
+            bank_csv: String::new(),
+            bank_reconciliation: Cache::default(),
+            bank_reconciliation_open: false,
             expense_editor: None,
             delivery_notes: Cache::default(),
+            delivery_search: String::new(),
             delivery_note_editor: None,
             scan: ScanState::default(),
             categories: Cache::default(),
             units: Cache::default(),
             catalog_tab: CatalogTab::default(),
             invoices: Cache::default(),
+            invoice_search: String::new(),
+            receipts: Cache::default(),
+            receipts_open: false,
+            refunds_open: false,
+            refund_search: String::new(),
+            receipt_search: String::new(),
             alerts: Cache::default(),
             nav_badges: Cache::default(),
             nav_badges_retry_at: None,
@@ -878,6 +973,7 @@ impl AtlasApp {
             }
             Route::Clients if self.clients.data.is_none() => self.load_clients(),
             Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
+            Route::Employees if self.employees.data.is_none() => self.load_employees(),
             Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
             Route::DeliveryNotes if self.delivery_notes.data.is_none() => {
                 self.load_delivery_notes();
@@ -940,6 +1036,7 @@ impl AtlasApp {
             }
             Route::Clients => self.load_clients(),
             Route::Vendors => self.load_vendors(),
+            Route::Employees => self.load_employees(),
             Route::Expenses => self.load_expenses(),
             Route::DeliveryNotes => self.load_delivery_notes(),
             Route::Sales => self.load_invoices(),
@@ -1112,6 +1209,20 @@ impl AtlasApp {
     }
 
     pub fn sign_out(&mut self) {
+        let was_browser = self.transient_session;
+        let mut vault_problem = false;
+        if let Some(session) = self.session.as_ref()
+            && session.server_url.starts_with("https://")
+        {
+            if was_browser {
+                match self.vault_worker.remove(session.clone()) {
+                    Ok(result) => self.vault_removals.push(result),
+                    Err(_) => vault_problem = true,
+                }
+            } else if self.vault_worker.block(&session.server_url).is_err() {
+                vault_problem = true;
+            }
+        }
         self.transient_session = false;
         self.avatar_job = None;
         if let Some(uri) = self.avatar_texture_uri.take() {
@@ -1135,6 +1246,9 @@ impl AtlasApp {
         self.products = Cache::default();
         self.product_search.clear();
         self.top_search.clear();
+        self.business_search_open = false;
+        self.business_search_query.clear();
+        self.business_search = Cache::default();
         self.product_editor = None;
         self.stock_dialog = None;
         self.quick_sale = None;
@@ -1146,19 +1260,39 @@ impl AtlasApp {
         self.clients = Cache::default();
         self.client_search = String::new();
         self.selected_client = None;
+        self.invoice_search.clear();
         self.client_invoice_id = None;
         self.client_invoices = Cache::default();
+        self.invoice_detail_id = None;
+        self.invoice_detail = Cache::default();
         self.client_editor = None;
         self.vendors = Cache::default();
         self.vendor_search = String::new();
         self.selected_vendor = None;
         self.vendor_editor = None;
+        self.employees = Cache::default();
+        self.employee_search.clear();
+        self.employee_status = "active".to_owned();
+        self.employee_category.clear();
+        self.employee_detail = Cache::default();
+        self.employee_detail_id = None;
+        self.employee_new = None;
+        self.employee_pay = None;
+        self.employee_resign = None;
+        self.employee_action = None;
         self.expenses = Cache::default();
         self.expense_search = String::new();
         self.bills = Cache::default();
         self.bills_open = false;
+        self.bill_search.clear();
+        self.ledger_reconciliation = Cache::default();
+        self.ledger_reconciliation_open = false;
+        self.bank_csv.clear();
+        self.bank_reconciliation = Cache::default();
+        self.bank_reconciliation_open = false;
         self.expense_editor = None;
         self.delivery_notes = Cache::default();
+        self.delivery_search.clear();
         self.delivery_note_editor = None;
         self.scan = ScanState::default();
         self.categories = Cache::default();
@@ -1166,6 +1300,11 @@ impl AtlasApp {
         self.category_editor = None;
         self.unit_editor = None;
         self.invoices = Cache::default();
+        self.receipts = Cache::default();
+        self.receipts_open = false;
+        self.receipt_search.clear();
+        self.refunds_open = false;
+        self.refund_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
         self.nav_badges_retry_at = None;
@@ -1181,6 +1320,9 @@ impl AtlasApp {
         self.created_key = None;
         self.key_create_job = None;
         self.report_job = None;
+        self.client_report = Cache::default();
+        self.client_report_id = None;
+        self.client_report_full = false;
         self.assist = Cache::default();
         self.nav_back.clear();
         self.nav_forward.clear();
@@ -1189,6 +1331,9 @@ impl AtlasApp {
         self.settings_focus = SettingsFocus::General;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
+        if vault_problem {
+            self.notice("La déconnexion locale n’a pas pu être confirmée dans le coffre ; vérifiez son accès avant de quitter.".to_owned());
+        }
         // The login endpoints need an unauthenticated client for this server.
         self.rebuild_client();
     }

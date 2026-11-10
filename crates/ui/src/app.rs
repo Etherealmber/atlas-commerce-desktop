@@ -26,10 +26,28 @@ impl AtlasApp {
         display_name: String,
         avatar_url: String,
     ) {
+        // A legacy login must supersede any previous v1 vault authority.
+        // Delete the old active legacy record before making it authoritative,
+        // so an interrupted replacement cannot revive the prior account.
+        if let Some(server) = self.server_store.selected_url().map(str::to_owned)
+            && server.starts_with("https://")
+        {
+            let deleted = match std::fs::remove_file(self.paths.session_file()) {
+                Ok(()) => true,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                Err(_) => false,
+            };
+            if !deleted || self.vault_worker.legacy(&server).is_err() {
+                self.notice(
+                    "La restauration de la session ne peut pas être garantie sur cet appareil."
+                        .to_owned(),
+                );
+            }
+        }
         self.enter_session_with_persistence(token, username, role, display_name, avatar_url, true);
     }
 
-    /// Browser sessions stay in memory until the native secure vault is wired.
+    /// Enters a v1 browser session and queues its OS-vault persistence.
     pub(crate) fn enter_browser_session(&mut self, token: String, username: String, role: String) {
         self.enter_session_with_persistence(
             token,
@@ -81,6 +99,14 @@ impl AtlasApp {
         self.login = Default::default();
         self.qr = Default::default();
         self.session = Some(record.clone());
+        if !persist {
+            match self.vault_worker.save(record.clone()) {
+                Ok(result) => self.vault_saves.push(result),
+                Err(_) => self.notice(
+                    "Coffre indisponible : session conservée uniquement en mémoire.".to_owned(),
+                ),
+            }
+        }
         if persist {
             self.account_store.upsert(&record);
             self.save_session();
@@ -88,6 +114,70 @@ impl AtlasApp {
         }
         self.rebuild_client();
         self.bootstrap_shell();
+    }
+
+    /// Begins a bounded, asynchronous restoration after startup selected a v1 authority.
+    pub fn begin_vault_restore(&mut self, server: String) {
+        match self.vault_worker.load(server.clone()) {
+            Ok(receiver) => {
+                self.screen = Screen::Splash;
+                self.vault_restore = Some((server, Instant::now(), receiver));
+            }
+            Err(_) => self.notice("Coffre indisponible : reconnectez-vous.".to_owned()),
+        }
+    }
+
+    fn poll_vault(&mut self) {
+        use std::sync::mpsc::TryRecvError;
+        if let Some((server, started, receiver)) = self.vault_restore.take() {
+            match receiver.try_recv() {
+                Ok(Ok(Some(session)))
+                    if matches!(self.screen, Screen::Splash)
+                        && self.session.is_none()
+                        && self.server_store.selected_url() == Some(server.as_str()) =>
+                {
+                    self.session = Some(session);
+                    self.transient_session = true;
+                    self.rebuild_client();
+                }
+                Ok(Ok(_)) => {}
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    self.notice("Coffre indisponible : reconnectez-vous.".to_owned());
+                }
+                Err(TryRecvError::Empty) if started.elapsed() < Duration::from_secs(10) => {
+                    self.vault_restore = Some((server, started, receiver));
+                }
+                Err(TryRecvError::Empty) => {
+                    self.notice("Le coffre ne répond pas ; reconnectez-vous.".to_owned());
+                }
+            }
+        }
+        let mut save_error = false;
+        self.vault_saves
+            .retain(|receiver| match receiver.try_recv() {
+                Ok(Ok(_)) => false,
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    save_error = true;
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+            });
+        if save_error {
+            self.notice("Coffre indisponible : la session reste en mémoire seulement.".to_owned());
+        }
+        let mut removal_error = false;
+        self.vault_removals
+            .retain(|receiver| match receiver.try_recv() {
+                Ok(Ok(())) => false,
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                    removal_error = true;
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+            });
+        if removal_error {
+            self.notice("La suppression du secret dans le coffre a échoué ; la restauration locale est bloquée.".to_owned());
+        }
     }
 
     /// First loads after entering the shell or restoring a session.
@@ -115,9 +205,20 @@ impl AtlasApp {
         {
             self.load_alerts();
         }
-        if self.settings.update_check_on_start {
-            self.check_for_updates(false);
+        self.update.cache = crate::update::UpdateCache::load(&self.paths.update_state_file());
+        let cached_manifest = match self.settings.update_channel {
+            atlas_core::settings::UpdateChannel::Stable => {
+                self.update.cache.manifest_stable.clone()
+            }
+            atlas_core::settings::UpdateChannel::Prerelease => {
+                self.update.cache.manifest_prerelease.clone()
+            }
+        };
+        if let Some(manifest) = cached_manifest {
+            self.apply_manifest(manifest);
         }
+        self.schedule_update_checks();
+        self.maybe_auto_check_updates();
     }
 
     // ── Data loaders ─────────────────────────────────────────────────────
@@ -155,6 +256,276 @@ impl AtlasApp {
         };
         let job = self.runner.spawn(async move { client.vendors().await });
         self.vendors.start(job);
+    }
+
+    pub fn load_employees(&mut self) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let status = self.employee_status.clone();
+        let query = self.employee_search.clone();
+        let category = self.employee_category.clone();
+        self.employees.start(
+            self.runner.spawn(async move {
+                crate::employees::fetch(&api, &status, &query, &category).await
+            }),
+        );
+    }
+
+    pub(crate) fn load_employee_detail(&mut self, id: i64) {
+        if id <= 0 || !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_detail_id = Some(id);
+        self.employee_detail.start(
+            self.runner
+                .spawn(async move { crate::employees::detail(&api, id).await }),
+        );
+    }
+
+    /// Mints a short-lived ticket and opens one allowlisted printable
+    /// document in the system browser. The ticket is never logged.
+    pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
+        if !crate::employees::printable_path(path) {
+            self.notice("Document imprimable non autorisé.".to_owned());
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        if self.report_job.is_some() {
+            return;
+        }
+        let path = path.to_owned();
+        let params: Vec<(String, String)> = params
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect();
+        let locale = self.locale;
+        let job = self.runner.spawn(async move {
+            if !crate::employees::printable_path(&path) {
+                return Err(atlas_api::ApiError::client(
+                    t!(locale, "Invalid report link.").into_owned(),
+                ));
+            }
+            let ticket = api.report_link_ticket().await?;
+            let mut url =
+                url::Url::parse(&format!("{}{path}", api.base_url())).map_err(|error| {
+                    log::warn!("invalid printable link: {error}");
+                    atlas_api::ApiError::client(t!(locale, "Invalid report link.").into_owned())
+                })?;
+            {
+                let mut query = url.query_pairs_mut();
+                query.append_pair("rt", &ticket.rt);
+                for (key, value) in &params {
+                    if !value.is_empty() {
+                        query.append_pair(key, value);
+                    }
+                }
+            }
+            Ok(url.to_string())
+        });
+        self.report_job = Some(job);
+    }
+
+    pub(crate) fn pay_employee(&mut self) {
+        let parsed = self.employee_pay.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let amount = form
+                .amount
+                .trim()
+                .replace(',', ".")
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0);
+            match amount {
+                Some(amount) => {
+                    form.saving = true;
+                    form.error = None;
+                    Some((
+                        form.employee_id,
+                        amount,
+                        form.date.trim().to_owned(),
+                        form.note.trim().to_owned(),
+                    ))
+                }
+                None => {
+                    form.error = Some("Montant de paiement invalide.".to_owned());
+                    None
+                }
+            }
+        });
+        let Some((id, amount, date, note)) = parsed else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_pay.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::pay(&api, id, amount, &date, &note).await }),
+        );
+    }
+
+    pub(crate) fn advance_employee(&mut self, id: i64, amount: f64, note: &str) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let note = note.to_owned();
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::advance(&api, id, amount, &note).await }),
+        );
+    }
+
+    pub(crate) fn resign_employee(&mut self) {
+        let parsed = self.employee_resign.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let reason = form.reason.trim().to_owned();
+            if reason.is_empty() || reason.chars().count() > 200 {
+                form.error = Some("Motif de démission invalide.".to_owned());
+                return None;
+            }
+            form.saving = true;
+            form.error = None;
+            Some((form.employee_id, reason))
+        });
+        let Some((id, reason)) = parsed else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_resign.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::resign(&api, id, &reason).await }),
+        );
+    }
+
+    pub(crate) fn reactivate_employee(&mut self, id: i64) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::reactivate(&api, id).await }),
+        );
+    }
+
+    pub(crate) fn create_employee(&mut self) {
+        let Some(body) = self.employee_new.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let salary = form
+                .salary
+                .trim()
+                .replace(',', ".")
+                .parse::<f64>()
+                .unwrap_or(0.0);
+            let days = form.cycle_days.trim().parse::<i64>().unwrap_or(7);
+            form.saving = true;
+            form.error = None;
+            Some(crate::employees::new_employee(
+                form.first_name.trim(),
+                form.last_name.trim(),
+                form.phone.trim(),
+                form.email.trim(),
+                form.role_title.trim(),
+                form.department.trim(),
+                form.category.trim(),
+                form.national_id.trim(),
+                form.city.trim(),
+                salary,
+                if form.days_cycle { "days" } else { "monthly" },
+                days,
+                form.notes.trim(),
+            ))
+        }) else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_new.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::create(&api, &body).await }),
+        );
+    }
+
+    fn poll_employee_jobs(&mut self) {
+        let Some(result) = self.employee_action.as_ref().and_then(|job| job.poll()) else {
+            return;
+        };
+        self.employee_action = None;
+        match result {
+            Ok(action) => {
+                if !action.message.is_empty() {
+                    self.notice(action.message);
+                }
+                self.employee_new = None;
+                self.employee_pay = None;
+                self.employee_resign = None;
+                self.load_employees();
+                if let Some(id) = self.employee_detail_id {
+                    self.load_employee_detail(id);
+                }
+            }
+            Err(error) => screens::employees::action_failed(self, &error),
+        }
+    }
+
+    pub(crate) fn reconcile_bank_csv(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) || self.bank_reconciliation.loading {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        let csv = self.bank_csv.clone();
+        self.bank_reconciliation.start(
+            self.runner.spawn(async move {
+                crate::client_invoices::reconcile_bank_csv(&client, csv).await
+            }),
+        );
+    }
+
+    pub(crate) fn load_ledger_reconciliation(&mut self) {
+        if !self.role_policy().allows_route(Route::Expenses) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.ledger_reconciliation
+            .start(self.runner.spawn(async move {
+                crate::client_invoices::fetch_ledger_reconciliation(&client).await
+            }));
     }
 
     pub(crate) fn load_bills(&mut self) {
@@ -212,6 +583,19 @@ impl AtlasApp {
             .runner
             .spawn(async move { client.invoices("all").await });
         self.invoices.start(job);
+    }
+
+    pub(crate) fn load_receipts(&mut self) {
+        if !self.role_policy().allows_route(Route::Sales) {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.receipts.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_receipts(&client).await }),
+        );
     }
 
     pub fn load_alerts(&mut self) {
@@ -382,12 +766,57 @@ impl AtlasApp {
         self.key_create_job = Some(job);
     }
 
+    pub(crate) fn search_business(&mut self, query: String) {
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let policy = self.role_policy();
+        let access = crate::business_search::SearchAccess {
+            products: policy.allows_route(Route::Products),
+            clients: policy.allows_route(Route::Clients),
+            sales: policy.allows_route(Route::Sales),
+            vendors: policy.allows_route(Route::Vendors),
+            delivery: policy.allows_route(Route::DeliveryNotes),
+            bills: policy.allows_route(Route::Expenses),
+        };
+        self.business_search_open = true;
+        self.business_search_query = query.clone();
+        self.business_search = Default::default();
+        self.business_search.start(
+            self.runner
+                .spawn(async move { crate::business_search::search(&api, query, access).await }),
+        );
+    }
+
+    /// Read an individual invoice with its lines without opening a browser.
+    pub(crate) fn open_invoice_detail(&mut self, id: i64) {
+        if id <= 0
+            || !(self.role_policy().allows_route(Route::Sales)
+                || self.role_policy().allows_route(Route::Clients))
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.invoice_detail_id = Some(id);
+        self.invoice_detail = Default::default();
+        self.invoice_detail.start(
+            self.runner
+                .spawn(async move { crate::client_invoices::fetch_detail(&api, id).await }),
+        );
+    }
+
     /// Load the server-filtered list into the native client detail panel.
     pub fn open_client_invoices(&mut self, client: &atlas_api::models::Client) {
         let Some(api) = self.client.clone() else {
             return;
         };
         let id = client.id;
+        if self.client_invoice_id != Some(id) {
+            self.invoice_detail_id = None;
+            self.invoice_detail = Default::default();
+        }
         self.client_invoice_id = Some(id);
         self.client_invoices = Default::default();
         self.client_invoices.start(
@@ -421,38 +850,36 @@ impl AtlasApp {
         }
     }
 
-    /// Mint a 30-minute report ticket and open the printable client
-    /// situation report (`Synthèse` or `Détail complet`) in the browser.
-    pub fn open_client_situation(&mut self, client: &atlas_api::models::Client, full: bool) {
+    /// Load the server's report as inert native text and tables.
+    pub(crate) fn load_client_report(&mut self, client: &atlas_api::models::Client, full: bool) {
+        if !self.role_policy().allows_route(Route::Clients) {
+            return;
+        }
         let Some(api) = self.client.clone() else {
             return;
         };
-        if self.report_job.is_some() {
-            return;
+        self.client_report_id = Some(client.id);
+        self.client_report_full = full;
+        self.client_report = Default::default();
+        let client = client.clone();
+        self.client_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch(&api, &client, full).await }),
+        );
+    }
+
+    /// Mint a 30-minute report ticket and open the printable client
+    /// situation report (`Synthèse` or `Détail complet`) in the browser.
+    pub fn open_client_situation(&mut self, client: &atlas_api::models::Client, full: bool) {
+        let mut params = vec![
+            ("client_id", client.id.to_string()),
+            ("name", client.name.clone()),
+            ("ice", client.ice.clone()),
+        ];
+        if full {
+            params.push(("detail", "full".to_owned()));
         }
-        let client_id = client.id;
-        let name = client.name.clone();
-        let ice = client.ice.clone();
-        let locale = self.locale;
-        let job = self.runner.spawn(async move {
-            let ticket = api.report_link_ticket().await?;
-            let mut url =
-                url::Url::parse(&format!("{}/api/reports/client-situation", api.base_url()))
-                    .map_err(|error| {
-                        log::warn!("invalid report link: {error}");
-                        atlas_api::ApiError::client(t!(locale, "Invalid report link.").into_owned())
-                    })?;
-            url.query_pairs_mut()
-                .append_pair("rt", &ticket.rt)
-                .append_pair("client_id", &client_id.to_string())
-                .append_pair("name", &name)
-                .append_pair("ice", &ice);
-            if full {
-                url.query_pairs_mut().append_pair("detail", "full");
-            }
-            Ok(url.to_string())
-        });
-        self.report_job = Some(job);
+        self.open_printable("/api/reports/client-situation", &params);
     }
 
     pub fn revoke_api_key(&mut self, id: i64) {
@@ -579,22 +1006,75 @@ impl AtlasApp {
             );
         self.update.checking = true;
         self.update.error = None;
-        let job = self
-            .runner
-            .spawn(async move { crate::update::fetch_manifest(prerelease).await });
+        let cache = self.update.cache.clone();
+        let cache_path = self.paths.update_state_file();
+        let job = self.runner.spawn(async move {
+            crate::update::fetch_manifest(prerelease, cache, cache_path).await
+        });
         self.update.job = Some(job);
     }
 
-    /// Downloads and hands off the update through the fastframe helper.
+    /// Recomputes when the next automatic check may run. Checks honour the
+    /// stored ETag and GitHub's rate-limit window, so several launches in an
+    /// hour never exhaust the unauthenticated quota.
+    pub fn schedule_update_checks(&mut self) {
+        if !self.settings.update_check_on_start {
+            self.update.next_check_at = None;
+            return;
+        }
+        let interval = self.settings.update_check_interval_hours.clamp(1, 168) * 3_600;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let elapsed = now.saturating_sub(self.update.cache.last_checked_unix);
+        let delay = interval.saturating_sub(elapsed);
+        self.update.next_check_at = Some(Instant::now() + Duration::from_secs(delay.min(interval)));
+    }
+
+    /// Runs an automatic check once its delay elapsed, never more often
+    /// than the configured interval.
+    pub fn maybe_auto_check_updates(&mut self) {
+        if !self.settings.update_check_on_start || self.update.checking {
+            return;
+        }
+        if self.update.next_check_at.is_none() {
+            self.schedule_update_checks();
+        }
+        let Some(next) = self.update.next_check_at else {
+            return;
+        };
+        if Instant::now() < next {
+            return;
+        }
+        self.check_for_updates(false);
+        self.schedule_update_checks();
+    }
+
+    fn save_update_cache(&self) {
+        self.update.cache.save(&self.paths.update_state_file());
+    }
+
+    /// User-triggered install: reuses an already downloaded copy when the
+    /// auto-download setting fetched one, otherwise downloads it now.
     pub fn start_update_download(&mut self) {
+        self.begin_update_download(false);
+    }
+
+    fn begin_update_download(&mut self, auto: bool) {
         if self.update.progress.is_some() {
             return;
         }
+        self.update.auto_download = auto;
         let progress = Arc::new(Mutex::new((0_u64, 0_u64)));
         self.update_progress = progress.clone();
         self.update.progress = Some((0, 0));
         self.update.stage = t!(self.locale, "Downloading…").into_owned();
         let locale = self.locale;
+        let expected = self
+            .update
+            .last_manifest
+            .as_ref()
+            .map(|manifest| manifest.version.clone());
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             // Pin the blocking closure's error type: without this, inference
             // starts from the &str guard below and resolves it to unsized str.
@@ -610,17 +1090,38 @@ impl AtlasApp {
                     )
                     .into_owned()
                 })?;
-                let release = updater
-                    .check()
-                    .map_err(|error| error.to_string())?
-                    .ok_or_else(|| t!(locale, "No published release found.").into_owned())?;
-                let prepared = updater
-                    .download(&release, |received, total| {
-                        if let Ok(mut guard) = progress.lock() {
-                            *guard = (received, total);
+                // A previous auto-download left its verified copy staged
+                // beside the app; reuse it instead of spending bandwidth.
+                let kept = updater.kept().ok().flatten().filter(|prepared| {
+                    expected.as_deref().is_none_or(|version| prepared.version().trim_start_matches('v') == version.trim_start_matches('v'))
+                });
+                let prepared = match kept {
+                    Some(prepared) => prepared,
+                    None => {
+                        let release = updater
+                            .check()
+                            .map_err(|error| error.to_string())?
+                            .ok_or_else(|| {
+                                t!(locale, "No published release found.").into_owned()
+                            })?;
+                        if expected.as_deref().is_some_and(|version| release.version.trim_start_matches('v') != version.trim_start_matches('v')) {
+                            return Err("La version proposée par le programme de mise à jour ne correspond pas au manifeste ; réessayez plus tard.".to_owned());
                         }
-                    })
-                    .map_err(|error| error.to_string())?;
+                        updater
+                            .download(&release, |received, total| {
+                                if let Ok(mut guard) = progress.lock() {
+                                    *guard = (received, total);
+                                }
+                            })
+                            .map_err(|error| error.to_string())?
+                    }
+                };
+                if auto {
+                    // Keep the staged files for a later install; never
+                    // restart the app while someone is working.
+                    drop(prepared);
+                    return Ok(());
+                }
                 updater
                     .handoff(prepared, Vec::new())
                     .map_err(|error| error.to_string())?;
@@ -656,12 +1157,30 @@ impl AtlasApp {
             self.update.job = None;
             self.update.checking = false;
             match result {
-                Ok(Some(manifest)) => {
-                    self.apply_manifest(manifest);
+                Ok(checked) => {
+                    let not_modified = checked.not_modified;
+                    self.update.cache = checked.cache;
+                    self.save_update_cache();
+                    if let Some(manifest) = checked.manifest {
+                        self.apply_manifest(manifest);
+                    } else if !not_modified {
+                        self.update.up_to_date_at = Some(Instant::now());
+                        self.update.error = None;
+                    }
                 }
-                Ok(None) => {}
-                Err(error) => self.update.error = Some(error),
+                Err(error) => {
+                    // Record failure as a check too, to avoid retrying every
+                    // frame offline; preserve any quota reset learned by HTTP.
+                    self.update.cache =
+                        crate::update::UpdateCache::load(&self.paths.update_state_file());
+                    self.update.cache.last_checked_unix = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |elapsed| elapsed.as_secs());
+                    self.update.error = Some(error);
+                    self.save_update_cache();
+                }
             }
+            self.schedule_update_checks();
         }
         if let Some(job) = &self.update_download_job {
             if let Ok(guard) = self.update_progress.lock() {
@@ -670,12 +1189,34 @@ impl AtlasApp {
             if let Some(result) = job.poll() {
                 self.update_download_job = None;
                 match result {
+                    Ok(()) if self.update.auto_download => {
+                        // Downloaded in the background and kept staged: the
+                        // app never restarts under someone because a byte
+                        // arrived. Installing waits for the user or the next
+                        // launch, and reuses this copy instead of downloading.
+                        self.update.auto_download = false;
+                        self.update.progress = None;
+                        self.update.stage =
+                            t!(self.locale, "Update downloaded. Restart to install.").into_owned();
+                        self.update.ready_version = self
+                            .update
+                            .last_manifest
+                            .as_ref()
+                            .map(|manifest| manifest.version.clone());
+                        if let Some(version) = self.update.ready_version.clone() {
+                            self.notice(format!(
+                                "{} v{version}",
+                                t!(self.locale, "Update downloaded. Restart to install.")
+                            ));
+                        }
+                    }
                     Ok(()) => {
                         self.update.stage = t!(self.locale, "Installing…").into_owned();
                         self.wants_quit = true;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     Err(error) => {
+                        self.update.auto_download = false;
                         self.update.progress = None;
                         self.update.error = Some(error);
                     }
@@ -700,8 +1241,13 @@ impl AtlasApp {
                 self.screen = Screen::UpdateGate;
             }
             UpdateDecision::Optional { .. } => {
+                let auto = self.settings.update_auto_download;
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
                 self.update.last_manifest = Some(manifest);
+                if auto && self.update.progress.is_none() && self.update_download_job.is_none() {
+                    // Background download; installation stays explicit.
+                    self.begin_update_download(true);
+                }
             }
         }
     }
@@ -772,6 +1318,7 @@ impl AtlasApp {
     pub fn poll_background(&mut self, ctx: &Context) {
         self.drain_power_events();
         self.drain_tray(ctx);
+        self.poll_vault();
         self.consume_deep_links();
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
@@ -780,15 +1327,15 @@ impl AtlasApp {
         screens::auth::poll_login_jobs(self);
         if let Some(result) = self.avatar_job.as_ref().and_then(|job| job.poll()) {
             self.avatar_job = None;
+            if let Some(old) = self.avatar_texture_uri.take() {
+                ctx.forget_image(&old);
+            }
             if let Some((uri, bytes)) = result {
-                if let Some(old) = self.avatar_texture_uri.take() {
-                    ctx.forget_image(&old);
-                }
                 ctx.forget_image(&uri);
                 ctx.include_bytes(uri.clone(), bytes);
                 self.avatar_texture_uri = Some(uri);
-                ctx.request_repaint();
             }
+            ctx.request_repaint();
         }
 
         // Caches.
@@ -801,16 +1348,37 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.client_report.poll() {
+            ctx.request_repaint();
+        }
         if self.client_invoices.poll() {
             ctx.request_repaint();
         }
+        if self.business_search.poll() {
+            ctx.request_repaint();
+        }
+        if self.invoice_detail.poll() {
+            ctx.request_repaint();
+        }
         if self.vendors.poll() {
+            ctx.request_repaint();
+        }
+        if self.employees.poll() {
+            ctx.request_repaint();
+        }
+        if self.employee_detail.poll() {
             ctx.request_repaint();
         }
         if self.expenses.poll() {
             ctx.request_repaint();
         }
         if self.bills.poll() {
+            ctx.request_repaint();
+        }
+        if self.ledger_reconciliation.poll() {
+            ctx.request_repaint();
+        }
+        if self.bank_reconciliation.poll() {
             ctx.request_repaint();
         }
         if self.delivery_notes.poll() {
@@ -820,6 +1388,9 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.units.poll() {
+            ctx.request_repaint();
+        }
+        if self.receipts.poll() {
             ctx.request_repaint();
         }
         if self.invoices.poll() {
@@ -853,9 +1424,11 @@ impl AtlasApp {
             }
             ctx.request_repaint();
         }
+        self.poll_employee_jobs();
         self.poll_profile_jobs();
         self.poll_agent_jobs();
         self.poll_update_jobs(ctx);
+        self.maybe_auto_check_updates();
         self.enforce_session_binding();
 
         // Periodic refresh while a session is live. A cache only enters the
@@ -1034,6 +1607,9 @@ impl AtlasApp {
     #[must_use]
     pub fn busy(&self) -> bool {
         self.login.busy
+            || self.vault_restore.is_some()
+            || !self.vault_saves.is_empty()
+            || !self.vault_removals.is_empty()
             || self.qr.job_status.is_some()
             || self.qr.job_create.is_some()
             || self.qr.job_complete.is_some()
@@ -1041,8 +1617,14 @@ impl AtlasApp {
             || self.dashboard.loading
             || self.products.loading
             || self.client_invoices.loading
+            || self.client_report.loading
+            || self.invoice_detail.loading
+            || self.business_search.loading
             || self.bills.loading
+            || self.ledger_reconciliation.loading
+            || self.bank_reconciliation.loading
             || self.invoices.loading
+            || self.receipts.loading
             || self.alerts.loading
             || self.devices.loading
             || self.profile.loading
@@ -1086,6 +1668,10 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        if self.browser_login.embedded {
+            crate::browser_auth::cancel(self);
+        }
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
@@ -1130,6 +1716,12 @@ impl Resident for AtlasApp {
 pub struct EframeShell {
     pub held: Held<AtlasApp>,
     first_frame: bool,
+    #[cfg(target_os = "windows")]
+    login_view: Option<crate::webview_auth::LoginView>,
+    #[cfg(target_os = "linux")]
+    login_view: Option<crate::webview_auth_linux::LoginView>,
+    #[cfg(target_os = "macos")]
+    login_view: Option<atlas_webview_macos::LoginView>,
 }
 
 impl EframeShell {
@@ -1157,6 +1749,8 @@ impl EframeShell {
         Self {
             held,
             first_frame: true,
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            login_view: None,
         }
     }
 }
@@ -1175,7 +1769,9 @@ impl eframe::App for EframeShell {
             .unwrap_or_else(|| egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32())
     }
 
-    fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let _ = &frame;
         if self.first_frame {
             log::info!("Startup: first window logic frame");
             self.first_frame = false;
@@ -1230,6 +1826,137 @@ impl eframe::App for EframeShell {
         }
 
         self.held.poll_background(ctx);
+        // Wake the app exactly when the next automatic update check is due,
+        // even when no input, job or animation requests a repaint.
+        if let Some(at) = self.held.update.next_check_at {
+            ctx.request_repaint_after(at.saturating_duration_since(Instant::now()));
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else if let Some(window) = frame.winit_window() {
+                let size = window.inner_size();
+                let geometry = (size.width, size.height, window.scale_factor());
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    match crate::webview_auth::LoginView::open(
+                        window.as_ref(),
+                        geometry,
+                        &url,
+                        &server,
+                        &self.held.paths.dirs.cache,
+                    ) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
+                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
+                        }
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if let Some(view) = &self.login_view {
+                    view.resize(geometry.0, geometry.1, geometry.2);
+                }
+            }
+        }
+        #[cfg(target_os = "linux")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else {
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let code = self
+                        .held
+                        .browser_login
+                        .pairing_code
+                        .as_deref()
+                        .unwrap_or_default();
+                    match crate::webview_auth_linux::LoginView::open(&url, &server, code) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(crate::webview_auth_linux::UNAVAILABLE) => {
+                            crate::browser_auth::fallback_to_browser(
+                                &mut self.held,
+                                url,
+                                crate::webview_auth_linux::UNAVAILABLE,
+                            );
+                        }
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if let Some(view) = self.login_view.as_mut() {
+                    match view.pump() {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            self.login_view = None;
+                            crate::browser_auth::cancel(&mut self.held);
+                        }
+                        Err(()) => {
+                            self.login_view = None;
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(
+                                "Connexion intégrée indisponible. Utilisez le navigateur système."
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                }
+                if self.login_view.is_some() {
+                    ctx.request_repaint_after(Duration::from_millis(16));
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if !crate::browser_auth::embedded_active(&self.held) {
+                self.login_view = None;
+            } else if let Some(window) = frame.winit_window() {
+                let size = window.inner_size();
+                let geometry = (size.width, size.height, window.scale_factor());
+                if let Some(url) = self.held.browser_login.pending_url.take() {
+                    let server = self
+                        .held
+                        .server_store
+                        .selected_url()
+                        .unwrap_or_default()
+                        .to_owned();
+                    match atlas_webview_macos::LoginView::open(
+                        window.as_ref(),
+                        geometry,
+                        &url,
+                        &server,
+                    ) {
+                        Ok(view) => self.login_view = Some(view),
+                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
+                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
+                        }
+                        Err(message) => {
+                            crate::browser_auth::cancel(&mut self.held);
+                            self.held.login.error = Some(message.to_owned());
+                        }
+                    }
+                }
+                if let Some(view) = &self.login_view {
+                    view.resize(geometry.0, geometry.1, geometry.2);
+                }
+            }
+        }
         // Unlike viewport.visible(), this also handles minimized, occluded,
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
@@ -1301,6 +2028,19 @@ impl eframe::App for EframeShell {
                         },
                     );
                 });
+        }
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::NONE
+                        .fill(palette.window)
+                        .inner_margin(egui::Margin::symmetric(16, 0)),
+                )
+                .show(ui, |ui| {
+                    screens::auth::draw_embedded_header(&mut self.held, ui, &palette)
+                });
+            return;
         }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it

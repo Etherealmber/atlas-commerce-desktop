@@ -15,6 +15,7 @@ on:
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
       - tests/windows-inno-upgrade.ps1
+      - tests/windows-mixed-install.ps1
       - .github/workflows/packaging.yml
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - scripts/generate-icons.py
       - tests/test_packaging_identity.py
       - tests/windows-inno-upgrade.ps1
+      - tests/windows-mixed-install.ps1
       - .github/workflows/packaging.yml
   workflow_dispatch:
 
@@ -35,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
         with:
           ruby-version: '3.4'
       - name: Desktop validation tools
@@ -93,12 +95,137 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  linux-packages:
+    # Builds the real DEB, RPM and AppImage from a release archive produced in
+    # this job, then checks that the optional WebKitGTK helper is packaged.
+    # Nothing is published: these packages are validation artifacts only.
+    name: Linux packages contain the WebView helper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        with:
+          ruby-version: '3.4'
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        with:
+          key: packaging-linux-packages
+      - name: Build GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libwebkitgtk-6.0-dev libx11-dev libx11-xcb-dev libxcursor-dev \
+            libxi-dev libxrandr-dev libarchive-tools squashfs-tools zsync
+      - name: Release binary and archive
+        run: |
+          set -euo pipefail
+          cargo build --release
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          name="atlas-commerce-desktop-v${version}-x86_64-unknown-linux-gnu"
+          mkdir -p "dist/$name"
+          cp target/release/atlas-commerce-desktop target/release/atlas-commerce-webview "dist/$name/"
+          cp README.md LICENSE packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
+          cp --parents packaging/applications/atlas-commerce-desktop.desktop \
+            packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
+          tar czf "dist/$name.tar.gz" -C dist "$name"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install nFPM 2.47.0
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/nfpm.tar.gz" \
+            https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
+          sudo tar -C /usr/local/bin -xzf "$RUNNER_TEMP/nfpm.tar.gz" nfpm
+          nfpm --version
+      - name: Build DEB, RPM and AppImage
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/build-packages.log"
+          : > "$log"
+          trap 'tail -40 "$log" | while IFS= read -r line; do echo "::error title=linux-packages::${line:0:400}"; done' ERR
+          exec > >(tee -a "$log") 2>&1
+          gem install native-packages --version 0.10.0 --no-document
+          native-packages build --version "$VERSION" \
+            --target linux-amd64 --target appimage-amd64 \
+            --defer-recipes --output "$RUNNER_TEMP/packages"
+          find "$RUNNER_TEMP/packages" -type f \( -name '*.deb' -o -name '*.rpm' \
+            -o -name '*.AppImage' -o -name '*.zsync' \) -print
+      - name: Assert the helper ships in every Linux package
+        run: |
+          set -euo pipefail
+          log=packaging-linux-packages.log
+          : > "$log"
+          step="deb-liste"
+          trap 'echo "::error title=linux-packages-content::étape ${step} en échec" ; tail -25 "$log" | while IFS= read -r line; do echo "::error title=linux-packages-content::${line:0:400}"; done' ERR
+          # `grep -q` would close the pipe early and, under `pipefail`, report
+          # a spurious failure; every listing is written once and then read.
+          deb=$(find "$RUNNER_TEMP/packages" -name '*.deb' | head -1)
+          test -n "$deb"
+          dpkg-deb -c "$deb" > "$RUNNER_TEMP/deb-listing.txt"
+          cat "$RUNNER_TEMP/deb-listing.txt" >> "$log"
+          grep -F '/usr/bin/atlas-commerce-webview' "$RUNNER_TEMP/deb-listing.txt"
+          grep -F '/usr/bin/atlas-commerce-desktop' "$RUNNER_TEMP/deb-listing.txt"
+          step="deb-dependances"
+          echo "--- dépendances DEB ---" >> "$log"
+          dpkg-deb -f "$deb" Depends > "$RUNNER_TEMP/deb-depends.txt"
+          tee -a "$log" < "$RUNNER_TEMP/deb-depends.txt"
+          grep -F 'libwebkitgtk-6.0-4' "$RUNNER_TEMP/deb-depends.txt"
+          step="rpm"
+          rpm=$(find "$RUNNER_TEMP/packages" -name '*.rpm' | head -1)
+          if [ -n "$rpm" ]; then
+            echo "--- contenu RPM ---" >> "$log"
+            rpm -qlp "$rpm" > "$RUNNER_TEMP/rpm-listing.txt"
+            cat "$RUNNER_TEMP/rpm-listing.txt" >> "$log"
+            grep -F '/usr/bin/atlas-commerce-webview' "$RUNNER_TEMP/rpm-listing.txt"
+            rpm -qpR "$rpm" > "$RUNNER_TEMP/rpm-depends.txt"
+            cat "$RUNNER_TEMP/rpm-depends.txt" >> "$log"
+            grep -F 'webkitgtk6.0' "$RUNNER_TEMP/rpm-depends.txt"
+          fi
+          step="appimage"
+          appimage=$(find "$RUNNER_TEMP/packages" -name '*.AppImage' | head -1)
+          test -n "$appimage"
+          chmod +x "$appimage"
+          rm -rf "$RUNNER_TEMP/squashfs-root"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/bin/*' >/dev/null)
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/lib/*' >/dev/null 2>&1 || true)
+          echo "--- contenu AppImage ---" >> "$log"
+          ls -l "$RUNNER_TEMP/squashfs-root/usr/bin/" | tee -a "$log"
+          test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-webview"
+          test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-desktop"
+          step="appimage-propre"
+          # Searches file names, not contents: the helper's ELF legitimately
+          # records the soname in its dynamic section.
+          bundled=$(find "$RUNNER_TEMP/squashfs-root" \
+            \( -name 'libwebkitgtk*' -o -name 'libwebkit2gtk*' -o -name 'libjavascriptcoregtk*' \) \
+            2>/dev/null | head -5)
+          if [ -n "$bundled" ]; then
+            printf '%s\n' "$bundled" | tee -a "$log"
+            echo "::error title=packaging Linux::L'AppImage embarque WebKitGTK."; exit 1
+          fi
+          echo "Assistant WebKitGTK présent dans le DEB et l'AppImage ; dépendances déclarées." | tee -a "$log"
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Paquets Linux — présence de l'assistant WebKitGTK"
+            echo
+            echo '```'
+            cat packaging-linux-packages.log 2>/dev/null || echo "(journal absent)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packaging-linux-packages
+          path: packaging-linux-packages.log
+          if-no-files-found: warn
+
   windows:
     name: Windows universal installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       # Same cache family as the CI test jobs: warm dependency builds make
       # this packaging check cheap on every push. Release builds themselves
       # stay uncached in the Release workflow (shipped-binary hygiene).
@@ -190,6 +317,13 @@ jobs:
           }
           Get-Item "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" |
             Tee-Object -Append packaging-windows.log
+      - name: Exercise mixed MSI and Inno installations
+        shell: pwsh
+        run: |
+          $setups = @(Get-ChildItem "$env:RUNNER_TEMP\inno-check\*-setup.exe")
+          if ($setups.Count -ne 1) { throw 'Expected exactly one Inno setup' }
+          ./tests/windows-mixed-install.ps1 -Msi "$env:RUNNER_TEMP\atlas-commerce-desktop-test.msi" `
+            -InnoSetup $setups[0].FullName
       - name: Job summary
         if: always()
         shell: pwsh

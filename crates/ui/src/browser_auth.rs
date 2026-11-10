@@ -23,6 +23,10 @@ pub(crate) struct BrowserLogin {
     server: Option<String>,
     pub(crate) pairing_code: Option<String>,
     pub(crate) active: bool,
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) embedded: bool,
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) pending_url: Option<Url>,
 }
 
 struct Event {
@@ -128,10 +132,66 @@ fn same_context(
 ) -> bool {
     id == got_id && server == got_origin && state == got_state
 }
+/// Identifies protocol stages without logging URLs, request bodies or proofs.
+#[derive(Clone, Copy)]
+enum Stage {
+    Capabilities,
+    Create,
+    Poll,
+    Exchange,
+}
+
+impl Stage {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Capabilities => "capabilities",
+            Self::Create => "requests",
+            Self::Poll => "poll",
+            Self::Exchange => "exchange",
+        }
+    }
+}
+
+fn decode_envelope<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, &'static str> {
+    let body: Envelope<T> = serde_json::from_slice(bytes)
+        .map_err(|_| "Réponse de connexion invalide (format inattendu).")?;
+    if !body.success {
+        return Err("Le serveur a refusé la demande de connexion.");
+    }
+    body.data.ok_or("Réponse de connexion incomplète.")
+}
+
 async fn response<T: serde::de::DeserializeOwned>(
     mut resp: reqwest::Response,
+    stage: Stage,
 ) -> Result<T, &'static str> {
-    if !resp.status().is_success() {
+    let status = resp.status();
+    // Do not log the header itself: it can contain arbitrary server input.
+    let content_kind = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| {
+            value
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase()
+        });
+    let content_kind = match content_kind.as_deref() {
+        Some("application/json") => "json",
+        Some("text/html") => "html",
+        Some(_) => "other",
+        None => "missing",
+    };
+    if !status.is_success() {
+        log::warn!(
+            "Authentification desktop: étape={}, statut={}, contenu={}, catégorie=http",
+            stage.label(),
+            status.as_u16(),
+            content_kind
+        );
         return Err("Le serveur a refusé la demande de connexion. Recommencez.");
     }
     const MAX_BODY: usize = 8192;
@@ -139,6 +199,12 @@ async fn response<T: serde::de::DeserializeOwned>(
         .content_length()
         .is_some_and(|size| size > MAX_BODY as u64)
     {
+        log::warn!(
+            "Authentification desktop: étape={}, statut={}, contenu={}, catégorie=taille",
+            stage.label(),
+            status.as_u16(),
+            content_kind
+        );
         return Err("Réponse de connexion trop volumineuse.");
     }
     let mut bytes = Vec::new();
@@ -148,16 +214,24 @@ async fn response<T: serde::de::DeserializeOwned>(
         .map_err(|_| "Réponse de connexion illisible.")?
     {
         if bytes.len().saturating_add(chunk.len()) > MAX_BODY {
+            log::warn!(
+                "Authentification desktop: étape={}, statut={}, contenu={}, catégorie=taille",
+                stage.label(),
+                status.as_u16(),
+                content_kind
+            );
             return Err("Réponse de connexion trop volumineuse.");
         }
         bytes.extend_from_slice(&chunk);
     }
-    let body: Envelope<T> =
-        serde_json::from_slice(&bytes).map_err(|_| "Réponse de connexion invalide.")?;
-    if !body.success {
-        return Err("Le serveur a refusé la demande de connexion.");
-    }
-    body.data.ok_or("Réponse de connexion incomplète.")
+    decode_envelope(&bytes).inspect_err(|_| {
+        log::warn!(
+            "Authentification desktop: étape={}, statut={}, contenu={}, catégorie=enveloppe",
+            stage.label(),
+            status.as_u16(),
+            content_kind
+        );
+    })
 }
 
 async fn run(
@@ -184,7 +258,7 @@ async fn run(
             "Ce serveur ne prend pas en charge la connexion navigateur v1. Utilisez le mot de passe ou le QR.",
         );
     }
-    let caps: Capabilities = response(cap).await?;
+    let caps: Capabilities = response(cap, Stage::Capabilities).await?;
     if caps.version != 1
         || caps.flow != "system_browser_pkce_polling"
         || caps.code_challenge_method != "S256"
@@ -204,6 +278,7 @@ async fn run(
             .send()
             .await
             .map_err(|_| "Impossible de créer la demande.")?,
+        Stage::Create,
     )
     .await?;
     if created.version != 1
@@ -224,7 +299,8 @@ async fn run(
             }
         })
     {
-        return Err("Réponse de connexion invalide.");
+        log::warn!("Authentification desktop: étape=requests, catégorie=contexte");
+        return Err("Réponse de connexion invalide (création de la demande).");
     }
     let url = valid_authorization_url(
         &base,
@@ -290,7 +366,7 @@ async fn run(
             wait = Duration::from_secs(seconds.min(300));
             continue;
         }
-        let polled: Poll = response(reply).await?;
+        let polled: Poll = response(reply, Stage::Poll).await?;
         if !same_context(
             &created.request_id,
             &server,
@@ -300,7 +376,8 @@ async fn run(
             &polled.state,
         ) || polled.interval < 5
         {
-            return Err("Réponse de connexion invalide.");
+            log::warn!("Authentification desktop: étape=poll, catégorie=contexte");
+            return Err("Réponse de connexion invalide (suivi de la demande).");
         }
         wait = Duration::from_secs(polled.interval.min(300));
         match polled.status.as_str() {
@@ -322,6 +399,7 @@ async fn run(
                         .send()
                         .await
                         .map_err(|_| "Échange interrompu ; recommencez.")?,
+                    Stage::Exchange,
                 )
                 .await?;
                 if !same_context(
@@ -342,13 +420,27 @@ async fn run(
             }
             "denied" => return Err("Connexion refusée dans le navigateur."),
             "cancelled" => return Err("Connexion annulée."),
-            _ => return Err("Réponse de connexion invalide."),
+            _ => {
+                log::warn!("Authentification desktop: étape=poll, catégorie=statut_inconnu");
+                return Err("Réponse de connexion invalide (statut inattendu).");
+            }
         }
     }
     Err("La demande a expiré. Recommencez.")
 }
 
 pub(crate) fn start(app: &mut AtlasApp) {
+    start_with_mode(app, false);
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub(crate) fn start_embedded(app: &mut AtlasApp) {
+    start_with_mode(app, true);
+}
+
+fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    let _ = embedded;
     if app.browser_login.active || app.login.busy {
         return;
     }
@@ -357,6 +449,10 @@ pub(crate) fn start(app: &mut AtlasApp) {
     };
     let fingerprint = app.identity.fingerprint().to_owned();
     app.browser_login.server = Some(base.clone());
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    {
+        app.browser_login.embedded = embedded;
+    }
     let cancelled = Arc::new(AtomicBool::new(false));
     let (tx, rx) = mpsc::channel();
     app.qr = Default::default();
@@ -367,11 +463,56 @@ pub(crate) fn start(app: &mut AtlasApp) {
     app.browser_login.events = Some(rx);
     app.browser_login.job = Some(app.runner.spawn(run(base, fingerprint, cancelled, tx)));
 }
+/// Keep the existing v1 request and polling, but finish it in the system
+/// browser when the embedded engine cannot start. The URL was validated by
+/// the host before this call; it never comes from a navigation event.
+/// Policy failures must not be opened in the browser: only host failures
+/// fall back. Both messages are produced before any hosted page is loaded.
+/// Linux reports its own startup failure explicitly instead.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub(crate) fn fallback_allowed(message: &str) -> bool {
+    !matches!(
+        message,
+        "Adresse d’autorisation invalide." | "Serveur HTTPS invalide."
+    )
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub(crate) fn fallback_to_browser(app: &mut AtlasApp, url: Url, message: &str) -> bool {
+    app.browser_login.embedded = false;
+    app.browser_login.pending_url = None;
+    if open::that(url.as_str()).is_err() {
+        cancel(app);
+        app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        false
+    } else {
+        app.login.error = Some(message.to_owned());
+        true
+    }
+}
+
 pub(crate) fn cancel(app: &mut AtlasApp) {
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    {
+        app.browser_login.pending_url = None;
+    }
     if let Some(flag) = &app.browser_login.cancel {
         flag.store(true, Ordering::Relaxed);
     }
 }
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub(crate) fn embedded_active(app: &AtlasApp) -> bool {
+    app.browser_login.active
+        && app.browser_login.embedded
+        && matches!(app.screen, Screen::Login)
+        && app.browser_login.server.as_deref() == app.server_store.selected_url()
+        && !app
+            .browser_login
+            .cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+}
+
 pub(crate) fn poll(app: &mut AtlasApp) {
     if !app.browser_login.active {
         return;
@@ -394,6 +535,14 @@ pub(crate) fn poll(app: &mut AtlasApp) {
             .is_some_and(|v| v.load(Ordering::Relaxed))
     {
         app.browser_login.pairing_code = Some(event.pairing_code);
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        if app.browser_login.embedded {
+            app.browser_login.pending_url = Some(event.url);
+        } else if open::that(event.url.as_str()).is_err() {
+            cancel(app);
+            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
         if open::that(event.url.as_str()).is_err() {
             cancel(app);
             app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
@@ -413,7 +562,6 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         match result {
             Ok(session) => {
                 app.enter_browser_session(session.token, session.username, session.role);
-                app.notice("Session gardée en mémoire seulement ; reconnectez-vous après fermeture complète.".to_owned());
             }
             Err(error) => app.login.error = Some(error.to_owned()),
         }
@@ -422,7 +570,133 @@ pub(crate) fn poll(app: &mut AtlasApp) {
 
 #[cfg(test)]
 mod tests {
-    use super::{origin, same_context, secret, valid_authorization_url};
+    use super::{
+        Capabilities, Created, Envelope, Poll, Session, decode_envelope, origin, same_context,
+        secret, valid_authorization_url,
+    };
+    // A local fixture exercises the actual HTTP response handling without
+    // contacting a real server or weakening the HTTPS requirement in run().
+    fn fixture_response(raw: Vec<u8>) -> Result<Poll, &'static str> {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = [0u8; 2048];
+            let _ = stream.read(&mut request);
+            // A rejection may stop reading before the whole body is sent.
+            let _ = stream.write_all(&raw);
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(async {
+            let client = reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .unwrap();
+            let resp = client
+                .get(format!("http://{address}/"))
+                .send()
+                .await
+                .unwrap();
+            super::response(resp, super::Stage::Poll).await
+        });
+        server.join().unwrap();
+        result
+    }
+
+    #[test]
+    fn http_response_rejects_redirects_proxy_pages_and_oversized_bodies() {
+        let redirect = b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/private\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+        assert_eq!(
+            fixture_response(redirect).err(),
+            Some("Le serveur a refusé la demande de connexion. Recommencez.")
+        );
+        let page = b"<html>private proxy page</html>";
+        let mut html = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", page.len()).into_bytes();
+        html.extend_from_slice(page);
+        assert_eq!(
+            fixture_response(html).err(),
+            Some("Réponse de connexion invalide (format inattendu).")
+        );
+        let mut large = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n2001\r\n".to_vec();
+        large.extend(std::iter::repeat_n(b'x', 8193));
+        large.extend_from_slice(b"\r\n0\r\n\r\n");
+        assert_eq!(
+            fixture_response(large).err(),
+            Some("Réponse de connexion trop volumineuse.")
+        );
+    }
+
+    #[test]
+    fn http_response_accepts_only_a_valid_poll_envelope() {
+        let body = br#"{"success":true,"data":{"status":"pending","request_id":"id","origin":"https://example.test","state":"state","interval":5}}"#;
+        let mut raw = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes();
+        raw.extend_from_slice(body);
+        let poll = fixture_response(raw).ok().unwrap();
+        assert_eq!(poll.status, "pending");
+        assert_eq!(poll.interval, 5);
+    }
+
+    #[test]
+    fn v1_envelopes_do_not_confuse_poll_or_otp_with_desktop_session() {
+        // These are distinct worker contracts; no token is accepted outside
+        // the exchange envelope or from the legacy web-login root.
+        let poll = r#"{"success":true,"data":{"status":"pending","request_id":"id","origin":"https://example.test","state":"state","interval":5}}"#;
+        let parsed: Envelope<Poll> = serde_json::from_str(poll).unwrap();
+        assert_eq!(parsed.data.unwrap().status, "pending");
+        assert!(serde_json::from_str::<Envelope<Session>>(poll).is_err());
+        let otp = r#"{"success":true,"needs_otp":true}"#;
+        assert!(
+            serde_json::from_str::<Envelope<Session>>(otp)
+                .unwrap()
+                .data
+                .is_none()
+        );
+        for body in [
+            "",
+            "<html>proxy</html>",
+            "{",
+            r#"{"success":true,"data":{"token":"x"}}"#,
+        ] {
+            assert!(serde_json::from_str::<Envelope<Session>>(body).is_err());
+        }
+        let valid = r#"{"success":true,"data":{"token":"opaque","token_type":"Bearer","username":"test","role":"owner","request_id":"id","origin":"https://example.test","state":"state"}}"#;
+        let session: Envelope<Session> = serde_json::from_str(valid).unwrap();
+        assert_eq!(session.data.unwrap().token, "opaque");
+        assert!(
+            serde_json::from_str::<Envelope<Capabilities>>(
+                r#"{"success":true,"data":{"version":"1"}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<Envelope<Created>>(r#"{"success":true,"data":{}}"#).is_err()
+        );
+    }
+
+    #[test]
+    fn envelope_errors_are_fixed_and_do_not_expose_response_content() {
+        for body in [b"<html>private proxy response</html>".as_slice(), b"", b"{"] {
+            assert_eq!(
+                decode_envelope::<Poll>(body).err(),
+                Some("Réponse de connexion invalide (format inattendu).")
+            );
+        }
+        assert_eq!(
+            decode_envelope::<Poll>(br#"{"success":false,"error":"private"}"#).err(),
+            Some("Le serveur a refusé la demande de connexion.")
+        );
+        assert_eq!(
+            decode_envelope::<Poll>(br#"{"success":true}"#).err(),
+            Some("Réponse de connexion incomplète.")
+        );
+    }
+
     #[test]
     fn proofs_are_random_url_safe_and_context_is_bound() {
         let a = secret().unwrap();

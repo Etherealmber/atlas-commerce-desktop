@@ -120,6 +120,14 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
             data.low_stock_count > 0,
         ),
     ];
+    render_metric_cards(ui, palette, &cards);
+}
+
+fn render_metric_cards(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    cards: &[(Icon, String, String, bool)],
+) {
     // A fixed 4-column grid starved narrow windows (each card demanded at
     // least 168px, so the row overflowed its card). Pick a column count from
     // the real available width and let the row wrap instead. The card frame
@@ -134,12 +142,16 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
     let outer_width =
         ((available - gap * (cols.saturating_sub(1)) as f32) / cols as f32).max(140.0);
     let card_width = (outer_width - FRAME_OVERHEAD).max(120.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        for (which, label, value, warn) in cards {
-            metric_card(ui, palette, which, &label, &value, warn, card_width);
-        }
-    });
+    // A wrapped horizontal layout can grow past its intended width when
+    // frames request space before wrapping. Build explicit rows instead.
+    for row in cards.chunks(cols) {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for (which, label, value, warn) in row {
+                metric_card(ui, palette, *which, label, value, *warn, card_width);
+            }
+        });
+    }
 }
 
 fn metric_card(
@@ -418,5 +430,51 @@ fn status_label(status: &str) -> String {
         "unpaid" => "Non payée".to_owned(),
         "overdue" => "En retard".to_owned(),
         other => other.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metric_rows_do_not_expand_a_narrow_dashboard() {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(crate::fonts::definitions());
+        let mut measured_width = 0.0;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.allocate_ui_with_layout(
+                    vec2(560.0, 700.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        let cards = [
+                            (
+                                Icon::Wallet,
+                                "Solde actuel".into(),
+                                "42 000 MAD".into(),
+                                false,
+                            ),
+                            (
+                                Icon::Boxes,
+                                "Valeur du stock".into(),
+                                "17 500 MAD".into(),
+                                false,
+                            ),
+                            (Icon::Package, "Produits".into(), "2".into(), false),
+                            (Icon::TriangleAlert, "Stock bas".into(), "0".into(), false),
+                        ];
+                        render_metric_cards(ui, &Palette::dark(), &cards);
+                        measured_width = ui.max_rect().width();
+                    },
+                );
+            });
+        });
+        output.textures_delta.set.clear();
+        output.textures_delta.free.clear();
+        assert!(
+            measured_width <= 561.0,
+            "dashboard expanded to {measured_width}"
+        );
     }
 }

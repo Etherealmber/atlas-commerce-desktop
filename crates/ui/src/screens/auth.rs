@@ -110,7 +110,7 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     );
 
     // Brief, calm splash while state restores.
-    if app.started_at.elapsed() >= Duration::from_millis(650) {
+    if app.started_at.elapsed() >= Duration::from_millis(650) && app.vault_restore.is_none() {
         if app.update.mandatory.is_some() {
             app.screen = Screen::UpdateGate;
         } else if app.session.is_some() && app.client.is_some() {
@@ -302,7 +302,9 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 ui.horizontal(|ui| {
                     crate::branding::lockup(ui, palette, 32.0);
                     ui.add_space(16.0);
-                    if secondary_button(ui, t!(app.locale, "Change server"), palette) {
+                    if !app.server_store.is_locked()
+                        && secondary_button(ui, t!(app.locale, "Change server"), palette)
+                    {
                         app.onboarding_transition_at = Some(std::time::Instant::now());
                         app.screen = Screen::ServerSetup;
                     }
@@ -342,7 +344,9 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     };
                 }
                 ui.add_space(12.0);
-                if secondary_button(ui, t!(app.locale, "Configure a custom server"), palette) {
+                if !app.server_store.is_locked()
+                    && secondary_button(ui, t!(app.locale, "Configure a custom server"), palette)
+                {
                     app.onboarding_transition_at = Some(std::time::Instant::now());
                     app.screen = Screen::ServerSetup;
                 }
@@ -376,6 +380,10 @@ fn showcase_tile(ui: &mut egui::Ui, palette: &Palette, which: Icon, width: f32) 
 // ── Server setup ───────────────────────────────────────────────────────────
 
 pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
+    if app.server_store.is_locked() {
+        draw_locked_server(app, ui, palette, embedded);
+        return;
+    }
     // Poll the probe.
     if let Some(job) = &app.server_form.probe_job
         && let Some(report) = job.poll()
@@ -644,6 +652,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 valid,
                             ) {
                                 app.server_store.onboarding_done = true;
+                                app.server_store.lock_current();
                                 app.save_servers();
                                 app.rebuild_client();
                                 app.screen = Screen::Login;
@@ -651,6 +660,56 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                         });
                     },
                 );
+            });
+        });
+}
+
+/// Shown instead of the server picker when the installer (or the first run)
+/// fixed the address. It is deliberately read-only: the only way to point an
+/// installation at another worker is to reinstall it.
+fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
+    let url = app.server_store.selected_url().unwrap_or("—").to_owned();
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(if embedded { 12.0 } else { 60.0 });
+                crate::branding::mark(ui, palette, 46.0);
+                ui.add_space(10.0);
+                page_title(ui, t!(app.locale, "Server fixed for this installation"), palette);
+                ui.add_space(8.0);
+                card(palette).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        icon(ui, Icon::Server, palette.accent, 18.0);
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(
+                                    app.server_store
+                                        .saved
+                                        .first()
+                                        .map(|entry| entry.label.clone())
+                                        .unwrap_or_else(|| t!(app.locale, "Server").into_owned()),
+                                )
+                                .color(palette.text)
+                                .strong(),
+                            );
+                            ui.label(RichText::new(url).color(palette.dim).size(12.0));
+                        });
+                    });
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new(t!(
+                            app.locale,
+                            "This address was chosen during installation. To use another server, uninstall and install the app again: it cannot be changed from Settings."
+                        ))
+                        .color(palette.secondary)
+                        .size(12.5),
+                    );
+                });
+                ui.add_space(16.0);
+                if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
+                    app.screen = Screen::Login;
+                }
             });
         });
 }
@@ -681,11 +740,18 @@ fn spawn_probe(app: &mut AtlasApp, url: String) {
 }
 
 fn select_server(app: &mut AtlasApp, url: String) {
+    // A locked installation never changes address; the UI hides every
+    // affordance, and this guard keeps a stale or scripted path honest.
+    if app.server_store.is_locked() {
+        return;
+    }
     // Switching server signs the current session out, as on Android.
     if app.session.is_some() {
         app.sign_out();
     }
     app.server_store.selected = Some(url);
+    // The first committed choice is final for this installation.
+    app.server_store.lock_current();
     app.save_servers();
     app.rebuild_client();
     app.server_form.custom_url.clear();
@@ -832,13 +898,21 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                     crate::browser_auth::cancel(app);
                 }
-            } else if primary_button(
-                ui,
-                t!(app.locale, "Sign in with your browser"),
-                palette,
-                !app.login.busy,
-            ) {
-                crate::browser_auth::start(app);
+            } else {
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                if primary_button(
+                    ui,
+                    t!(app.locale, "Sign in inside Atlas"),
+                    palette,
+                    !app.login.busy,
+                ) {
+                    crate::browser_auth::start_embedded(app);
+                }
+                if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
+                    && !app.login.busy
+                {
+                    crate::browser_auth::start(app);
+                }
             }
             ui.add_space(10.0);
             let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
@@ -889,18 +963,19 @@ fn draw_login_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal_wrapped(|ui| {
         icon(ui, Icon::Server, palette.secondary, 14.0);
         pill(ui, &host, palette.window, palette.secondary);
-        if ui
-            .add(
-                egui::Button::new(
-                    RichText::new(t!(app.locale, "Change server"))
-                        .color(palette.secondary)
-                        .size(12.5),
+        if !app.server_store.is_locked()
+            && ui
+                .add(
+                    egui::Button::new(
+                        RichText::new(t!(app.locale, "Change server"))
+                            .color(palette.secondary)
+                            .size(12.5),
+                    )
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::NONE)
+                    .min_size(egui::vec2(0.0, TARGET)),
                 )
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::NONE)
-                .min_size(egui::vec2(0.0, TARGET)),
-            )
-            .clicked()
+                .clicked()
         {
             // In-flight password and QR jobs belong to the old server.
             app.login = Default::default();
@@ -1711,4 +1786,40 @@ mod browser_approval_tests {
             assert!(browser_approval_url(base, url, "abc").is_none(), "{url}");
         }
     }
+}
+
+/// Native chrome remains outside the remote login page and shows the v1
+/// comparison code and a cancellation control without exposing proofs.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            let server = app
+                .server_store
+                .selected_url()
+                .map(atlas_core::ServerUrl::host)
+                .unwrap_or_default();
+            ui.label(
+                RichText::new(format!("{} : {}", t!(app.locale, "Server"), server))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if let Some(code) = &app.browser_login.pairing_code {
+                ui.label(
+                    RichText::new(format!(
+                        "{} {}",
+                        t!(app.locale, "Compare this code with your browser:"),
+                        code
+                    ))
+                    .color(palette.secondary),
+                );
+            }
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                crate::browser_auth::cancel(app);
+            }
+        });
+    });
 }

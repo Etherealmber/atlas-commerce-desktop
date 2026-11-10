@@ -1231,3 +1231,333 @@ msgstr "Aucune facture fournisseur."
 
 msgid "Paid"
 msgstr "Payé"
+
+msgid "Here to help with your shop."
+msgstr "Je suis là pour vous aider sur Atlas Commerce."
+
+msgid "Current page"
+msgstr "Page actuelle"
+
+msgid "How can I help with your shop?"
+msgstr "Comment puis-je vous aider avec votre boutique ?"
+
+msgid "Daily report"
+msgstr "Rapport du jour"
+
+msgid "Summarize today's sales."
+msgstr "Résume les ventes du jour."
+
+msgid "Search by number or client"
+msgstr "Rechercher par numéro ou nom de client"
+
+msgid "No matching invoice."
+msgstr "Aucune facture correspondante."
+
+msgid "Ledger reconciliation"
+msgstr "Rapprochement comptable"
+
+msgid "Invoice payments"
+msgstr "Paiements factures"
+
+msgid "Ledger receipts"
+msgstr "Encaissements solde"
+
+msgid "Receipts"
+msgstr "Reçus"
+
+msgid "Unmatched payments"
+msgstr "Paiements sans solde"
+
+msgid "Orphan ledger entries"
+msgstr "Solde orphelin"
+
+msgid "Paid without receipt"
+msgstr "Payées sans reçu"
+
+msgid "Bank reconciliation"
+msgstr "Rapprochement bancaire"
+
+msgid "Paste a CSV: date;description;amount. Results are suggestions, not confirmed entries."
+msgstr "Collez un CSV : date;libellé;montant. Les résultats sont des suggestions, pas des écritures confirmées."
+
+msgid "Find matches"
+msgstr "Rechercher les correspondances"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Lines read"
+msgstr "Lignes lues"
+
+msgid "Proposed matches"
+msgstr "Correspondances proposées"
+
+msgid "Unmatched"
+msgstr "Sans correspondance"
+
+msgid "Score"
+msgstr "Score"
+
+msgid "Only the first 150 results of each kind are shown."
+msgstr "Seuls les 150 premiers résultats de chaque type sont affichés."
+
+msgid "View"
+msgstr "Voir"
+
+msgid "Invoice detail"
+msgstr "Détail du document"
+
+msgid "No lines in this document."
+msgstr "Ce document ne contient aucune ligne."
+
+msgid "Tax rate"
+msgstr "Taux de TVA"
+
+msgid "Line total"
+msgstr "Total de la ligne"
+
+msgid "Search pages or business data…"
+msgstr "Rechercher une page ou des données métier…"
+
+msgid "Business search"
+msgstr "Recherche métier"
+
+msgid "Products: first 200 server matches; clients and documents: first 40 matches per category."
+msgstr "Produits : 200 premiers résultats du serveur ; clients et documents : 40 premiers résultats par catégorie."
+
+msgid "Search unavailable for"
+msgstr "Recherche indisponible pour"
+
+msgid "No results."
+msgstr "Aucun résultat."
+
+msgid "View invoice"
+msgstr "Voir la facture"
+
+msgid "No matching receipt."
+msgstr "Aucun reçu correspondant."
+
+msgid "Products: first 200 server matches; clients, vendors, invoices and receipts: first 40 matches per category."
+msgstr "Produits : 200 premiers résultats du serveur ; clients, fournisseurs, factures et reçus : 40 premiers résultats par catégorie."
+
+msgid "Search by number or vendor"
+msgstr "Rechercher par numéro ou fournisseur"
+
+msgid "No matching delivery note."
+msgstr "Aucun bon de livraison correspondant."
+
+msgid "No matching supplier bill."
+msgstr "Aucune facture fournisseur correspondante."
+
+msgid "Products: first 200 server matches; other categories: first 40 matches. Delivery notes: latest 100 only."
+msgstr "Produits : 200 premiers résultats du serveur ; autres catégories : 40 premiers résultats. Bons de livraison : 100 plus récents seulement."
+
+msgid "Client situation"
+msgstr "Situation client"
+
+msgid "Native text view of the server report; formatting and printing are available in the browser."
+msgstr "Vue texte native du rapport serveur ; mise en page et impression disponibles dans le navigateur."
+
+msgid "Due balance of loaded clients"
+msgstr "Solde dû des clients chargés"
+
+msgid "Loaded clients"
+msgstr "Clients chargés"
+
+msgid "Welcome"
+msgstr "Bienvenue"
+
+msgid "Sign in inside Atlas"
+msgstr "Se connecter dans Atlas"
+
+msgid "Employees"
+msgstr "Employés"
+
+msgid "Add employee"
+msgstr "Ajouter un employé"
+
+msgid "Print hiring form"
+msgstr "Imprimer fiche d’embauche"
+
+msgid "No employee"
+msgstr "Aucun employé"
+
+msgid "Add a collaborator with identity, role and salary."
+msgstr "Ajoutez un collaborateur avec identité, poste et salaire."
+
+msgid "New employee"
+msgstr "Nouvel employé"
+
+msgid "Name, number, role, phone or ID"
+msgstr "Nom, n° employé, poste, téléphone, CIN…"
+
+msgid "Status"
+msgstr "Statut"
+
+msgid "All categories"
+msgstr "Toutes catégories"
+
+msgid "Resigned"
+msgstr "Démissionnaire"
+
+msgid "to pay"
+msgstr "à payer"
+
+msgid "File"
+msgstr "Fiche"
+
+msgid "Situation"
+msgstr "Situation"
+
+msgid "Mark paid"
+msgstr "Marquer payé"
+
+msgid "Reactivate"
+msgstr "Réactiver"
+
+msgid "Advance"
+msgstr "Acompte"
+
+msgid "Resign"
+msgstr "Démissionner"
+
+msgid "Payment history"
+msgstr "Historique des paiements"
+
+msgid "No payment recorded."
+msgstr "Aucun paiement enregistré."
+
+msgid "First name"
+msgstr "Prénom"
+
+msgid "Last name"
+msgstr "Nom"
+
+msgid "Role"
+msgstr "Poste"
+
+msgid "Department"
+msgstr "Service"
+
+msgid "National ID"
+msgstr "CIN"
+
+msgid "Joined"
+msgstr "Embauche"
+
+msgid "Salary"
+msgstr "Salaire"
+
+msgid "Pay cycle"
+msgstr "Cycle de paie"
+
+msgid "Monthly"
+msgstr "Mensuel"
+
+msgid "Every N days"
+msgstr "Tous les N jours"
+
+msgid "Accrued"
+msgstr "Acquis"
+
+msgid "Last payment"
+msgstr "Dernier paiement"
+
+msgid "Next due"
+msgstr "Prochaine échéance"
+
+msgid "Reason"
+msgstr "Motif"
+
+msgid "Amount"
+msgstr "Montant"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Note"
+msgstr "Note"
+
+msgid "Confirm"
+msgstr "Confirmer"
+
+msgid "The server records the resignation and keeps the payment history."
+msgstr "Le serveur enregistre la démission et conserve l’historique des paiements."
+
+msgid "Advances and settlements follow the server rules; nothing is rounded locally."
+msgstr "Les acomptes et soldes suivent les règles du serveur ; aucun arrondi local."
+
+msgid "Payroll (active)"
+msgstr "Masse salariale (actifs)"
+
+msgid "Print"
+msgstr "Imprimer"
+
+msgid "Refunds"
+msgstr "Remboursements"
+
+msgid "No refund recorded."
+msgstr "Aucun remboursement enregistré."
+
+msgid "No matching refund."
+msgstr "Aucun remboursement correspondant."
+
+msgid "Number or client"
+msgstr "Numéro ou client"
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Server"
+msgstr "Serveur"
+
+msgid "Continue"
+msgstr "Continuer"
+
+msgid "Server fixed for this installation"
+msgstr "Serveur défini pour cette installation"
+
+msgid "This address was chosen during installation. To use another server, uninstall and install the app again: it cannot be changed from Settings."
+msgstr "Cette adresse a été choisie à l'installation. Pour utiliser un autre serveur, désinstallez puis réinstallez l'application : elle ne peut pas être modifiée dans les réglages."
+
+msgid "Fixed"
+msgstr "Défini"
+
+msgid "This server was chosen during installation. To use another one, uninstall the app and install it again; it cannot be changed from Settings."
+msgstr "Ce serveur a été choisi à l'installation. Pour en utiliser un autre, désinstallez puis réinstallez l'application ; il ne peut pas être modifié dans les réglages."
+
+msgid "Check for updates automatically"
+msgstr "Rechercher les mises à jour automatiquement"
+
+msgid "GitHub Releases are the only update source; checks reuse an ETag and respect the API quota."
+msgstr "GitHub Releases est la seule source de mise à jour ; les vérifications réutilisent un ETag et respectent le quota de l'API."
+
+msgid "Check every"
+msgstr "Vérifier toutes les"
+
+msgid "Longer delays keep several machines behind one connection far below GitHub's hourly limit."
+msgstr "Un délai plus long garde plusieurs machines derrière une même connexion bien en dessous de la limite horaire de GitHub."
+
+msgid "6 hours"
+msgstr "6 heures"
+
+msgid "12 hours"
+msgstr "12 heures"
+
+msgid "24 hours"
+msgstr "24 heures"
+
+msgid "Download updates automatically"
+msgstr "Télécharger les mises à jour automatiquement"
+
+msgid "A verified copy is prepared in the background; installation waits for a restart. Downloads come from release assets, not the API."
+msgstr "Une copie vérifiée est préparée en arrière-plan ; l'installation attend un redémarrage. Les téléchargements viennent des fichiers de version, pas de l'API."
+
+msgid "Update downloaded. Restart to install."
+msgstr "Mise à jour téléchargée. Redémarrez pour l'installer."
+
+msgid "Restart and install"
+msgstr "Redémarrer et installer"
+
+msgid "Update ready — restart to install"
+msgstr "Mise à jour prête — redémarrez pour l'installer"

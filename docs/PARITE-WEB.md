@@ -57,17 +57,17 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 |---|--:|--:|
 | `admin` | 0 | 39 |
 | `auth` | 10 | 29 |
-| `invoices` | 1 | 24 |
+| `invoices` | 4 | 24 |
 | `inventory` | 0 | 17 |
 | `reports` | 1 | 17 |
 | `products` | 3 | 16 |
-| `bills` | 0 | 15 |
-| `employees` | 0 | 14 |
+| `bills` | 2 | 15 |
+| `employees` | 7 | 14 |
 | `public` | 0 | 13 |
 | `clients` | 3 | 12 |
 | `settings` | 1 | 11 |
 | `attendance` | 0 | 9 |
-| `receipts` | 0 | 9 |
+| `receipts` | 2 | 9 |
 | `catalog` | 0 | 8 |
 | `assist` | 1 | 7 |
 | `stock` | 0 | 7 |
@@ -110,22 +110,24 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Login`, `LoginQr` | Partiel — connexion OTP/lien/QR déjà présente ; manque webauthn |
 | `Dashboard` | Oui |
 | `Products`, `ProductHistory` | Partiel — lecture + ajustement de stock ; manque CRUD, variantes, images, historique mouvements |
-| `Invoices`, `InvoiceDetail` | Partiel — liste seule ; manque détail, création, paiements, statuts, PDF/UBL |
+| `Invoices`, `InvoiceDetail` | Partiel — liste, détail natif, impression et PDF officiels ouverts dans le navigateur via un ticket `rt` de 30 minutes ; manque création, paiements, statuts et UBL |
 | `Quotes` | Non (devis) |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
-| `Receipts` | Non (reçus) |
+| `Receipts` | Partiel — liste en lecture seule, ouverture de la facture liée et impression officielle via ticket ; création et suppression restent à couvrir |
 | `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche une liste filtrée par identifiant dans l'application avec option navigateur. `Situation` ouvre encore le rapport imprimable via ticket `link-ticket` ; manque détail de facture, prix par client, imports et suppressions OTP |
-| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; liste des factures fournisseurs en lecture seule dans Dépenses. Création, paiements, réception et rapprochement restent à couvrir |
+| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; factures fournisseurs en lecture seule avec impression/PDF officiels. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
-| `Employees`, `Attendance` | Non (RH et pointage) |
+| `Employees`, `Attendance` | Partiel — liste, recherche, statut et catégorie, détail avec historique des paiements, paiement, acompte, démission et réactivation, fiche d'embauche et situation RH imprimables ; création réduite aux champs essentiels. Manquent édition complète, pièce d'identité chiffrée et pointage |
 | `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
 | `Bank` | Non (rapprochement CSV) |
-| `Reimbursements` | Non (remboursements, rattachés aux factures) |
+| `Reimbursements` | Partiel — les avoirs `remboursement` sont listés dans Ventes (recherche numéro/client, ouverture de la facture liée, impression officielle) ; création, suppression OTP et envoi d'e-mail restent dans le web |
 | `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
 | `ImportData` | Non (imports validés en deux temps) |
 | `Actions` | Non (file d'actions mobile) |
 | `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
 | `AccessPage` | Non (administration des utilisateurs) |
+| Documents imprimables | Les pages HTML officielles du serveur (facture, PDF, reçu, facture fournisseur, fiche d'embauche, situation RH) s'ouvrent dans le navigateur système avec un ticket `rt` de 30 minutes, limité par le serveur aux chemins d'impression. Le jeton de session n'apparaît jamais dans l'URL ; aucun rendu local ne prétend remplacer ces pages. |
+
 | `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version dans les réglages, option navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
 
 ## Exclusions proposées (non transposables au desktop)

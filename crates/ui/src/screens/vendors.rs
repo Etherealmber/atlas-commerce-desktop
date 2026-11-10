@@ -107,20 +107,19 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
-    ui.horizontal_top(|ui| {
-        card(palette).show(ui, |ui| {
-            ui.set_width((ui.available_width() * 0.55).max(300.0));
-            ui.vertical(|ui| {
-                vendor_list(app, ui, palette);
-            });
-        });
+    // Stack full-width sections rather than squeezing the detail pane at
+    // narrow window sizes; the selected record stays below the list.
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        vendor_list(app, ui, palette);
+    });
+    if app.selected_vendor.is_some() {
+        ui.add_space(12.0);
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.vertical(|ui| {
-                vendor_detail(app, ui, palette);
-            });
+            vendor_detail(app, ui, palette);
         });
-    });
+    }
 
     if app.vendor_editor.is_some() {
         draw_editor(app, ui, palette);
