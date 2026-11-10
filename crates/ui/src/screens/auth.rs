@@ -770,7 +770,90 @@ enum LoginTab {
     Qr,
 }
 
+/// Start the hosted login automatically, never the legacy native form. The
+/// local screen only reports progress/errors and offers an explicit fallback.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_login_jobs(app);
+    if !matches!(app.screen, Screen::Login) {
+        return;
+    }
+    if !app.requires_password
+        && let Some(link) = app.login.pending_link.take()
+    {
+        start_verify_link(app, link);
+    }
+    if should_start_hosted_login(
+        app.login.browser_auto_started,
+        app.login.busy,
+        app.qr.active,
+    ) {
+        app.login.browser_auto_started = true;
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        crate::browser_auth::start_embedded(app);
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+        crate::browser_auth::start(app);
+    }
+
+    ui.vertical_centered(|ui| {
+        ui.add_space((ui.available_height() * 0.25).max(24.0));
+        crate::branding::mark(ui, palette, 46.0);
+        ui.add_space(16.0);
+        if app.browser_login.active {
+            ui.label(
+                RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
+                    .color(palette.text)
+                    .size(16.0),
+            );
+            if let Some(code) = &app.browser_login.pairing_code {
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new(t!(app.locale, "Compare this code with your browser:"))
+                        .color(palette.secondary),
+                );
+                ui.label(
+                    RichText::new(code)
+                        .font(crate::fonts::mono_semibold(20.0))
+                        .color(palette.text),
+                );
+            }
+            ui.add_space(16.0);
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                crate::browser_auth::cancel(app);
+            }
+        } else {
+            if let Some(error) = &app.login.error {
+                ui.label(RichText::new(error).color(palette.danger));
+                ui.add_space(12.0);
+            }
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            if primary_button(
+                ui,
+                t!(app.locale, "Retry integrated sign-in"),
+                palette,
+                !app.login.busy,
+            ) {
+                crate::browser_auth::start_embedded(app);
+            }
+            ui.add_space(8.0);
+            if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
+                && !app.login.busy
+            {
+                crate::browser_auth::start(app);
+            }
+        }
+    });
+}
+
+/// Do not retry automatically after cancellation or failure, and do not race
+/// an existing deep-link or QR operation.
+fn should_start_hosted_login(started: bool, busy: bool, qr_active: bool) -> bool {
+    !started && !busy && !qr_active
+}
+
+// The earlier native login implementation is retained for its existing QR,
+// password and deep-link helpers, but is not rendered as the login page.
+#[allow(dead_code)]
+fn draw_legacy_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
     if !matches!(app.screen, Screen::Login) {
         return;
@@ -1822,4 +1905,17 @@ pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palett
             }
         });
     });
+}
+
+#[cfg(test)]
+mod hosted_login_entry_tests {
+    use super::should_start_hosted_login;
+
+    #[test]
+    fn starts_once_and_never_races_an_existing_flow() {
+        assert!(should_start_hosted_login(false, false, false));
+        assert!(!should_start_hosted_login(true, false, false));
+        assert!(!should_start_hosted_login(false, true, false));
+        assert!(!should_start_hosted_login(false, false, true));
+    }
 }

@@ -227,6 +227,9 @@ pub struct ServerSetupForm {
 /// Login form and its in-flight calls.
 #[derive(Default)]
 pub struct LoginState {
+    /// Auto-start only once per login entry; errors and cancellation must
+    /// remain visible until the user explicitly retries.
+    pub browser_auto_started: bool,
     pub username: String,
     pub password: String,
     pub otp: String,

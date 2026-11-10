@@ -1561,3 +1561,6 @@ msgstr "Redémarrer et installer"
 
 msgid "Update ready — restart to install"
 msgstr "Mise à jour prête — redémarrez pour l'installer"
+
+msgid "Retry integrated sign-in"
+msgstr "Réessayer la connexion intégrée"
