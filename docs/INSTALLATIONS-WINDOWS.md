@@ -53,8 +53,7 @@ fournir avec `/SERVERURL=https://exemple.example`.
 
 À la fin de l'installation, l'installeur écrit `server.json` à côté de
 l'exécutable et mémorise l'adresse dans
-`HKCU\Software\AtlasCommerceDesktop\Server`. Au premier lancement, si aucun
-serveur n'est déjà verrouillé, l'application importe le fichier, le supprime
+`HKCU\Software\AtlasCommerceDesktop\Server`. Au premier lancement, l'application importe le fichier, le supprime
 et verrouille cette adresse. Le réglage est ensuite en lecture seule :
 l'interface explique qu'une **réinstallation** est nécessaire pour changer de
 serveur. Lors d'une mise à jour, la page est préremplie avec l'adresse
@@ -70,3 +69,9 @@ invalide est ignoré et supprimé.
 Sous Linux et macOS, sans page d'installation, le premier écran de
 configuration verrouille le premier choix ; un déploiement géré peut fixer
 l'adresse avant le premier lancement avec `ATLAS_SERVER_URL=https://…`.
+
+Le verrou empêche le changement dans l'interface, mais n'est pas une frontière
+de sécurité contre une personne qui peut modifier les fichiers locaux ou
+l'installation. Une signature « Verified » sur un commit GitHub ne signe pas
+l'exécutable : les signatures Authenticode et notarisation nécessitent leurs
+propres certificats et une vérification dédiée.

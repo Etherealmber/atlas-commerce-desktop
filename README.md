@@ -102,7 +102,7 @@ est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
   réutilise l'`ETag` GitHub : une réponse `304` ne consomme pas le quota et
   l'application attend la fin d'une fenêtre de limitation avant de réessayer.
 - Le téléchargement automatique prépare une copie vérifiée en arrière-plan ;
-  l'installation n'a lieu qu'au redémarrage choisi par la personne. Une icône
+  l'installation est lancée par le bouton « Redémarrer et installer ». Une icône
   dans la barre de titre signale une version disponible ou prête à installer.
 - Un serveur choisi à l'installation reste verrouillé ; sur Linux et macOS, le premier écran de configuration le
   verrouille de la même manière.
@@ -117,8 +117,12 @@ Pour un déploiement géré, `ATLAS_SERVER_URL=https://…` fixe l'adresse avant
 premier lancement, puis l'application la verrouille comme le fait l'installeur
 Windows.
 Dans les deux cas, les réglages affichent l'adresse en lecture seule. Pour en
-changer, il faut réinstaller l'application ; un utilisateur ne peut pas la
-modifier depuis les réglages. Le détail Windows se trouve dans
+changer sous Windows, désinstallez puis réinstallez l'application. Sous Linux
+et macOS, les données de configuration peuvent survivre à une désinstallation :
+une procédure de reprovisionnement reste à définir ; ne supprimez pas vos
+données sans sauvegarde. Un utilisateur ne peut pas modifier cette adresse
+à partir des réglages. Ce verrou d'interface ne protège pas contre une
+personne pouvant modifier les fichiers ou l'installation locale. Le détail Windows se trouve dans
 `docs/INSTALLATIONS-WINDOWS.md`.
 
 ## Session et verrouillage

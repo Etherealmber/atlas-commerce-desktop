@@ -220,18 +220,29 @@ end;
 
 function ValidServerUrl(const Value: String): Boolean;
 var
-  Lowered: String;
+  Lowered, Authority: String;
+  P: Integer;
 begin
   Lowered := Lowercase(Trim(Value));
   Result := (Pos('https://', Lowered) = 1)
     or (Pos('http://localhost', Lowered) = 1)
     or (Pos('http://127.0.0.1', Lowered) = 1)
     or (Pos('http://[::1]', Lowered) = 1);
-  if Result then
-    { JSON and URL safety: no quote, backslash, credential or whitespace. }
-    Result := (Pos('"', Value) = 0) and (Pos('\', Value) = 0)
-      and (Pos('@', Value) = 0) and (Pos(' ', Value) = 0)
-      and (Pos(#9, Value) = 0) and (Length(Value) <= 200);
+  if not Result then Exit;
+  P := Pos('://', Lowered);
+  Authority := Copy(Lowered, P + 3, Length(Lowered));
+  { An origin only, no credentials, path, query, fragment or control chars.
+    The application independently validates and normalizes this again. }
+  Result := (Authority <> '') and (Pos('/', Authority) = 0)
+    and (Pos('?', Authority) = 0) and (Pos('#', Authority) = 0)
+    and (Pos('"', Value) = 0) and (Pos('\', Value) = 0)
+    and (Pos('@', Value) = 0) and (Pos(' ', Value) = 0)
+    and (Pos(#9, Value) = 0) and (Pos(#10, Value) = 0)
+    and (Pos(#13, Value) = 0) and (Length(Value) <= 200);
+  if Result and (Pos('http://', Lowered) = 1) then
+    Result := (Authority = 'localhost') or (Pos('localhost:', Authority) = 1)
+      or (Authority = '127.0.0.1') or (Pos('127.0.0.1:', Authority) = 1)
+      or (Authority = '[::1]') or (Pos('[::1]:', Authority) = 1);
 end;
 
 procedure InitializeWizard;
@@ -274,8 +285,13 @@ begin
   Result := ServerUrlFromParam;
   if Result = '' then
     Result := Trim(ServerPage.Values[0]);
-  if not ValidServerUrl(Result) then
-    Result := '{#DefaultServer}';
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if not ValidServerUrl(ChosenServer) then
+    Result := 'Adresse du serveur invalide. Indiquez une origine HTTPS valide sans chemin ni identifiants.';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
