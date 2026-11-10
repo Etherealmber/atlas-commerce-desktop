@@ -7,8 +7,9 @@
 
 use atlas_core::update_feed::{MANIFEST_ASSET, UpdateManifest};
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig, Updater};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::Read;
+use std::path::Path;
 
 const REPOSITORY: &str = "Etherealmber/atlas-commerce-desktop";
 const SLUG: &str = "atlas-commerce-desktop";
@@ -31,6 +32,78 @@ pub const CONFIG: UpdateConfig = UpdateConfig {
     ..UpdateConfig::new(REPOSITORY, APP_NAME, SLUG, env!("CARGO_PKG_VERSION"))
 };
 
+/// What survives between launches so automatic checks stay inside GitHub's
+/// unauthenticated quota (60 requests per hour per public address).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UpdateCache {
+    /// ETag of the last release listing; a matching one answers `304` and
+    /// does not count against the API quota.
+    pub etag: Option<String>,
+    /// Unix timestamp of the last completed check, successful or not.
+    pub last_checked_unix: u64,
+    /// While set, GitHub answered that the quota was exhausted; no request
+    /// is sent before it.
+    pub rate_limited_until_unix: u64,
+    /// Newest version seen, for an informative status line.
+    pub last_version: Option<String>,
+}
+
+impl UpdateCache {
+    /// Reads the file; a corrupt or missing cache simply starts empty.
+    #[must_use]
+    pub fn load(path: &Path) -> Self {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self, path: &Path) {
+        let json = serde_json::to_vec_pretty(self).unwrap_or_default();
+        fastframe_file::write(path, json);
+    }
+
+    /// Seconds still to wait when GitHub asked us to back off.
+    #[must_use]
+    pub fn blocked_for(&self, now: u64) -> Option<u64> {
+        (self.rate_limited_until_unix > now).then(|| self.rate_limited_until_unix - now)
+    }
+}
+
+/// Answer of one check, with the cache to persist.
+pub struct UpdateCheck {
+    pub manifest: Option<UpdateManifest>,
+    pub cache: UpdateCache,
+    /// GitHub answered `304 Not Modified`: nothing changed since last time.
+    pub not_modified: bool,
+}
+
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+/// Reads the rate-limit headers and the ETag of a GitHub response.
+fn remember_headers(cache: &mut UpdateCache, headers: &reqwest::header::HeaderMap) {
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    };
+    if let Some(etag) = header("etag") {
+        cache.etag = Some(etag);
+    }
+    let remaining = header("x-ratelimit-remaining").and_then(|value| value.parse::<u64>().ok());
+    if remaining == Some(0)
+        && let Some(reset) = header("x-ratelimit-reset").and_then(|value| value.parse().ok())
+    {
+        cache.rate_limited_until_unix = reset;
+    }
+}
+
 #[derive(Deserialize)]
 struct ReleaseListing {
     #[serde(default)]
@@ -46,9 +119,22 @@ struct Asset {
 
 /// Fetches the newest release's `update.json`, if a published release exists.
 ///
+/// Sends `If-None-Match` when a previous ETag is known, records GitHub's
+/// rate-limit window and never contacts the API while that window is open.
+///
 /// # Errors
 /// Network or parse failures, as French messages.
-pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, String> {
+pub async fn fetch_manifest(
+    prerelease: bool,
+    mut cache: UpdateCache,
+) -> Result<UpdateCheck, String> {
+    let now = now_unix();
+    if let Some(remaining) = cache.blocked_for(now) {
+        return Err(format!(
+            "GitHub limite les vérifications pour encore {} min. Réessayez ensuite.",
+            remaining.div_ceil(60)
+        ));
+    }
     let client = reqwest::Client::builder()
         .user_agent(concat!(
             "atlas-commerce-desktop/",
@@ -60,48 +146,89 @@ pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, 
 
     let listing = if prerelease {
         let url = format!("https://api.github.com/repos/{REPOSITORY}/releases?per_page=5");
-        let releases: Vec<ReleaseListing> = client
+        let mut request = client
             .get(url)
-            .header("Accept", "application/vnd.github+json")
+            .header("Accept", "application/vnd.github+json");
+        if let Some(etag) = cache.etag.clone() {
+            request = request.header("If-None-Match", etag);
+        }
+        let response = request
             .send()
             .await
-            .map_err(|error| format!("Requête GitHub impossible : {error}"))?
-            .error_for_status()
-            .map_err(|error| format!("GitHub a répondu {error}"))?
+            .map_err(|error| format!("Requête GitHub impossible : {error}"))?;
+        cache.last_checked_unix = now;
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(UpdateCheck {
+                manifest: None,
+                cache,
+                not_modified: true,
+            });
+        }
+        remember_headers(&mut cache, response.headers());
+        if !response.status().is_success() {
+            return Err(format!("GitHub a répondu {}", response.status()));
+        }
+        let releases: Vec<ReleaseListing> = response
             .json()
             .await
             .map_err(|error| format!("Liste des versions illisible : {error}"))?;
         releases.into_iter().find(|release| !release.draft)
     } else {
         let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
-        match client
+        let mut request = client
             .get(url)
-            .header("Accept", "application/vnd.github+json")
-            .send()
-            .await
-        {
-            Ok(response) if response.status().as_u16() == 404 => return Ok(None),
-            Ok(response) => Some(
-                response
-                    .error_for_status()
-                    .map_err(|error| format!("GitHub a répondu {error}"))?
-                    .json()
-                    .await
-                    .map_err(|error| format!("Version illisible : {error}"))?,
-            ),
-            Err(error) => return Err(format!("Requête GitHub impossible : {error}")),
+            .header("Accept", "application/vnd.github+json");
+        if let Some(etag) = cache.etag.clone() {
+            request = request.header("If-None-Match", etag);
         }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(error) => return Err(format!("Requête GitHub impossible : {error}")),
+        };
+        cache.last_checked_unix = now;
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(UpdateCheck {
+                manifest: None,
+                cache,
+                not_modified: true,
+            });
+        }
+        if response.status().as_u16() == 404 {
+            return Ok(UpdateCheck {
+                manifest: None,
+                cache,
+                not_modified: false,
+            });
+        }
+        remember_headers(&mut cache, response.headers());
+        if !response.status().is_success() {
+            return Err(format!("GitHub a répondu {}", response.status()));
+        }
+        Some(
+            response
+                .json()
+                .await
+                .map_err(|error| format!("Version illisible : {error}"))?,
+        )
     };
 
     let Some(release) = listing else {
-        return Ok(None);
+        return Ok(UpdateCheck {
+            manifest: None,
+            cache,
+            not_modified: false,
+        });
     };
     let Some(asset) = release
         .assets
         .iter()
         .find(|asset| asset.name == MANIFEST_ASSET)
     else {
-        return Ok(None);
+        return Ok(UpdateCheck {
+            manifest: None,
+            cache,
+            not_modified: false,
+        });
     };
     let manifest_response = client
         .get(&asset.browser_download_url)
@@ -112,7 +239,11 @@ pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, 
     // has propagated (the workflow creates the release, then uploads files).
     // Treat that window as "no update yet", not as an error the user sees.
     if manifest_response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
+        return Ok(UpdateCheck {
+            manifest: None,
+            cache,
+            not_modified: false,
+        });
     }
     let manifest: UpdateManifest = manifest_response
         .error_for_status()
@@ -120,7 +251,13 @@ pub async fn fetch_manifest(prerelease: bool) -> Result<Option<UpdateManifest>, 
         .json()
         .await
         .map_err(|error| format!("Manifeste illisible : {error}"))?;
-    Ok(Some(manifest))
+    cache.last_checked_unix = now_unix();
+    cache.last_version = Some(manifest.version.clone());
+    Ok(UpdateCheck {
+        manifest: Some(manifest),
+        cache,
+        not_modified: false,
+    })
 }
 
 /// Whether a fastframe error describes a release whose assets are not
@@ -234,6 +371,25 @@ mod tests {
             .collect();
         assert_eq!(names, ["atlas-setup.exe", "checksums.txt"]);
         assert!(without_msi_metadata(b"{}").is_err());
+    }
+
+    #[test]
+    fn etag_and_rate_limit_are_remembered() {
+        let mut cache = UpdateCache::default();
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("etag", "\"release-42\"".parse().unwrap());
+        headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
+        headers.insert("x-ratelimit-reset", "2000000000".parse().unwrap());
+        remember_headers(&mut cache, &headers);
+        assert_eq!(cache.etag.as_deref(), Some("\"release-42\""));
+        // Still blocked one hour before the reset, free afterwards.
+        assert_eq!(cache.blocked_for(1_999_996_400), Some(3_600));
+        assert_eq!(cache.blocked_for(2_000_000_000), None);
+        // An ordinary answer without headers never invents a quota window.
+        let mut plain = UpdateCache::default();
+        remember_headers(&mut plain, &reqwest::header::HeaderMap::new());
+        assert_eq!(plain.etag, None);
+        assert_eq!(plain.rate_limited_until_unix, 0);
     }
 
     #[test]

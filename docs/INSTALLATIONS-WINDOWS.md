@@ -42,3 +42,27 @@ Aucune migration automatique destructive n'est activée. Pour un appareil
 réel, utiliser uniquement des paquets Atlas vérifiés et demander de l'aide
 avant suppression si les identités, dossiers ou conséquences ne sont pas
 clairs. Ne jamais partager de jeton ou de fichier de session pour ce diagnostic.
+
+## Serveur choisi à l'installation
+
+L'installeur Inno demande l'adresse du serveur avant de copier les fichiers.
+La page propose `https://stock.afmarble.com`, accepte une adresse HTTPS
+(ou `http://localhost` pour un serveur local) et refuse espaces, guillemets,
+barre oblique inverse et identifiants. Une installation silencieuse peut la
+fournir avec `/SERVERURL=https://exemple.example`.
+
+À la fin de l'installation, l'installeur écrit `server.json` à côté de
+l'exécutable et mémorise l'adresse dans
+`HKCU\Software\AtlasCommerceDesktop\Server`. Au premier lancement, si aucun
+serveur n'est déjà verrouillé, l'application importe le fichier, le supprime
+et verrouille cette adresse. Le réglage est ensuite en lecture seule :
+l'interface explique qu'une **réinstallation** est nécessaire pour changer de
+serveur. Lors d'une mise à jour, la page est préremplie avec l'adresse
+mémorisée : un serveur auto-hébergé n'est donc jamais remplacé par la valeur
+par défaut. La désinstallation supprime la valeur de registre, si bien qu'une
+nouvelle installation repart de la page de choix.
+
+Ce choix n'est pas un secret. Il ne remplace ni TLS, ni la vérification
+d'origine, ni PKCE : l'application refuse toujours un document, un jeton ou
+une demande d'autorisation liés à une autre origine. Un fichier `server.json`
+invalide est ignoré et supprimé.

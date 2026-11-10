@@ -73,6 +73,13 @@ impl AppPaths {
         self.dirs.config.join("servers.json")
     }
 
+    /// Remembers the last automatic update check, its ETag and any GitHub
+    /// rate-limit window, so launching often never exhausts the quota.
+    #[must_use]
+    pub fn update_state_file(&self) -> PathBuf {
+        self.dirs.config.join("update-state.json")
+    }
+
     #[must_use]
     pub fn themes_dir(&self) -> PathBuf {
         self.dirs.config.join("themes")

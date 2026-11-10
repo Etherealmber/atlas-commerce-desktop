@@ -11,6 +11,14 @@ pub const PRODUCTION_URL: &str = "https://stock.afmarbre.com";
 /// Label of the prefilled production entry.
 pub const PRODUCTION_LABEL: &str = "Atlas Cloud";
 
+/// What the installer writes to `server.json` beside the executable.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct InstallChoice {
+    url: String,
+    #[serde(default)]
+    label: String,
+}
+
 /// One saved server (label + normalized URL).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SavedServerEntry {
@@ -29,6 +37,10 @@ pub struct ServerStore {
     /// Whether the onboarding welcome was shown once.
     #[serde(default)]
     pub onboarding_done: bool,
+    /// Set by the installer or by the first server choice: the address is
+    /// then read-only in Settings. Only a reinstall can pick another server.
+    #[serde(default)]
+    pub locked: bool,
 }
 
 impl ServerStore {
@@ -42,6 +54,7 @@ impl ServerStore {
                 url: PRODUCTION_URL.to_owned(),
             }],
             onboarding_done: false,
+            locked: false,
         }
     }
 
@@ -70,6 +83,65 @@ impl ServerStore {
         self.selected = Some(normalized.clone());
         self.onboarding_done = true;
         Ok(normalized)
+    }
+
+    /// Applies the address the installer wrote next to the executable: it
+    /// becomes the only saved server and the whole installation is locked to
+    /// it. Returns the normalized URL, or `None` when the file is unreadable
+    /// or unsafe (non-HTTPS, credentials, path…).
+    pub fn apply_install_choice(&mut self, url: &str, label: &str) -> Option<String> {
+        let normalized = ServerUrl::normalize(url)?;
+        if ServerUrl::is_cleartext(&normalized) && !ServerUrl::is_loopback(&normalized) {
+            return None;
+        }
+        self.saved = vec![SavedServerEntry {
+            label: if label.trim().is_empty() {
+                ServerUrl::host(&normalized)
+            } else {
+                label.trim().to_owned()
+            },
+            url: normalized.clone(),
+        }];
+        self.selected = Some(normalized.clone());
+        self.onboarding_done = true;
+        self.locked = true;
+        Some(normalized)
+    }
+
+    /// Locks the current choice. Called once the user picked a server on a
+    /// build that has no installer prompt (Linux/macOS archives).
+    pub fn lock_current(&mut self) -> bool {
+        if self.selected.is_some() {
+            self.locked = true;
+        }
+        self.locked
+    }
+
+    /// Whether the address may still be changed from the interface.
+    #[must_use]
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    /// Imports the `server.json` the Windows installer writes beside the
+    /// executable, then removes the hand-off file. The file is data, not
+    /// code: only an HTTPS (or loopback HTTP) origin without credentials,
+    /// path, query or fragment is accepted.
+    ///
+    /// The installer writes the *previous* value during an upgrade (it
+    /// pre-fills its page from the registry), so an upgrade keeps the
+    /// address while a deliberate reinstall can provision a new one. Seeing
+    /// this file means setup ran, which is exactly the "reinstall to change
+    /// the server" path the interface documents.
+    pub fn import_install_file(&mut self, path: &Path) -> Option<String> {
+        let text = std::fs::read_to_string(path).ok()?;
+        let choice: InstallChoice = serde_json::from_str(&text).ok();
+        let applied = choice
+            .as_ref()
+            .and_then(|choice| self.apply_install_choice(&choice.url, &choice.label));
+        // Never leave a stale hand-off: it is read once.
+        let _ = std::fs::remove_file(path);
+        applied
     }
 
     pub fn forget(&mut self, url: &str) {
@@ -164,6 +236,23 @@ impl ServerUrl {
         base.starts_with("http://")
     }
 
+    /// True for a loopback literal, the only host allowed over plain HTTP so
+    /// a shop can try a local worker without faking a TLS certificate.
+    #[must_use]
+    pub fn is_loopback(base: &str) -> bool {
+        url::Url::parse(base)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_owned))
+            .is_some_and(|host| {
+                let host = host.trim_matches(['[', ']']);
+                host.eq_ignore_ascii_case("localhost")
+                    || host == "::1"
+                    || host
+                        .parse::<std::net::Ipv4Addr>()
+                        .is_ok_and(|ip| ip.is_loopback())
+            })
+    }
+
     #[must_use]
     pub fn host(base: &str) -> String {
         url::Url::parse(base)
@@ -191,6 +280,69 @@ impl ServerUrl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installer_choice_locks_the_only_server() {
+        let mut store = ServerStore::with_production();
+        // Plain HTTP is refused except on loopback.
+        assert_eq!(
+            store.apply_install_choice("http://shop.example.com", ""),
+            None
+        );
+        assert_eq!(
+            store.apply_install_choice("http://localhost:8787", " Atelier "),
+            Some("http://localhost:8787".to_owned())
+        );
+        assert!(store.is_locked());
+        assert_eq!(store.saved.len(), 1);
+        assert_eq!(store.saved[0].label, "Atelier");
+        assert_eq!(store.selected_url(), Some("http://localhost:8787"));
+        // Credentials or a path never enter a server address.
+        assert_eq!(
+            store.apply_install_choice("https://u:p@example.com", ""),
+            None
+        );
+        assert_eq!(
+            store.apply_install_choice("https://example.com/api", ""),
+            None
+        );
+    }
+
+    #[test]
+    fn install_file_is_data_only_and_applies_each_reinstall() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("atlas-server-{unique}.json"));
+        std::fs::write(
+            &path,
+            r#"{"url":"https://worker.example.dev/","label":"Boutique"}"#,
+        )
+        .unwrap();
+        let mut store = ServerStore::with_production();
+        assert_eq!(
+            store.import_install_file(&path).as_deref(),
+            Some("https://worker.example.dev")
+        );
+        assert!(store.is_locked());
+        // The hand-off file is consumed.
+        assert!(!path.exists());
+        // A later setup run is the documented way to reprovision the server;
+        // the installer pre-fills an upgrade with the previous address, so
+        // this only changes on a deliberate reinstall.
+        std::fs::write(&path, r#"{"url":"https://other.example.dev"}"#).unwrap();
+        assert_eq!(
+            store.import_install_file(&path).as_deref(),
+            Some("https://other.example.dev")
+        );
+        assert_eq!(store.selected_url(), Some("https://other.example.dev"));
+        // Invalid data is discarded and leaves the current choice intact.
+        std::fs::write(&path, r#"{"url":"http://evil.example.com"}"#).unwrap();
+        assert_eq!(store.import_install_file(&path), None);
+        assert_eq!(store.selected_url(), Some("https://other.example.dev"));
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn normalizes_typed_addresses() {

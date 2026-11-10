@@ -205,9 +205,9 @@ impl AtlasApp {
         {
             self.load_alerts();
         }
-        if self.settings.update_check_on_start {
-            self.check_for_updates(false);
-        }
+        self.update.cache = crate::update::UpdateCache::load(&self.paths.update_state_file());
+        self.schedule_update_checks();
+        self.maybe_auto_check_updates();
     }
 
     // ── Data loaders ─────────────────────────────────────────────────────
@@ -995,17 +995,64 @@ impl AtlasApp {
             );
         self.update.checking = true;
         self.update.error = None;
+        let cache = self.update.cache.clone();
         let job = self
             .runner
-            .spawn(async move { crate::update::fetch_manifest(prerelease).await });
+            .spawn(async move { crate::update::fetch_manifest(prerelease, cache).await });
         self.update.job = Some(job);
     }
 
-    /// Downloads and hands off the update through the fastframe helper.
+    /// Recomputes when the next automatic check may run. Checks honour the
+    /// stored ETag and GitHub's rate-limit window, so several launches in an
+    /// hour never exhaust the unauthenticated quota.
+    pub fn schedule_update_checks(&mut self) {
+        if !self.settings.update_check_on_start {
+            self.update.next_check_at = None;
+            return;
+        }
+        let interval = self.settings.update_check_interval_hours.clamp(1, 168) * 3_600;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let elapsed = now.saturating_sub(self.update.cache.last_checked_unix);
+        let delay = interval.saturating_sub(elapsed);
+        self.update.next_check_at = Some(Instant::now() + Duration::from_secs(delay.min(interval)));
+    }
+
+    /// Runs an automatic check once its delay elapsed, never more often
+    /// than the configured interval.
+    pub fn maybe_auto_check_updates(&mut self) {
+        if !self.settings.update_check_on_start || self.update.checking {
+            return;
+        }
+        if self.update.next_check_at.is_none() {
+            self.schedule_update_checks();
+        }
+        let Some(next) = self.update.next_check_at else {
+            return;
+        };
+        if Instant::now() < next {
+            return;
+        }
+        self.check_for_updates(false);
+        self.schedule_update_checks();
+    }
+
+    fn save_update_cache(&self) {
+        self.update.cache.save(&self.paths.update_state_file());
+    }
+
+    /// User-triggered install: reuses an already downloaded copy when the
+    /// auto-download setting fetched one, otherwise downloads it now.
     pub fn start_update_download(&mut self) {
+        self.begin_update_download(false);
+    }
+
+    fn begin_update_download(&mut self, auto: bool) {
         if self.update.progress.is_some() {
             return;
         }
+        self.update.auto_download = auto;
         let progress = Arc::new(Mutex::new((0_u64, 0_u64)));
         self.update_progress = progress.clone();
         self.update.progress = Some((0, 0));
@@ -1026,17 +1073,33 @@ impl AtlasApp {
                     )
                     .into_owned()
                 })?;
-                let release = updater
-                    .check()
-                    .map_err(|error| error.to_string())?
-                    .ok_or_else(|| t!(locale, "No published release found.").into_owned())?;
-                let prepared = updater
-                    .download(&release, |received, total| {
-                        if let Ok(mut guard) = progress.lock() {
-                            *guard = (received, total);
-                        }
-                    })
-                    .map_err(|error| error.to_string())?;
+                // A previous auto-download left its verified copy staged
+                // beside the app; reuse it instead of spending bandwidth.
+                let kept = updater.kept().ok().flatten();
+                let prepared = match kept {
+                    Some(prepared) => prepared,
+                    None => {
+                        let release = updater
+                            .check()
+                            .map_err(|error| error.to_string())?
+                            .ok_or_else(|| {
+                                t!(locale, "No published release found.").into_owned()
+                            })?;
+                        updater
+                            .download(&release, |received, total| {
+                                if let Ok(mut guard) = progress.lock() {
+                                    *guard = (received, total);
+                                }
+                            })
+                            .map_err(|error| error.to_string())?
+                    }
+                };
+                if auto {
+                    // Keep the staged files for a later install; never
+                    // restart the app while someone is working.
+                    drop(prepared);
+                    return Ok(());
+                }
                 updater
                     .handoff(prepared, Vec::new())
                     .map_err(|error| error.to_string())?;
@@ -1072,12 +1135,28 @@ impl AtlasApp {
             self.update.job = None;
             self.update.checking = false;
             match result {
-                Ok(Some(manifest)) => {
-                    self.apply_manifest(manifest);
+                Ok(checked) => {
+                    let not_modified = checked.not_modified;
+                    self.update.cache = checked.cache;
+                    self.save_update_cache();
+                    if not_modified {
+                        // A matching ETag answers 304 without spending
+                        // GitHub's quota: nothing changed since last time.
+                        self.update.up_to_date_at = Some(Instant::now());
+                        self.update.error = None;
+                    } else if let Some(manifest) = checked.manifest {
+                        self.apply_manifest(manifest);
+                    } else {
+                        self.update.up_to_date_at = Some(Instant::now());
+                        self.update.error = None;
+                    }
                 }
-                Ok(None) => {}
-                Err(error) => self.update.error = Some(error),
+                Err(error) => {
+                    self.update.error = Some(error);
+                    self.save_update_cache();
+                }
             }
+            self.schedule_update_checks();
         }
         if let Some(job) = &self.update_download_job {
             if let Ok(guard) = self.update_progress.lock() {
@@ -1086,12 +1165,34 @@ impl AtlasApp {
             if let Some(result) = job.poll() {
                 self.update_download_job = None;
                 match result {
+                    Ok(()) if self.update.auto_download => {
+                        // Downloaded in the background and kept staged: the
+                        // app never restarts under someone because a byte
+                        // arrived. Installing waits for the user or the next
+                        // launch, and reuses this copy instead of downloading.
+                        self.update.auto_download = false;
+                        self.update.progress = None;
+                        self.update.stage =
+                            t!(self.locale, "Update downloaded. Restart to install.").into_owned();
+                        self.update.ready_version = self
+                            .update
+                            .last_manifest
+                            .as_ref()
+                            .map(|manifest| manifest.version.clone());
+                        if let Some(version) = self.update.ready_version.clone() {
+                            self.notice(format!(
+                                "{} v{version}",
+                                t!(self.locale, "Update downloaded. Restart to install.")
+                            ));
+                        }
+                    }
                     Ok(()) => {
                         self.update.stage = t!(self.locale, "Installing…").into_owned();
                         self.wants_quit = true;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     Err(error) => {
+                        self.update.auto_download = false;
                         self.update.progress = None;
                         self.update.error = Some(error);
                     }
@@ -1116,8 +1217,13 @@ impl AtlasApp {
                 self.screen = Screen::UpdateGate;
             }
             UpdateDecision::Optional { .. } => {
+                let auto = self.settings.update_auto_download;
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
                 self.update.last_manifest = Some(manifest);
+                if auto && self.update.progress.is_none() && self.update_download_job.is_none() {
+                    // Background download; installation stays explicit.
+                    self.begin_update_download(true);
+                }
             }
         }
     }
@@ -1298,6 +1404,7 @@ impl AtlasApp {
         self.poll_profile_jobs();
         self.poll_agent_jobs();
         self.poll_update_jobs(ctx);
+        self.maybe_auto_check_updates();
         self.enforce_session_binding();
 
         // Periodic refresh while a session is live. A cache only enters the
@@ -1695,6 +1802,11 @@ impl eframe::App for EframeShell {
         }
 
         self.held.poll_background(ctx);
+        // Wake the app exactly when the next automatic update check is due,
+        // even when no input, job or animation requests a repaint.
+        if let Some(at) = self.held.update.next_check_at {
+            ctx.request_repaint_after(at.saturating_duration_since(Instant::now()));
+        }
         #[cfg(target_os = "windows")]
         {
             if !crate::browser_auth::embedded_active(&self.held) {

@@ -1507,3 +1507,57 @@ msgstr "Numéro ou client"
 
 msgid "Open"
 msgstr "Ouvrir"
+
+msgid "Server"
+msgstr "Serveur"
+
+msgid "Continue"
+msgstr "Continuer"
+
+msgid "Server fixed for this installation"
+msgstr "Serveur défini pour cette installation"
+
+msgid "This address was chosen during installation. To use another server, uninstall and install the app again: it cannot be changed from Settings."
+msgstr "Cette adresse a été choisie à l'installation. Pour utiliser un autre serveur, désinstallez puis réinstallez l'application : elle ne peut pas être modifiée dans les réglages."
+
+msgid "Fixed"
+msgstr "Défini"
+
+msgid "This server was chosen during installation. To use another one, uninstall the app and install it again; it cannot be changed from Settings."
+msgstr "Ce serveur a été choisi à l'installation. Pour en utiliser un autre, désinstallez puis réinstallez l'application ; il ne peut pas être modifié dans les réglages."
+
+msgid "Check for updates automatically"
+msgstr "Rechercher les mises à jour automatiquement"
+
+msgid "GitHub Releases are the only update source; checks reuse an ETag and respect the API quota."
+msgstr "GitHub Releases est la seule source de mise à jour ; les vérifications réutilisent un ETag et respectent le quota de l'API."
+
+msgid "Check every"
+msgstr "Vérifier toutes les"
+
+msgid "Longer delays keep several machines behind one connection far below GitHub's hourly limit."
+msgstr "Un délai plus long garde plusieurs machines derrière une même connexion bien en dessous de la limite horaire de GitHub."
+
+msgid "6 hours"
+msgstr "6 heures"
+
+msgid "12 hours"
+msgstr "12 heures"
+
+msgid "24 hours"
+msgstr "24 heures"
+
+msgid "Download updates automatically"
+msgstr "Télécharger les mises à jour automatiquement"
+
+msgid "A verified copy is prepared in the background; installation waits for a restart. Downloads come from release assets, not the API."
+msgstr "Une copie vérifiée est préparée en arrière-plan ; l'installation attend un redémarrage. Les téléchargements viennent des fichiers de version, pas de l'API."
+
+msgid "Update downloaded. Restart to install."
+msgstr "Mise à jour téléchargée. Redémarrez pour l'installer."
+
+msgid "Restart and install"
+msgstr "Redémarrer et installer"
+
+msgid "Update ready — restart to install"
+msgstr "Mise à jour prête — redémarrez pour l'installer"

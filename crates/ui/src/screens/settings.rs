@@ -799,6 +799,56 @@ fn servers_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     section_header(ui, palette, t!(app.locale, "Servers"));
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
+        // Installed copies fix their server: the installer wrote it and the
+        // only way to change it is a reinstall. Settings stays honest about
+        // that instead of offering a change that a guard would refuse.
+        if app.server_store.is_locked() {
+            let entry = app.server_store.saved.first().cloned();
+            ui.horizontal(|ui| {
+                icon(ui, Icon::Lock, palette.secondary, 18.0);
+                ui.vertical(|ui| {
+                    ui.label(
+                        RichText::new(
+                            entry
+                                .as_ref()
+                                .map(|entry| entry.label.clone())
+                                .unwrap_or_else(|| t!(app.locale, "Server").into_owned()),
+                        )
+                        .color(palette.text)
+                        .strong()
+                        .size(13.5),
+                    );
+                    ui.label(
+                        RichText::new(
+                            entry
+                                .as_ref()
+                                .map(|entry| entry.url.clone())
+                                .unwrap_or_else(|| "—".to_owned()),
+                        )
+                        .color(palette.dim)
+                        .size(11.5),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    pill(
+                        ui,
+                        t!(app.locale, "Fixed"),
+                        palette.accent.gamma_multiply(0.18),
+                        palette.accent,
+                    );
+                });
+            });
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new(t!(
+                    app.locale,
+                    "This server was chosen during installation. To use another one, uninstall the app and install it again; it cannot be changed from Settings."
+                ))
+                .color(palette.secondary)
+                .size(12.5),
+            );
+            return;
+        }
         let entries = app.server_store.saved.clone();
         for entry in &entries {
             let is_selected = app.server_store.selected.as_deref() == Some(entry.url.as_str());
@@ -1040,7 +1090,28 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     ui.add_space(8.0);
                     crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
                 });
-        } else if app.update.up_to_date_at.is_some() {
+        }
+        if let Some(version) = app.update.ready_version.clone() {
+            ui.add_space(10.0);
+            ui.horizontal_wrapped(|ui| {
+                icon(ui, Icon::Download, palette.accent, 18.0);
+                ui.label(
+                    RichText::new(format!(
+                        "{} · v{version}",
+                        t!(app.locale, "Update downloaded. Restart to install.")
+                    ))
+                    .color(palette.text)
+                    .size(13.0),
+                );
+                if primary_button(ui, t!(app.locale, "Restart and install"), palette, true) {
+                    app.start_update_download();
+                }
+            });
+        }
+        if app.update.last_manifest.is_none()
+            && app.update.ready_version.is_none()
+            && app.update.up_to_date_at.is_some()
+        {
             ui.horizontal(|ui| {
                 icon(ui, Icon::CircleCheck, palette.accent, 18.0);
                 ui.label(
@@ -1075,15 +1146,70 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if switch_row(
             ui,
             palette,
-            t!(app.locale, "Check for updates on launch"),
+            t!(app.locale, "Check for updates automatically"),
             Some(&t!(
                 app.locale,
-                "GitHub Releases are the only update source."
+                "GitHub Releases are the only update source; checks reuse an ETag and respect the API quota."
             )),
             &mut app.settings.update_check_on_start,
             app.settings.reduced_motion,
         ) {
             app.save_settings();
+            app.schedule_update_checks();
+            if app.settings.update_check_on_start {
+                app.maybe_auto_check_updates();
+            }
+        }
+
+        if app.settings.update_check_on_start {
+            ui.add_space(10.0);
+            setting_row(
+                ui,
+                palette,
+                t!(app.locale, "Check every"),
+                Some(&t!(
+                    app.locale,
+                    "Longer delays keep several machines behind one connection far below GitHub's hourly limit."
+                )),
+                |ui| {
+                    let six = t!(app.locale, "6 hours");
+                    let twelve = t!(app.locale, "12 hours");
+                    let day = t!(app.locale, "24 hours");
+                    let options = [
+                        (six.as_ref(), 6_u64),
+                        (twelve.as_ref(), 12),
+                        (day.as_ref(), 24),
+                    ];
+                    if let Some(hours) =
+                        segmented(ui, palette, &options, Some(app.settings.update_check_interval_hours))
+                    {
+                        app.settings.update_check_interval_hours = hours;
+                        app.save_settings();
+                        app.schedule_update_checks();
+                    }
+                },
+            );
+        }
+
+        ui.add_space(10.0);
+        if switch_row(
+            ui,
+            palette,
+            t!(app.locale, "Download updates automatically"),
+            Some(&t!(
+                app.locale,
+                "A verified copy is prepared in the background; installation waits for a restart. Downloads come from release assets, not the API."
+            )),
+            &mut app.settings.update_auto_download,
+            app.settings.reduced_motion,
+        ) {
+            app.save_settings();
+            if app.settings.update_auto_download
+                && app.update.last_manifest.is_some()
+                && app.update.progress.is_none()
+            {
+                app.start_update_download();
+            }
         }
 
         ui.add_space(10.0);

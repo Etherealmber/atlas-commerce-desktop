@@ -133,7 +133,21 @@ fn main() -> eframe::Result<()> {
     // 4. Persisted state. No password is ever read here — only the token.
     let settings = Settings::load(&paths.settings_file());
     let locale = atlas_ui::i18n::Locale::from_tag(&settings.language);
-    let servers = ServerStore::load(&paths.servers_file());
+    let mut servers = ServerStore::load(&paths.servers_file());
+    // The Windows installer writes `server.json` beside the executable. It is
+    // imported once, locks the installation to that server, and is deleted.
+    // Setups without an installer prompt lock their first choice instead.
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(folder) = executable.parent()
+        && servers
+            .import_install_file(&folder.join("server.json"))
+            .is_some()
+    {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to save the installer's server choice: {error}");
+        }
+        log::info!("server fixed by the installer");
+    }
     let identity = DeviceIdentity::load_or_create(&paths.device_file());
     let accounts = AccountStore::load(&paths.accounts_file());
     let restore_mode = servers.selected_url().map(|base| {

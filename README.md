@@ -98,6 +98,25 @@ est compilée via `ATLAS_UPDATE_PUBLIC_KEY`).
 - Le téléchargement, la vérification de somme de contrôle, l'installation par
   assistant et la restauration automatique en cas d'échec sont gérés par
   `fastframe-update`.
+- La vérification automatique est réglable (6, 12 ou 24 h, ou désactivée) et
+  réutilise l'`ETag` GitHub : une réponse `304` ne consomme pas le quota et
+  l'application attend la fin d'une fenêtre de limitation avant de réessayer.
+- Le téléchargement automatique prépare une copie vérifiée en arrière-plan ;
+  l'installation n'a lieu qu'au redémarrage choisi par la personne. Une icône
+  dans la barre de titre signale une version disponible ou prête à installer.
+- Un serveur choisi à l'installation reste verrouillé ; sur Linux et macOS, le premier écran de configuration le
+  verrouille de la même manière.
+
+## Serveur fixé à l'installation
+
+Sous Windows, l'installeur demande l'adresse du serveur et l'écrit dans
+`server.json` à côté de l'exécutable ; l'application l'importe une fois et le
+verrouille. Les paquets Linux et macOS n'ont pas de page d'installation : le
+premier écran de configuration joue ce rôle et verrouille le premier choix.
+Dans les deux cas, les réglages affichent l'adresse en lecture seule. Pour en
+changer, il faut réinstaller l'application ; un utilisateur ne peut pas la
+modifier depuis les réglages. Le détail Windows se trouve dans
+`docs/INSTALLATIONS-WINDOWS.md`.
 
 ## Session et verrouillage
 

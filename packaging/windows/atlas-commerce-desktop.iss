@@ -27,6 +27,10 @@
 #endif
 
 #define AppName "Atlas Commerce"
+; Default server written into server.json. The installer page lets the person
+; installing override it, including silently with /SERVERURL=https://...
+; The app locks this address: Settings never offers another one.
+#define DefaultServer "https://stock.afmarble.com"
 #define AppExeName "atlas-commerce-desktop.exe"
 #define AppIdentity "AtlasCommerceDesktop"
 
@@ -191,9 +195,93 @@ var
 begin
   if CurUninstallStep <> usUninstall then
     Exit;
+  // A fresh install asks again: the installer's remembered address must not
+  // survive uninstall.
+  RegDeleteValue(HKCU, 'Software\{#AppIdentity}', 'Server');
   if not RegQueryStringValue(HKCU, 'Software\Classes\atlascommerce\shell\open\command', '', Command) then
     Exit;
   Exe := Lowercase(ExpandConstant('{app}\{#AppExeName}'));
   if Pos(Exe, Lowercase(Command)) > 0 then
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\atlascommerce');
+end;
+
+{ ── Server chosen at install time ─────────────────────────────────────── }
+var
+  ServerPage: TInputQueryWizardPage;
+  Existing: String;
+
+function ServerUrlFromParam: String;
+begin
+  Result := Trim(ExpandConstant('{param:SERVERURL|}'));
+end;
+
+function ValidServerUrl(const Value: String): Boolean;
+var
+  Lowered: String;
+begin
+  Lowered := Lowercase(Trim(Value));
+  Result := (Pos('https://', Lowered) = 1)
+    or (Pos('http://localhost', Lowered) = 1)
+    or (Pos('http://127.0.0.1', Lowered) = 1)
+    or (Pos('http://[::1]', Lowered) = 1);
+  if Result then
+    { JSON and URL safety: no quote, backslash, credential or whitespace. }
+    Result := (Pos('"', Value) = 0) and (Pos('\', Value) = 0)
+      and (Pos('@', Value) = 0) and (Pos(' ', Value) = 0)
+      and (Pos(#9, Value) = 0) and (Length(Value) <= 200);
+end;
+
+procedure InitializeWizard;
+begin
+  ServerPage := CreateInputQueryPage(wpSelectDir,
+    'Serveur Atlas Commerce',
+    'Quel serveur cette installation doit-elle utiliser ?',
+    'L''adresse est fixée par l''installateur : elle ne pourra plus être changée dans les réglages. Une réinstallation est nécessaire pour en choisir une autre.');
+  ServerPage.Add('Adresse du serveur (HTTPS) :', False);
+  // Pre-fill order: silent /SERVERURL, then the address this installation
+  // already uses (an upgrade keeps it), then the public default. The value
+  // is written to the registry at the end of setup and removed by uninstall,
+  // so a genuine reinstall starts from the default again.
+  if ServerUrlFromParam <> '' then
+    ServerPage.Values[0] := ServerUrlFromParam
+  else if RegQueryStringValue(HKCU, 'Software\{#AppIdentity}', 'Server', Existing) then
+    ServerPage.Values[0] := Existing
+  else
+    ServerPage.Values[0] := '{#DefaultServer}';
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = ServerPage.ID then
+  begin
+    if not ValidServerUrl(ServerPage.Values[0]) then
+    begin
+      MsgBox('Adresse invalide. Utilisez une adresse HTTPS telle que https://stock.afmarble.com, ou http://localhost uniquement pour un serveur local.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function ChosenServer: String;
+begin
+  Result := ServerUrlFromParam;
+  if Result = '' then
+    Result := Trim(ServerPage.Values[0]);
+  if not ValidServerUrl(Result) then
+    Result := '{#DefaultServer}';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Data: String;
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+  { Read once by the app, which then deletes this file and locks the
+    address in its own servers.json. A silent install writes it too. }
+  Data := '{"url":"' + ChosenServer + '","label":"Atlas Commerce"}';
+  if not SaveStringToFile(ExpandConstant('{app}\server.json'), Data, False) then
+    MsgBox('Le serveur n''a pas pu être enregistré. L''application demandera l''adresse au premier lancement.', mbInformation, MB_OK);
+  RegWriteStringValue(HKCU, 'Software\{#AppIdentity}', 'Server', ChosenServer);
 end;

@@ -252,13 +252,23 @@ pub struct UpdateState {
     pub last_manifest: Option<UpdateManifest>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
-    pub job: Option<Job<Result<Option<UpdateManifest>, String>>>,
+    pub job: Option<Job<Result<crate::update::UpdateCheck, String>>>,
     pub progress: Option<(u64, u64)>,
     pub stage: String,
     pub error: Option<String>,
     /// Set when a check answered that the current build is the newest, so
     /// the settings card can show an explicit "up to date" status.
     pub up_to_date_at: Option<Instant>,
+    /// ETag, last check and GitHub quota window, persisted between launches.
+    pub cache: crate::update::UpdateCache,
+    /// When the next automatic check is due; `None` disables the timer.
+    pub next_check_at: Option<Instant>,
+    /// A background download started by the auto-download setting, so the
+    /// interface can explain why bytes are moving on their own.
+    pub auto_download: bool,
+    /// Version already downloaded by the auto-download setting; the next
+    /// install reuses fastframe-update's staged copy instead of downloading.
+    pub ready_version: Option<String>,
 }
 
 /// Agent conversation.

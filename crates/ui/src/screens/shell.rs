@@ -292,6 +292,39 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                 app.profile_menu_open = !app.profile_menu_open;
             }
 
+            // An available release is visible from every screen: the icon
+            // opens the update, and a dot means a copy is already staged and
+            // only needs a restart.
+            if app.update.progress.is_none()
+                && (app.update.last_manifest.is_some() || app.update.ready_version.is_some())
+            {
+                let update = widgets::icon_circle_button(ui, palette, Icon::Download, true);
+                if app.update.ready_version.is_some() {
+                    paint_update_dot(ui, &update, palette);
+                }
+                let tooltip = match &app.update.ready_version {
+                    Some(version) => format!(
+                        "{} · v{version}",
+                        t!(app.locale, "Update ready — restart to install")
+                    ),
+                    None => format!(
+                        "{} · v{}",
+                        t!(app.locale, "Update available"),
+                        app.update
+                            .last_manifest
+                            .as_ref()
+                            .map(|manifest| manifest.version.as_str())
+                            .unwrap_or("—")
+                    ),
+                };
+                let update = update.on_hover_text(tooltip);
+                if update.clicked() {
+                    // Reuses the staged copy when one exists; otherwise this
+                    // starts the verified download and then the hand-off.
+                    app.start_update_download();
+                }
+            }
+
             if app.role_policy().allows_route(Route::Notifications) {
                 let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
                 let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
@@ -439,6 +472,14 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
     );
 }
 
+/// A small accent dot on the update icon: a verified copy is staged and the
+/// next restart installs it.
+fn paint_update_dot(ui: &egui::Ui, response: &egui::Response, palette: &Palette) {
+    let rect = response.rect;
+    let center = egui::pos2(rect.right() - 3.0, rect.top() + 3.0);
+    ui.painter().circle_filled(center, 4.0, palette.accent);
+}
+
 /// Compact live download indicator shown beside the notification bell while
 /// a release is being fetched, so the transfer never hides on Settings.
 fn draw_update_pill(
@@ -571,8 +612,11 @@ fn draw_profile_menu(
                         app.settings_focus = crate::state::SettingsFocus::General;
                         app.go(Route::Settings);
                     }
-                    if menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
-                        .clicked()
+                    // The server is fixed by the installer and read-only in
+                    // Settings; only a reinstall can point elsewhere.
+                    if !app.server_store.is_locked()
+                        && menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
+                            .clicked()
                     {
                         app.profile_menu_open = false;
                         app.sign_out();

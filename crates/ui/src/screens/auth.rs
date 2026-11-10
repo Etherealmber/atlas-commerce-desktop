@@ -302,7 +302,9 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 ui.horizontal(|ui| {
                     crate::branding::lockup(ui, palette, 32.0);
                     ui.add_space(16.0);
-                    if secondary_button(ui, t!(app.locale, "Change server"), palette) {
+                    if !app.server_store.is_locked()
+                        && secondary_button(ui, t!(app.locale, "Change server"), palette)
+                    {
                         app.onboarding_transition_at = Some(std::time::Instant::now());
                         app.screen = Screen::ServerSetup;
                     }
@@ -342,7 +344,9 @@ pub fn draw_onboarding(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                     };
                 }
                 ui.add_space(12.0);
-                if secondary_button(ui, t!(app.locale, "Configure a custom server"), palette) {
+                if !app.server_store.is_locked()
+                    && secondary_button(ui, t!(app.locale, "Configure a custom server"), palette)
+                {
                     app.onboarding_transition_at = Some(std::time::Instant::now());
                     app.screen = Screen::ServerSetup;
                 }
@@ -376,6 +380,10 @@ fn showcase_tile(ui: &mut egui::Ui, palette: &Palette, which: Icon, width: f32) 
 // ── Server setup ───────────────────────────────────────────────────────────
 
 pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
+    if app.server_store.is_locked() {
+        draw_locked_server(app, ui, palette, embedded);
+        return;
+    }
     // Poll the probe.
     if let Some(job) = &app.server_form.probe_job
         && let Some(report) = job.poll()
@@ -644,6 +652,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 valid,
                             ) {
                                 app.server_store.onboarding_done = true;
+                                app.server_store.lock_current();
                                 app.save_servers();
                                 app.rebuild_client();
                                 app.screen = Screen::Login;
@@ -651,6 +660,56 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                         });
                     },
                 );
+            });
+        });
+}
+
+/// Shown instead of the server picker when the installer (or the first run)
+/// fixed the address. It is deliberately read-only: the only way to point an
+/// installation at another worker is to reinstall it.
+fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
+    let url = app.server_store.selected_url().unwrap_or("—").to_owned();
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(if embedded { 12.0 } else { 60.0 });
+                crate::branding::mark(ui, palette, 46.0);
+                ui.add_space(10.0);
+                page_title(ui, t!(app.locale, "Server fixed for this installation"), palette);
+                ui.add_space(8.0);
+                card(palette).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        icon(ui, Icon::Server, palette.accent, 18.0);
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(
+                                    app.server_store
+                                        .saved
+                                        .first()
+                                        .map(|entry| entry.label.clone())
+                                        .unwrap_or_else(|| t!(app.locale, "Server").into_owned()),
+                                )
+                                .color(palette.text)
+                                .strong(),
+                            );
+                            ui.label(RichText::new(url).color(palette.dim).size(12.0));
+                        });
+                    });
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new(t!(
+                            app.locale,
+                            "This address was chosen during installation. To use another server, uninstall and install the app again: it cannot be changed from Settings."
+                        ))
+                        .color(palette.secondary)
+                        .size(12.5),
+                    );
+                });
+                ui.add_space(16.0);
+                if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
+                    app.screen = Screen::Login;
+                }
             });
         });
 }
@@ -681,11 +740,18 @@ fn spawn_probe(app: &mut AtlasApp, url: String) {
 }
 
 fn select_server(app: &mut AtlasApp, url: String) {
+    // A locked installation never changes address; the UI hides every
+    // affordance, and this guard keeps a stale or scripted path honest.
+    if app.server_store.is_locked() {
+        return;
+    }
     // Switching server signs the current session out, as on Android.
     if app.session.is_some() {
         app.sign_out();
     }
     app.server_store.selected = Some(url);
+    // The first committed choice is final for this installation.
+    app.server_store.lock_current();
     app.save_servers();
     app.rebuild_client();
     app.server_form.custom_url.clear();
@@ -897,18 +963,19 @@ fn draw_login_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal_wrapped(|ui| {
         icon(ui, Icon::Server, palette.secondary, 14.0);
         pill(ui, &host, palette.window, palette.secondary);
-        if ui
-            .add(
-                egui::Button::new(
-                    RichText::new(t!(app.locale, "Change server"))
-                        .color(palette.secondary)
-                        .size(12.5),
+        if !app.server_store.is_locked()
+            && ui
+                .add(
+                    egui::Button::new(
+                        RichText::new(t!(app.locale, "Change server"))
+                            .color(palette.secondary)
+                            .size(12.5),
+                    )
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::NONE)
+                    .min_size(egui::vec2(0.0, TARGET)),
                 )
-                .fill(Color32::TRANSPARENT)
-                .stroke(egui::Stroke::NONE)
-                .min_size(egui::vec2(0.0, TARGET)),
-            )
-            .clicked()
+                .clicked()
         {
             // In-flight password and QR jobs belong to the old server.
             app.login = Default::default();
