@@ -111,16 +111,29 @@ fn build(route: &str) -> AtlasApp {
         },
     ]);
     app.selected_client = Some(1);
-    app.invoices.data = Some(vec![Invoice {
-        id: 1,
-        number: Some("FA-DEMO-001".into()),
-        client_name: Some("Client Exemple".into()),
-        issue_date: Some("2026-01-15".into()),
-        total: 1500.0,
-        amount_paid: Some(250.0),
-        status: Some("partial".into()),
-        ..Invoice::default()
-    }]);
+    app.invoices.data = Some(vec![
+        Invoice {
+            id: 1,
+            number: Some("FA-DEMO-001".into()),
+            client_name: Some("Client Exemple".into()),
+            issue_date: Some("2026-01-15".into()),
+            total: 1500.0,
+            amount_paid: Some(250.0),
+            status: Some("partial".into()),
+            ..Invoice::default()
+        },
+        Invoice {
+            id: 2,
+            number: Some("WR-DEMO-001".into()),
+            client_name: Some("Client Exemple".into()),
+            issue_date: Some("2026-01-20".into()),
+            total: 300.0,
+            amount_paid: Some(300.0),
+            status: Some("remboursement".into()),
+            doc_kind: Some("remboursement".into()),
+            ..Invoice::default()
+        },
+    ]);
     app.vendors.data = Some(vec![Vendor {
         id: 1,
         name: "Fournisseur Exemple".into(),
@@ -192,6 +205,9 @@ fn build(route: &str) -> AtlasApp {
         }))
         .expect("fixture employees"),
     );
+    if route == "sales" {
+        app.refunds_open = true;
+    }
     if route == "employees" {
         app.employee_detail_id = Some(1);
         app.employee_detail.data = Some(
