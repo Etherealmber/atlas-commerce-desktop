@@ -48,15 +48,40 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
             page_title(ui, t!(app.locale, "Settings"), palette);
             ui.add_space(8.0);
 
-            if focus == SettingsFocus::Profile {
+            // Direct section links avoid making users scroll through every
+            // unrelated setting to reach security or updates.
+            let mut jump = None;
+            ui.horizontal_wrapped(|ui| {
+                for (label, target) in [
+                    (t!(app.locale, "Profile"), 0_u8),
+                    (t!(app.locale, "Application"), 1),
+                    (t!(app.locale, "Appearance"), 2),
+                    (t!(app.locale, "Servers"), 3),
+                    (t!(app.locale, "Security"), 4),
+                    (t!(app.locale, "Updates and about"), 5),
+                ] {
+                    if secondary_button(ui, label, palette) {
+                        jump = Some(target);
+                    }
+                }
+            });
+            ui.add_space(12.0);
+
+            if focus == SettingsFocus::Profile || jump == Some(0) {
                 ui.scroll_to_cursor(Some(egui::Align::Min));
             }
             profile_section(app, ui, palette);
             ui.add_space(18.0);
 
+            if jump == Some(1) {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
             application_section(app, ui, palette);
             ui.add_space(18.0);
 
+            if jump == Some(2) {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
             appearance_section(app, ui, palette);
             ui.add_space(18.0);
 
@@ -71,13 +96,19 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
                 ui.add_space(18.0);
             }
 
+            if jump == Some(3) {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
             servers_section(app, ui, palette);
             ui.add_space(18.0);
 
+            if jump == Some(4) {
+                ui.scroll_to_cursor(Some(egui::Align::Min));
+            }
             security_section(app, ui, palette);
             ui.add_space(18.0);
 
-            if focus == SettingsFocus::About {
+            if focus == SettingsFocus::About || jump == Some(5) {
                 ui.scroll_to_cursor(Some(egui::Align::Min));
             }
             updates_section(app, ui, palette);
@@ -1089,7 +1120,19 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     });
                     ui.add_space(8.0);
                     crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
+                    if app.update.ready_version.is_none() && app.update.progress.is_none() {
+                        ui.add_space(8.0);
+                        if primary_button(ui, t!(app.locale, "Download and install update"), palette, true) {
+                            app.start_update_download();
+                        }
+                    }
                 });
+        }
+        if let Some((received, total)) = app.update.progress {
+            ui.add_space(8.0);
+            let progress = if total > 0 { (received as f32 / total as f32).clamp(0.0, 1.0) } else { 0.0 };
+            ui.label(RichText::new(&app.update.stage).color(palette.secondary));
+            ui.add(egui::ProgressBar::new(progress).show_percentage());
         }
         if let Some(version) = app.update.ready_version.clone() {
             ui.add_space(10.0);
@@ -1226,10 +1269,12 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
 
         ui.add_space(12.0);
-        ui.horizontal(|ui| {
-            if secondary_button(ui, t!(app.locale, "Check for updates now"), palette) {
-                app.check_for_updates(false);
-            }
+        ui.horizontal_wrapped(|ui| {
+            ui.add_enabled_ui(!app.update.checking, |ui| {
+                if secondary_button(ui, t!(app.locale, "Check for updates now"), palette) {
+                    app.check_for_updates(false);
+                }
+            });
             if secondary_button(ui, t!(app.locale, "Release notes"), palette)
                 && let Err(error) = open::that(RELEASES_URL)
             {

@@ -1588,3 +1588,6 @@ msgstr "Lecture seule. Créez ou convertissez un devis dans l’application web.
 
 msgid "No matching quote."
 msgstr "Aucun devis correspondant."
+
+msgid "Download and install update"
+msgstr "Télécharger et installer la mise à jour"
