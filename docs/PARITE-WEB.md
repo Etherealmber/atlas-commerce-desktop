@@ -111,14 +111,14 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Dashboard` | Oui |
 | `Products`, `ProductHistory` | Partiel — lecture + ajustement de stock ; manque CRUD, variantes, images, historique mouvements |
 | `Invoices`, `InvoiceDetail` | Partiel — liste, détail natif, impression et PDF officiels ouverts dans le navigateur via un ticket `rt` de 30 minutes ; manque création, paiements, statuts et UBL |
-| `Quotes` | Non (devis) |
+| `Quotes` | Partiel — liste en lecture seule dans Ventes, recherche, détail et impression officiels ; création, édition, conversion et suppression restent dans le web |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Partiel — liste en lecture seule, ouverture de la facture liée et impression officielle via ticket ; création et suppression restent à couvrir |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche une liste filtrée par identifiant dans l'application avec option navigateur. `Situation` ouvre encore le rapport imprimable via ticket `link-ticket` ; manque détail de facture, prix par client, imports et suppressions OTP |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche les factures standard filtrées par identifiant et leur détail natif, avec option navigateur ; `Situation` affiche les valeurs du rapport serveur en synthèse ou détail produits, avec impression officielle via ticket `link-ticket`. Prix par client, imports et suppressions OTP restent à couvrir |
 | `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; factures fournisseurs en lecture seule avec impression/PDF officiels. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Partiel — liste, recherche, statut et catégorie, détail avec historique des paiements, paiement, acompte, démission et réactivation, fiche d'embauche et situation RH imprimables ; création réduite aux champs essentiels. Manquent édition complète, pièce d'identité chiffrée et pointage |
-| `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
+| `Reports`, `Balance` | Partiel — `client-situation` lu dans l’application en synthèse ou détail produits, impression officielle ouverte dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
 | `Bank` | Non (rapprochement CSV) |
 | `Reimbursements` | Partiel — les avoirs `remboursement` sont listés dans Ventes (recherche numéro/client, ouverture de la facture liée, impression officielle) ; création, suppression OTP et envoi d'e-mail restent dans le web |
 | `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
