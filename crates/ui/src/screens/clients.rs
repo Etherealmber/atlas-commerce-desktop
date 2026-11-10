@@ -362,7 +362,11 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui,
         palette,
         t!(app.locale, "Credit limit"),
-        money(client.credit_limit, &currency),
+        if client.credit_limit > 0.0 {
+            money(client.credit_limit, &currency)
+        } else {
+            t!(app.locale, "Unlimited").into_owned()
+        },
     );
     detail_row(
         ui,
@@ -443,14 +447,15 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .color(palette.text)
                     .strong(),
                 );
-                ui.label(
-                    RichText::new(format!(
-                        "{} · {}",
-                        invoice.issue_date.as_deref().unwrap_or("—"),
-                        invoice.status.as_deref().unwrap_or("—")
-                    ))
-                    .color(palette.secondary),
-                );
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        RichText::new(invoice.issue_date.as_deref().unwrap_or("—"))
+                            .color(palette.secondary),
+                    );
+                    if let Some(status) = invoice.status.as_deref() {
+                        super::dashboard::status_pill(ui, palette, status);
+                    }
+                });
                 ui.label(
                     RichText::new(format!(
                         "{} : {} · {} : {}",

@@ -1597,3 +1597,6 @@ msgstr "Les informations de mise à jour ne sont pas encore disponibles. Réessa
 
 msgid "Sales and invoice history"
 msgstr "Historique des ventes et factures"
+
+msgid "Unlimited"
+msgstr "Illimité"
