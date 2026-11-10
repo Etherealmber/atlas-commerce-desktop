@@ -504,7 +504,7 @@ pub struct AtlasApp {
     pub employee_status: String,
     pub employee_category: String,
     pub employee_detail: Cache<crate::employees::EmployeeDetail>,
-    pub(crate) employee_detail_id: Option<i64>,
+    pub employee_detail_id: Option<i64>,
     pub employee_new: Option<NewEmployeeForm>,
     pub employee_pay: Option<EmployeePayForm>,
     pub employee_resign: Option<EmployeeResignForm>,
