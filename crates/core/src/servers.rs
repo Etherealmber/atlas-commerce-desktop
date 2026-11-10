@@ -135,7 +135,7 @@ impl ServerStore {
     /// the server" path the interface documents.
     pub fn import_install_file(&mut self, path: &Path) -> Option<String> {
         let text = std::fs::read_to_string(path).ok()?;
-        let choice: InstallChoice = serde_json::from_str(&text).ok();
+        let choice: Option<InstallChoice> = serde_json::from_str(&text).ok();
         let applied = choice
             .as_ref()
             .and_then(|choice| self.apply_install_choice(&choice.url, &choice.label));
