@@ -548,6 +548,9 @@ pub struct AtlasApp {
     pub(crate) receipts_open: bool,
     /// Public so the visual fixture can open the refunds panel.
     pub refunds_open: bool,
+    /// Open the read-only quotes list within Sales.
+    pub quotes_open: bool,
+    pub(crate) quote_search: String,
     pub(crate) refund_search: String,
     pub(crate) receipt_search: String,
     pub alerts: Cache<Vec<Alert>>,
@@ -736,6 +739,8 @@ impl AtlasApp {
             receipts: Cache::default(),
             receipts_open: false,
             refunds_open: false,
+            quotes_open: false,
+            quote_search: String::new(),
             refund_search: String::new(),
             receipt_search: String::new(),
             alerts: Cache::default(),
@@ -1308,6 +1313,8 @@ impl AtlasApp {
         self.receipt_search.clear();
         self.refunds_open = false;
         self.refund_search.clear();
+        self.quotes_open = false;
+        self.quote_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
         self.nav_badges_retry_at = None;

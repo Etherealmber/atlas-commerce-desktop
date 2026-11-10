@@ -77,6 +77,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(12.0);
 
     ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Quotes"), palette) {
+            app.quotes_open = !app.quotes_open;
+            if app.quotes_open && app.invoices.data.is_none() && !app.invoices.loading {
+                app.load_invoices();
+            }
+        }
         if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
             app.receipts_open = !app.receipts_open;
             if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
@@ -90,6 +96,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     });
+    if app.quotes_open {
+        ui.add_space(12.0);
+        quote_list(app, ui, palette);
+        ui.add_space(12.0);
+    }
     if app.receipts_open {
         ui.add_space(12.0);
         receipt_list(app, ui, palette);
@@ -115,6 +126,100 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         quick_sale_form(app, ui, palette);
+    });
+}
+
+/// Quotes are invoices whose status is `quote` or legacy `devis`, as in
+/// the web Quotes page. Loading kind=all includes both historical statuses.
+/// Creating, converting and deleting quotes remain in the web application.
+fn is_quote(invoice: &atlas_api::models::Invoice) -> bool {
+    matches!(invoice.status.as_deref(), Some("quote" | "devis"))
+}
+
+fn quote_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Quotes"))
+                    .strong()
+                    .color(palette.text),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_invoices();
+            }
+            let width = (ui.available_width() - 220.0).clamp(160.0, 380.0);
+            widgets::search_field(
+                ui,
+                &mut app.quote_search,
+                t!(app.locale, "Number or client"),
+                width,
+            );
+        });
+        ui.label(
+            RichText::new(t!(
+                app.locale,
+                "Read-only. Create or convert a quote in the web application."
+            ))
+            .color(palette.secondary)
+            .size(12.0),
+        );
+        if app.invoices.loading && app.invoices.data.is_none() {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoices.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(invoices) = app.invoices.data.clone() else {
+            return;
+        };
+        let query = crate::shortcuts::normalize(app.quote_search.trim());
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
+        let mut found = false;
+        for quote in invoices
+            .into_iter()
+            .filter(|invoice| is_quote(invoice) && invoice_matches(invoice, &query))
+        {
+            found = true;
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(
+                        quote
+                            .number
+                            .clone()
+                            .unwrap_or_else(|| format!("#{}", quote.id)),
+                    )
+                    .strong()
+                    .color(palette.text),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        quote.client_name.as_deref().unwrap_or("—"),
+                        quote.issue_date.as_deref().unwrap_or("—"),
+                        money(quote.total, &currency)
+                    ))
+                    .color(palette.secondary),
+                );
+                if secondary_button(ui, t!(app.locale, "Open"), palette) {
+                    app.open_invoice_detail(quote.id);
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{}/print", quote.id), &[]);
+                }
+            });
+        }
+        if !found {
+            ui.label(RichText::new(t!(app.locale, "No matching quote.")).color(palette.secondary));
+        }
     });
 }
 
@@ -829,6 +934,24 @@ mod tests {
 mod invoice_search_tests {
     use super::invoice_matches;
     use atlas_api::models::Invoice;
+
+    #[test]
+    fn quote_list_only_includes_worker_quote_statuses() {
+        for status in ["quote", "devis"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(super::is_quote(&doc));
+        }
+        for status in ["paid", "cancelled", "remboursement"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_quote(&doc));
+        }
+    }
 
     #[test]
     fn matches_number_and_accent_folded_client_name() {
