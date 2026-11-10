@@ -54,7 +54,7 @@ jobs:
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
               if [ "$page" = client-invoices ]; then
-                # Bring the selected client's invoice section into view.
+                # Bring the selected client invoice section into view.
                 xdotool mousemove 900 500 click --repeat 5 --delay 80 5
                 sleep 1
                 import -window root visual-output/client-invoices-scrolled.png
