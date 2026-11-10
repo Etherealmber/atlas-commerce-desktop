@@ -37,9 +37,11 @@ pub const CONFIG: UpdateConfig = UpdateConfig {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UpdateCache {
-    /// ETag of the last release listing; a matching one answers `304` and
-    /// does not count against the API quota.
+    /// ETags of the two listing endpoints; a matching one answers `304` and
+    /// does not count against the API quota. They are kept apart so
+    /// switching channel never reuses the other endpoint's validator.
     pub etag: Option<String>,
+    pub etag_prerelease: Option<String>,
     /// Unix timestamp of the last completed check, successful or not.
     pub last_checked_unix: u64,
     /// While set, GitHub answered that the quota was exhausted; no request
@@ -90,7 +92,11 @@ fn now_unix() -> u64 {
 }
 
 /// Reads the rate-limit headers and the ETag of a GitHub response.
-fn remember_headers(cache: &mut UpdateCache, headers: &reqwest::header::HeaderMap) {
+fn remember_headers(
+    cache: &mut UpdateCache,
+    headers: &reqwest::header::HeaderMap,
+    prerelease: bool,
+) {
     let header = |name: &str| {
         headers
             .get(name)
@@ -98,7 +104,11 @@ fn remember_headers(cache: &mut UpdateCache, headers: &reqwest::header::HeaderMa
             .map(str::to_owned)
     };
     if let Some(etag) = header("etag") {
-        cache.etag = Some(etag);
+        if prerelease {
+            cache.etag_prerelease = Some(etag);
+        } else {
+            cache.etag = Some(etag);
+        }
     }
     let remaining = header("x-ratelimit-remaining").and_then(|value| value.parse::<u64>().ok());
     if remaining == Some(0)
@@ -153,7 +163,7 @@ pub async fn fetch_manifest(
         let mut request = client
             .get(url)
             .header("Accept", "application/vnd.github+json");
-        if let Some(etag) = cache.etag.clone() {
+        if let Some(etag) = cache.etag_prerelease.clone() {
             request = request.header("If-None-Match", etag);
         }
         let response = request
@@ -168,7 +178,7 @@ pub async fn fetch_manifest(
                 not_modified: true,
             });
         }
-        remember_headers(&mut cache, response.headers());
+        remember_headers(&mut cache, response.headers(), true);
         if !response.status().is_success() {
             return Err(format!("GitHub a répondu {}", response.status()));
         }
@@ -204,7 +214,7 @@ pub async fn fetch_manifest(
                 not_modified: false,
             });
         }
-        remember_headers(&mut cache, response.headers());
+        remember_headers(&mut cache, response.headers(), false);
         if !response.status().is_success() {
             return Err(format!("GitHub a répondu {}", response.status()));
         }
@@ -384,15 +394,16 @@ mod tests {
         headers.insert("etag", "\"release-42\"".parse().unwrap());
         headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
         headers.insert("x-ratelimit-reset", "2000000000".parse().unwrap());
-        remember_headers(&mut cache, &headers);
+        remember_headers(&mut cache, &headers, false);
         assert_eq!(cache.etag.as_deref(), Some("\"release-42\""));
         // Still blocked one hour before the reset, free afterwards.
         assert_eq!(cache.blocked_for(1_999_996_400), Some(3_600));
         assert_eq!(cache.blocked_for(2_000_000_000), None);
         // An ordinary answer without headers never invents a quota window.
         let mut plain = UpdateCache::default();
-        remember_headers(&mut plain, &reqwest::header::HeaderMap::new());
+        remember_headers(&mut plain, &reqwest::header::HeaderMap::new(), false);
         assert_eq!(plain.etag, None);
+        assert_eq!(plain.etag_prerelease, None);
         assert_eq!(plain.rate_limited_until_unix, 0);
     }
 
