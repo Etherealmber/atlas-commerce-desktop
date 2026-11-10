@@ -227,39 +227,54 @@ fn metrics(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .as_ref()
         .map(|data| data.currency().to_owned())
         .unwrap_or_else(|| "MAD".to_owned());
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 12.0;
-        let width = ((ui.available_width() - 24.0) / 3.0).clamp(150.0, 360.0);
-        for (label, value, warn) in [
-            (
-                t!(app.locale, "Active").into_owned(),
-                active.to_string(),
-                false,
-            ),
-            (t!(app.locale, "Due").into_owned(), due.to_string(), due > 0),
-            (
-                t!(app.locale, "Payroll (active)").into_owned(),
-                money(payroll, &currency),
-                false,
-            ),
-        ] {
+    let values = [
+        (
+            t!(app.locale, "Active").into_owned(),
+            active.to_string(),
+            false,
+        ),
+        (t!(app.locale, "Due").into_owned(), due.to_string(), due > 0),
+        (
+            t!(app.locale, "Payroll (active)").into_owned(),
+            money(payroll, &currency),
+            false,
+        ),
+    ];
+    // Three equal columns, minus the card's own 16 px padding on each side:
+    // without that reserve the right column paints past the window edge.
+    const GAP: f32 = 12.0;
+    const PADDING: f32 = 32.0;
+    let columns = 3.0;
+    let width = ((ui.available_width() - GAP * (columns - 1.0)) / columns - PADDING).max(96.0);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = GAP;
+        for (label, value, warn) in values {
             card(palette).show(ui, |ui| {
                 ui.set_width(width);
-                ui.set_min_height(72.0);
+                ui.set_min_height(64.0);
                 ui.label(
                     RichText::new(label)
                         .color(palette.secondary)
                         .font(crate::fonts::medium(12.0)),
                 );
                 ui.add_space(6.0);
-                ui.label(
-                    RichText::new(value)
-                        .color(if warn {
-                            palette.finance_warning
-                        } else {
-                            palette.text
-                        })
-                        .font(crate::fonts::mono_semibold(20.0)),
+                // Long amounts drop a few points instead of clipping.
+                let size = if value.chars().count() > 10 {
+                    15.0
+                } else {
+                    20.0
+                };
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(value)
+                            .color(if warn {
+                                palette.finance_warning
+                            } else {
+                                palette.text
+                            })
+                            .font(crate::fonts::mono_semibold(size)),
+                    )
+                    .truncate(),
                 );
             });
         }
@@ -278,76 +293,87 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .map(|data| data.currency().to_owned())
         .unwrap_or_else(|| "MAD".to_owned());
     for employee in rows {
-        ui.add_space(4.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 12.0;
-            let selected = app.employee_detail_id == Some(employee.id);
-            let name = RichText::new(employee.label())
-                .color(if selected {
-                    palette.accent
-                } else {
-                    palette.text
-                })
-                .strong()
-                .size(13.5);
-            if ui
-                .add(egui::Label::new(name).sense(egui::Sense::click()))
-                .clicked()
-            {
-                app.employee_detail_id = Some(employee.id);
-                app.load_employee_detail(employee.id);
-            }
-            ui.label(
-                RichText::new(format!(
-                    "{} · {}",
-                    if employee.emp_number.is_empty() {
-                        "—"
+        ui.add_space(6.0);
+        ui.vertical(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                let selected = app.employee_detail_id == Some(employee.id);
+                let name = RichText::new(employee.label())
+                    .color(if selected {
+                        palette.accent
                     } else {
-                        &employee.emp_number
-                    },
-                    if employee.role_title.is_empty() {
-                        "—"
-                    } else {
-                        &employee.role_title
-                    }
-                ))
-                .color(palette.dim)
-                .size(12.0),
-            );
-            if !employee.is_active() {
-                ui.label(
-                    RichText::new(t!(app.locale, "Resigned"))
-                        .color(palette.finance_warning)
-                        .size(12.0),
-                );
-            }
-            ui.label(
-                RichText::new(format!(
-                    "{} · {}",
-                    money(employee.pay_amount, &currency),
-                    employee.cycle_label()
-                ))
-                .color(palette.secondary)
-                .size(12.0),
-            );
-            if employee.pay_overdue {
+                        palette.text
+                    })
+                    .strong()
+                    .size(13.5);
+                if ui
+                    .add(egui::Label::new(name).sense(egui::Sense::click()))
+                    .clicked()
+                {
+                    app.employee_detail_id = Some(employee.id);
+                    app.load_employee_detail(employee.id);
+                }
                 ui.label(
                     RichText::new(format!(
                         "{} · {}",
-                        employee.next_due,
-                        t!(app.locale, "to pay")
+                        if employee.emp_number.is_empty() {
+                            "—"
+                        } else {
+                            &employee.emp_number
+                        },
+                        if employee.role_title.is_empty() {
+                            "—"
+                        } else {
+                            &employee.role_title
+                        }
                     ))
-                    .color(palette.finance_warning)
+                    .color(palette.dim)
                     .size(12.0),
                 );
-            } else if !employee.next_due.is_empty() {
+                if !employee.is_active() {
+                    ui.label(
+                        RichText::new(t!(app.locale, "Resigned"))
+                            .color(palette.finance_warning)
+                            .size(12.0),
+                    );
+                }
                 ui.label(
-                    RichText::new(format!("→ {}", employee.next_due))
-                        .color(palette.dim)
-                        .size(12.0),
+                    RichText::new(format!(
+                        "{} · {}",
+                        money(employee.pay_amount, &currency),
+                        employee.cycle_label()
+                    ))
+                    .color(palette.secondary)
+                    .size(12.0),
                 );
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if employee.pay_overdue {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} · {}",
+                            employee.next_due,
+                            t!(app.locale, "to pay")
+                        ))
+                        .color(palette.finance_warning)
+                        .size(12.0),
+                    );
+                } else if !employee.next_due.is_empty() {
+                    ui.label(
+                        RichText::new(format!("→ {}", employee.next_due))
+                            .color(palette.dim)
+                            .size(12.0),
+                    );
+                }
+            });
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                if employee.is_active() {
+                    if primary_button(ui, t!(app.locale, "Mark paid"), palette, true) {
+                        open_pay(&employee, app);
+                    }
+                } else if secondary_button(ui, t!(app.locale, "Reactivate"), palette) {
+                    app.reactivate_employee(employee.id);
+                }
                 if secondary_button(ui, t!(app.locale, "File"), palette) {
                     app.open_printable(&format!("/api/employees/{}/form/print", employee.id), &[]);
                 }
@@ -356,13 +382,6 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         "/api/reports/employee-situation",
                         &[("employee_id", employee.id.to_string())],
                     );
-                }
-                if employee.is_active() {
-                    if primary_button(ui, t!(app.locale, "Mark paid"), palette, true) {
-                        open_pay(&employee, app);
-                    }
-                } else if secondary_button(ui, t!(app.locale, "Reactivate"), palette) {
-                    app.reactivate_employee(employee.id);
                 }
             });
         });
@@ -420,37 +439,35 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     };
     let employee = &detail.employee;
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.label(
-                RichText::new(employee.label())
-                    .color(palette.text)
-                    .font(crate::fonts::semibold(16.0)),
+    ui.label(
+        RichText::new(employee.label())
+            .color(palette.text)
+            .font(crate::fonts::semibold(16.0)),
+    );
+    ui.label(
+        RichText::new(format!(
+            "{} · {} · {}",
+            employee.emp_number, employee.role_title, employee.department
+        ))
+        .color(palette.secondary)
+        .size(12.5),
+    );
+    ui.add_space(6.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        if secondary_button(ui, t!(app.locale, "Close"), palette) {
+            app.employee_detail_id = None;
+            app.employee_detail = Default::default();
+        }
+        if secondary_button(ui, t!(app.locale, "File"), palette) {
+            app.open_printable(&format!("/api/employees/{}/form/print", employee.id), &[]);
+        }
+        if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+            app.open_printable(
+                "/api/reports/employee-situation",
+                &[("employee_id", employee.id.to_string())],
             );
-            ui.label(
-                RichText::new(format!(
-                    "{} · {} · {}",
-                    employee.emp_number, employee.role_title, employee.department
-                ))
-                .color(palette.secondary)
-                .size(12.5),
-            );
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if secondary_button(ui, t!(app.locale, "Close"), palette) {
-                app.employee_detail_id = None;
-                app.employee_detail = Default::default();
-            }
-            if secondary_button(ui, t!(app.locale, "File"), palette) {
-                app.open_printable(&format!("/api/employees/{}/form/print", employee.id), &[]);
-            }
-            if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-                app.open_printable(
-                    "/api/reports/employee-situation",
-                    &[("employee_id", employee.id.to_string())],
-                );
-            }
-        });
+        }
     });
     ui.add_space(8.0);
     let lines = [
