@@ -65,9 +65,9 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "client-editor" => Route::Clients,
+        "clients" | "client-editor" | "client-invoices" => Route::Clients,
         "products" | "stock" => Route::Products,
-        "sales" => Route::Sales,
+        "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" => Route::Vendors,
         "employees" => Route::Employees,
@@ -155,6 +155,15 @@ fn build(route: &str) -> AtlasApp {
             ..Invoice::default()
         },
         Invoice {
+            id: 3,
+            number: Some("DV-DEMO-001".into()),
+            client_name: Some("Client Exemple".into()),
+            issue_date: Some("2026-01-21".into()),
+            total: 2500.0,
+            status: Some("quote".into()),
+            ..Invoice::default()
+        },
+        Invoice {
             id: 2,
             number: Some("WR-DEMO-001".into()),
             client_name: Some("Client Exemple".into()),
@@ -239,6 +248,14 @@ fn build(route: &str) -> AtlasApp {
     );
     if route == "sales" {
         app.refunds_open = true;
+    }
+    if route == "quotes" {
+        app.quotes_open = true;
+    }
+    if route == "client-invoices" {
+        app.selected_client = Some(1);
+        app.client_invoice_id = Some(1);
+        app.client_invoices.data = app.invoices.data.clone();
     }
     if route == "employees" {
         app.employee_detail_id = Some(1);
