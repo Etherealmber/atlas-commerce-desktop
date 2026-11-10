@@ -156,30 +156,41 @@ jobs:
           set -euo pipefail
           log=packaging-linux-packages.log
           : > "$log"
-          trap 'tail -20 "$log" | while IFS= read -r line; do echo "::error title=linux-packages-content::${line:0:400}"; done' ERR
+          step="deb-liste"
+          trap 'echo "::error title=linux-packages-content::étape ${step} en échec" ; tail -25 "$log" | while IFS= read -r line; do echo "::error title=linux-packages-content::${line:0:400}"; done' ERR
           deb=$(find "$RUNNER_TEMP/packages" -name '*.deb' | head -1)
           test -n "$deb"
           dpkg-deb -c "$deb" | tee -a "$log"
           dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-webview$'
           dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-desktop$'
+          step="deb-dependances"
+          echo "--- dépendances DEB ---" >> "$log"
+          dpkg-deb -f "$deb" Depends | tee -a "$log"
+          dpkg-deb -f "$deb" Depends | grep -q 'libwebkitgtk-6.0-4'
+          step="rpm"
           rpm=$(find "$RUNNER_TEMP/packages" -name '*.rpm' | head -1)
           if [ -n "$rpm" ]; then
+            echo "--- contenu RPM ---" >> "$log"
             rpm -qlp "$rpm" | tee -a "$log"
             rpm -qlp "$rpm" | grep -q '/usr/bin/atlas-commerce-webview$'
+            rpm -qpR "$rpm" | tee -a "$log"
+            rpm -qpR "$rpm" | grep -q 'webkitgtk6.0'
           fi
+          step="appimage"
           appimage=$(find "$RUNNER_TEMP/packages" -name '*.AppImage' | head -1)
           test -n "$appimage"
           chmod +x "$appimage"
+          rm -rf "$RUNNER_TEMP/squashfs-root"
           (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/bin/*' >/dev/null)
+          echo "--- contenu AppImage ---" >> "$log"
           ls -l "$RUNNER_TEMP/squashfs-root/usr/bin/" | tee -a "$log"
           test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-webview"
           test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-desktop"
-          # The AppImage must not carry a private WebKit copy or it would
-          # silently diverge from the host engine.
-          if grep -rlE 'libwebkit2gtk|libwebkitgtk-6' "$RUNNER_TEMP/squashfs-root/usr/lib" 2>/dev/null; then
-            echo "::error title=packaging Linux::The AppImage bundles WebKitGTK."; exit 1
+          step="appimage-propre"
+          if grep -rlE 'libwebkit2gtk|libwebkitgtk-6' "$RUNNER_TEMP/squashfs-root" 2>/dev/null | head -5 | tee -a "$log"; then
+            echo "::error title=packaging Linux::L'AppImage embarque WebKitGTK."; exit 1
           fi
-          echo "Assistant WebKitGTK présent dans le DEB et l'AppImage." | tee -a "$log"
+          echo "Assistant WebKitGTK présent dans le DEB et l'AppImage ; dépendances déclarées." | tee -a "$log"
       - name: Job summary
         if: always()
         run: |
