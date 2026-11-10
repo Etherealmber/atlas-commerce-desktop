@@ -478,6 +478,14 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ))
                 .color(palette.text),
             );
+            ui.horizontal_wrapped(|ui| {
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/bills/{}/print", bill.id), &[]);
+                }
+                if secondary_button(ui, t!(app.locale, "PDF"), palette) {
+                    app.open_printable(&format!("/api/bills/{}/pdf", bill.id), &[]);
+                }
+            });
         }
         if !found {
             ui.label(

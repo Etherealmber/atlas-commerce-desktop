@@ -98,6 +98,7 @@ pub fn rail_route_at(index: usize) -> Option<Route> {
         Route::Vendors,
         Route::Expenses,
         Route::DeliveryNotes,
+        Route::Employees,
     ]
     .get(index)
     .copied()

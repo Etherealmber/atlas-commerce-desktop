@@ -13,6 +13,7 @@ mod business_search;
 mod client_invoices;
 mod client_report;
 pub mod dialogs;
+pub mod employees;
 pub mod fonts;
 pub mod i18n;
 pub mod icons;

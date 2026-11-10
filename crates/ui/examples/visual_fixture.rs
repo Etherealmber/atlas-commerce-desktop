@@ -60,6 +60,7 @@ fn build(route: &str) -> AtlasApp {
         "sales" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" => Route::Vendors,
+        "employees" => Route::Employees,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
@@ -127,6 +128,100 @@ fn build(route: &str) -> AtlasApp {
         balance_due: 500.0,
         ..Vendor::default()
     }]);
+    app.employees.data = Some(
+        serde_json::from_value(serde_json::json!({
+            "rows": [
+                {
+                    "id": 1,
+                    "emp_number": "EMP-001",
+                    "display_name": "Amina Fictive",
+                    "name": "Amina Fictive",
+                    "phone": "0600000000",
+                    "role_title": "Vendeuse",
+                    "department": "Magasin",
+                    "category": "Magasin",
+                    "employment_status": "CDI",
+                    "joined_date": "2025-03-01",
+                    "national_id": "FI000001",
+                    "pay_amount": 4200.0,
+                    "pay_cycle_type": "monthly",
+                    "cycle_days": 30,
+                    "next_due": "2026-11-01",
+                    "pay_overdue": false,
+                    "active": 1,
+                    "suggested_pay": 4200.0,
+                    "gross_accrued": 4200.0,
+                    "accrued_days": 30,
+                    "period_from": "2026-10-01"
+                },
+                {
+                    "id": 2,
+                    "emp_number": "EMP-002",
+                    "display_name": "Youssef Fictif",
+                    "name": "Youssef Fictif",
+                    "phone": "0611111111",
+                    "role_title": "Magasinier",
+                    "department": "Dépôt",
+                    "category": "Chantier",
+                    "national_id": "FI000002",
+                    "pay_amount": 3600.0,
+                    "pay_cycle_type": "days",
+                    "cycle_days": 7,
+                    "next_due": "2026-10-20",
+                    "pay_overdue": true,
+                    "active": 1,
+                    "suggested_pay": 840.0,
+                    "gross_accrued": 840.0,
+                    "accrued_days": 7,
+                    "period_from": "2026-10-13"
+                },
+                {
+                    "id": 3,
+                    "emp_number": "EMP-003",
+                    "display_name": "Salma Fictive",
+                    "name": "Salma Fictive",
+                    "role_title": "Assistante",
+                    "pay_amount": 3800.0,
+                    "pay_cycle_type": "monthly",
+                    "cycle_days": 30,
+                    "active": 0,
+                    "is_resigned": true
+                }
+            ],
+            "categories": ["Bureau", "Chantier", "Magasin"]
+        }))
+        .expect("fixture employees"),
+    );
+    if route == "employees" {
+        app.employee_detail_id = Some(1);
+        app.employee_detail.data = Some(
+            serde_json::from_value(serde_json::json!({
+                "id": 1,
+                "emp_number": "EMP-001",
+                "display_name": "Amina Fictive",
+                "name": "Amina Fictive",
+                "phone": "0600000000",
+                "email": "amina@example.invalid",
+                "role_title": "Vendeuse",
+                "department": "Magasin",
+                "national_id": "FI000001",
+                "joined_date": "2025-03-01",
+                "pay_amount": 4200.0,
+                "pay_cycle_type": "monthly",
+                "cycle_days": 30,
+                "next_due": "2026-11-01",
+                "active": 1,
+                "suggested_pay": 4200.0,
+                "gross_accrued": 4200.0,
+                "accrued_days": 30,
+                "period_from": "2026-10-01",
+                "payments": [
+                    {"id": 1, "amount": 4200.0, "paid_at": "2026-10-01", "period_label": "Période 2026-09-01 → 2026-10-01", "note": "Fictif"}
+                ]
+            }))
+            .expect("fixture employee detail"),
+        );
+    }
     app.delivery_notes.data = Some(vec![DeliveryNote {
         id: 1,
         number: "BL-DEMO-001".into(),

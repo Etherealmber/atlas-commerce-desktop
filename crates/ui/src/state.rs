@@ -18,6 +18,7 @@ use crate::i18n::Locale;
 use crate::screens::catalog::{CatalogTab, CategoryEditor, UnitEditor};
 use crate::screens::clients::ClientEditor;
 use crate::screens::delivery_notes::DeliveryNoteEditor;
+use crate::screens::employees::{EmployeePayForm, EmployeeResignForm, NewEmployeeForm};
 use crate::screens::expenses::ExpenseEditor;
 use crate::screens::products::ProductEditor;
 use crate::screens::products::StockDialog;
@@ -101,13 +102,14 @@ pub enum Route {
     Expenses,
     DeliveryNotes,
     Sales,
+    Employees,
     Agent,
     Notifications,
     Settings,
 }
 
 impl Route {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Dashboard,
         Self::Products,
         Self::Catalog,
@@ -116,6 +118,7 @@ impl Route {
         Self::Expenses,
         Self::DeliveryNotes,
         Self::Sales,
+        Self::Employees,
         Self::Agent,
         Self::Notifications,
         Self::Settings,
@@ -165,6 +168,7 @@ impl RolePolicy {
                 | Route::Expenses
                 | Route::DeliveryNotes
                 | Route::Sales
+                | Route::Employees
                 | Route::Catalog
                 | Route::Notifications => self.office,
             }
@@ -495,6 +499,16 @@ pub struct AtlasApp {
     pub vendors: Cache<Vec<Vendor>>,
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
+    pub employees: Cache<crate::employees::EmployeesList>,
+    pub employee_search: String,
+    pub employee_status: String,
+    pub employee_category: String,
+    pub employee_detail: Cache<crate::employees::EmployeeDetail>,
+    pub(crate) employee_detail_id: Option<i64>,
+    pub employee_new: Option<NewEmployeeForm>,
+    pub employee_pay: Option<EmployeePayForm>,
+    pub employee_resign: Option<EmployeeResignForm>,
+    pub(crate) employee_action: Option<Job<Result<crate::employees::Action, ApiError>>>,
     pub expenses: Cache<Vec<Expense>>,
     pub expense_search: String,
     pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
@@ -673,6 +687,16 @@ impl AtlasApp {
             vendors: Cache::default(),
             vendor_search: String::new(),
             selected_vendor: None,
+            employees: Cache::default(),
+            employee_search: String::new(),
+            employee_status: "active".to_owned(),
+            employee_category: String::new(),
+            employee_detail: Cache::default(),
+            employee_detail_id: None,
+            employee_new: None,
+            employee_pay: None,
+            employee_resign: None,
+            employee_action: None,
             expenses: Cache::default(),
             expense_search: String::new(),
             bills: Cache::default(),
@@ -934,6 +958,7 @@ impl AtlasApp {
             }
             Route::Clients if self.clients.data.is_none() => self.load_clients(),
             Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
+            Route::Employees if self.employees.data.is_none() => self.load_employees(),
             Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
             Route::DeliveryNotes if self.delivery_notes.data.is_none() => {
                 self.load_delivery_notes();
@@ -996,6 +1021,7 @@ impl AtlasApp {
             }
             Route::Clients => self.load_clients(),
             Route::Vendors => self.load_vendors(),
+            Route::Employees => self.load_employees(),
             Route::Expenses => self.load_expenses(),
             Route::DeliveryNotes => self.load_delivery_notes(),
             Route::Sales => self.load_invoices(),
@@ -1229,6 +1255,16 @@ impl AtlasApp {
         self.vendor_search = String::new();
         self.selected_vendor = None;
         self.vendor_editor = None;
+        self.employees = Cache::default();
+        self.employee_search.clear();
+        self.employee_status = "active".to_owned();
+        self.employee_category.clear();
+        self.employee_detail = Cache::default();
+        self.employee_detail_id = None;
+        self.employee_new = None;
+        self.employee_pay = None;
+        self.employee_resign = None;
+        self.employee_action = None;
         self.expenses = Cache::default();
         self.expense_search = String::new();
         self.bills = Cache::default();

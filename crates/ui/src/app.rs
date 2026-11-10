@@ -247,6 +247,248 @@ impl AtlasApp {
         self.vendors.start(job);
     }
 
+    pub fn load_employees(&mut self) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let status = self.employee_status.clone();
+        let query = self.employee_search.clone();
+        let category = self.employee_category.clone();
+        self.employees.start(
+            self.runner.spawn(async move {
+                crate::employees::fetch(&api, &status, &query, &category).await
+            }),
+        );
+    }
+
+    pub(crate) fn load_employee_detail(&mut self, id: i64) {
+        if id <= 0 || !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_detail_id = Some(id);
+        self.employee_detail.start(
+            self.runner
+                .spawn(async move { crate::employees::detail(&api, id).await }),
+        );
+    }
+
+    /// Mints a short-lived ticket and opens one allowlisted printable
+    /// document in the system browser. The ticket is never logged.
+    pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
+        if !crate::employees::printable_path(path) {
+            self.notice("Document imprimable non autorisé.".to_owned());
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        if self.report_job.is_some() {
+            return;
+        }
+        let path = path.to_owned();
+        let params: Vec<(String, String)> = params
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect();
+        let locale = self.locale;
+        let job = self.runner.spawn(async move {
+            if !crate::employees::printable_path(&path) {
+                return Err(atlas_api::ApiError::client(
+                    t!(locale, "Invalid report link.").into_owned(),
+                ));
+            }
+            let ticket = api.report_link_ticket().await?;
+            let mut url =
+                url::Url::parse(&format!("{}{path}", api.base_url())).map_err(|error| {
+                    log::warn!("invalid printable link: {error}");
+                    atlas_api::ApiError::client(t!(locale, "Invalid report link.").into_owned())
+                })?;
+            {
+                let mut query = url.query_pairs_mut();
+                query.append_pair("rt", &ticket.rt);
+                for (key, value) in &params {
+                    if !value.is_empty() {
+                        query.append_pair(key, value);
+                    }
+                }
+            }
+            Ok(url.to_string())
+        });
+        self.report_job = Some(job);
+    }
+
+    pub(crate) fn pay_employee(&mut self) {
+        let parsed = self.employee_pay.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let amount = form
+                .amount
+                .trim()
+                .replace(',', ".")
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0);
+            match amount {
+                Some(amount) => {
+                    form.saving = true;
+                    form.error = None;
+                    Some((
+                        form.employee_id,
+                        amount,
+                        form.date.trim().to_owned(),
+                        form.note.trim().to_owned(),
+                    ))
+                }
+                None => {
+                    form.error = Some("Montant de paiement invalide.".to_owned());
+                    None
+                }
+            }
+        });
+        let Some((id, amount, date, note)) = parsed else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_pay.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::pay(&api, id, amount, &date, &note).await }),
+        );
+    }
+
+    pub(crate) fn advance_employee(&mut self, id: i64, amount: f64, note: &str) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let note = note.to_owned();
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::advance(&api, id, amount, &note).await }),
+        );
+    }
+
+    pub(crate) fn resign_employee(&mut self) {
+        let parsed = self.employee_resign.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let reason = form.reason.trim().to_owned();
+            if reason.is_empty() || reason.chars().count() > 200 {
+                form.error = Some("Motif de démission invalide.".to_owned());
+                return None;
+            }
+            form.saving = true;
+            form.error = None;
+            Some((form.employee_id, reason))
+        });
+        let Some((id, reason)) = parsed else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_resign.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::resign(&api, id, &reason).await }),
+        );
+    }
+
+    pub(crate) fn reactivate_employee(&mut self, id: i64) {
+        if !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::reactivate(&api, id).await }),
+        );
+    }
+
+    pub(crate) fn create_employee(&mut self) {
+        let Some(body) = self.employee_new.as_mut().and_then(|form| {
+            if form.saving {
+                return None;
+            }
+            let salary = form
+                .salary
+                .trim()
+                .replace(',', ".")
+                .parse::<f64>()
+                .unwrap_or(0.0);
+            let days = form.cycle_days.trim().parse::<i64>().unwrap_or(7);
+            form.saving = true;
+            form.error = None;
+            Some(crate::employees::new_employee(
+                form.first_name.trim(),
+                form.last_name.trim(),
+                form.phone.trim(),
+                form.email.trim(),
+                form.role_title.trim(),
+                form.department.trim(),
+                form.category.trim(),
+                form.national_id.trim(),
+                form.city.trim(),
+                salary,
+                if form.days_cycle { "days" } else { "monthly" },
+                days,
+                form.notes.trim(),
+            ))
+        }) else {
+            return;
+        };
+        let Some(api) = self.client.clone() else {
+            if let Some(form) = self.employee_new.as_mut() {
+                form.saving = false;
+            }
+            return;
+        };
+        self.employee_action = Some(
+            self.runner
+                .spawn(async move { crate::employees::create(&api, &body).await }),
+        );
+    }
+
+    fn poll_employee_jobs(&mut self) {
+        let Some(result) = self.employee_action.as_ref().and_then(|job| job.poll()) else {
+            return;
+        };
+        self.employee_action = None;
+        match result {
+            Ok(action) => {
+                if !action.message.is_empty() {
+                    self.notice(action.message);
+                }
+                self.employee_new = None;
+                self.employee_pay = None;
+                self.employee_resign = None;
+                self.load_employees();
+                if let Some(id) = self.employee_detail_id {
+                    self.load_employee_detail(id);
+                }
+            }
+            Err(error) => screens::employees::action_failed(self, &error),
+        }
+    }
+
     pub(crate) fn reconcile_bank_csv(&mut self) {
         if !self.role_policy().allows_route(Route::Expenses) || self.bank_reconciliation.loading {
             return;
@@ -618,35 +860,15 @@ impl AtlasApp {
     /// Mint a 30-minute report ticket and open the printable client
     /// situation report (`Synthèse` or `Détail complet`) in the browser.
     pub fn open_client_situation(&mut self, client: &atlas_api::models::Client, full: bool) {
-        let Some(api) = self.client.clone() else {
-            return;
-        };
-        if self.report_job.is_some() {
-            return;
+        let mut params = vec![
+            ("client_id", client.id.to_string()),
+            ("name", client.name.clone()),
+            ("ice", client.ice.clone()),
+        ];
+        if full {
+            params.push(("detail", "full".to_owned()));
         }
-        let client_id = client.id;
-        let name = client.name.clone();
-        let ice = client.ice.clone();
-        let locale = self.locale;
-        let job = self.runner.spawn(async move {
-            let ticket = api.report_link_ticket().await?;
-            let mut url =
-                url::Url::parse(&format!("{}/api/reports/client-situation", api.base_url()))
-                    .map_err(|error| {
-                        log::warn!("invalid report link: {error}");
-                        atlas_api::ApiError::client(t!(locale, "Invalid report link.").into_owned())
-                    })?;
-            url.query_pairs_mut()
-                .append_pair("rt", &ticket.rt)
-                .append_pair("client_id", &client_id.to_string())
-                .append_pair("name", &name)
-                .append_pair("ice", &ice);
-            if full {
-                url.query_pairs_mut().append_pair("detail", "full");
-            }
-            Ok(url.to_string())
-        });
-        self.report_job = Some(job);
+        self.open_printable("/api/reports/client-situation", &params);
     }
 
     pub fn revoke_api_key(&mut self, id: i64) {
@@ -1011,6 +1233,12 @@ impl AtlasApp {
         if self.vendors.poll() {
             ctx.request_repaint();
         }
+        if self.employees.poll() {
+            ctx.request_repaint();
+        }
+        if self.employee_detail.poll() {
+            ctx.request_repaint();
+        }
         if self.expenses.poll() {
             ctx.request_repaint();
         }
@@ -1066,6 +1294,7 @@ impl AtlasApp {
             }
             ctx.request_repaint();
         }
+        self.poll_employee_jobs();
         self.poll_profile_jobs();
         self.poll_agent_jobs();
         self.poll_update_jobs(ctx);

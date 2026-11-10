@@ -32,6 +32,7 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
         Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
         Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
+        Route::Employees => (Icon::Users, t!(locale, "Employees").into_owned()),
         Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
         Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
         Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
@@ -366,6 +367,7 @@ fn search_destination(query: &str) -> Option<Route> {
         "situation" | "client" | "clients" => Some(Route::Clients),
         "produit" | "produits" | "products" => Some(Route::Products),
         "depense" | "depenses" | "expenses" => Some(Route::Expenses),
+        "employe" | "employes" | "employees" | "equipe" | "rh" => Some(Route::Employees),
         "parametres" | "reglages" | "settings" => Some(Route::Settings),
         "agent" => Some(Route::Agent),
         _ => None,
@@ -691,7 +693,7 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         (t!(app.locale, "Overview"), &[Route::Dashboard]),
         (t!(app.locale, "Catalog"), &[Route::Products]),
         (t!(app.locale, "Customer relations"), &[Route::Clients]),
-        (t!(app.locale, "Team"), &[Route::Sales]),
+        (t!(app.locale, "Team"), &[Route::Sales, Route::Employees]),
         (t!(app.locale, "Purchases"), &[Route::Vendors]),
         (
             t!(app.locale, "Finance"),
@@ -881,6 +883,9 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 }
                 Screen::Shell(Route::Sales) => {
                     super::sales::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Employees) => {
+                    super::employees::draw(app, ui, palette);
                 }
                 Screen::Shell(Route::Agent) => {
                     super::agent::draw(app, ui, palette);

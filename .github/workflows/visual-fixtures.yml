@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in clients client-editor products stock sales expenses vendors delivery agent; do
+            for page in clients client-editor products stock sales expenses vendors employees delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -163,6 +163,15 @@ jobs:
           count=0
           while IFS= read -r line || [ -n "$line" ]; do
             printf '::notice title=FixtureImage-expenses-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review employees screenshot
+        run: |
+          convert visual-output/employees.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-employees-%03d::%s\n' "$count" "$line"
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review delivery screenshot

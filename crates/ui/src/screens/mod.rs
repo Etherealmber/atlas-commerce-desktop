@@ -6,6 +6,7 @@ pub mod catalog;
 pub mod clients;
 pub mod dashboard;
 pub mod delivery_notes;
+pub mod employees;
 pub mod expenses;
 pub mod notifications;
 pub mod products;

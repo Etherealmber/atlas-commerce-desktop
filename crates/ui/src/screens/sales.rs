@@ -189,6 +189,9 @@ fn receipt_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if secondary_button(ui, t!(app.locale, "View invoice"), palette) {
                         app.open_invoice_detail(id);
                     }
+                    if receipt.id > 0 && secondary_button(ui, t!(app.locale, "Print"), palette) {
+                        app.open_printable(&format!("/api/receipts/{}/print", receipt.id), &[]);
+                    }
                 });
             }
         }
@@ -343,6 +346,12 @@ pub(crate) fn draw_invoice_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette
                 if secondary_button(ui, t!(app.locale, "Close"), palette) {
                     app.invoice_detail_id = None;
                     app.invoice_detail = Default::default();
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{id}/print"), &[]);
+                }
+                if secondary_button(ui, t!(app.locale, "PDF"), palette) {
+                    app.open_printable(&format!("/api/invoices/{id}/pdf"), &[]);
                 }
             }
         });
