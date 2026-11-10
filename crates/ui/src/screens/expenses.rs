@@ -423,7 +423,7 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             error_banner(ui, error, palette);
             return;
         }
-        let Some(bills) = &app.bills.data else {
+        let Some(bills) = app.bills.data.clone() else {
             return;
         };
         if bills.is_empty() {

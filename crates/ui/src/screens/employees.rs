@@ -225,8 +225,8 @@ fn metrics(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .dashboard
         .data
         .as_ref()
-        .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .map(|data| data.currency().to_owned())
+        .unwrap_or_else(|| "MAD".to_owned());
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 12.0;
         let width = ((ui.available_width() - 24.0) / 3.0).clamp(150.0, 360.0);
@@ -239,7 +239,7 @@ fn metrics(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             (t!(app.locale, "Due").into_owned(), due.to_string(), due > 0),
             (
                 t!(app.locale, "Payroll (active)").into_owned(),
-                money(payroll, currency),
+                money(payroll, &currency),
                 false,
             ),
         ] {
@@ -275,8 +275,8 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .dashboard
         .data
         .as_ref()
-        .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .map(|data| data.currency().to_owned())
+        .unwrap_or_else(|| "MAD".to_owned());
     for employee in rows {
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
@@ -324,7 +324,7 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.label(
                 RichText::new(format!(
                     "{} · {}",
-                    money(employee.pay_amount, currency),
+                    money(employee.pay_amount, &currency),
                     employee.cycle_label()
                 ))
                 .color(palette.secondary)
@@ -406,8 +406,8 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .dashboard
         .data
         .as_ref()
-        .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .map(|data| data.currency().to_owned())
+        .unwrap_or_else(|| "MAD".to_owned());
     if app.employee_detail.loading && app.employee_detail.data.is_none() {
         super::centered_spinner(ui, palette);
         return;
@@ -471,7 +471,7 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             t!(app.locale, "Salary").into_owned(),
             format!(
                 "{} · {}",
-                money(employee.pay_amount, currency),
+                money(employee.pay_amount, &currency),
                 employee.cycle_label()
             ),
         ),
@@ -483,9 +483,9 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             t!(app.locale, "Accrued").into_owned(),
             format!(
                 "{} ({} j · avances {})",
-                money(employee.gross_accrued, currency),
+                money(employee.gross_accrued, &currency),
                 employee.accrued_days.max(0),
-                money(employee.advances_in_period, currency)
+                money(employee.advances_in_period, &currency)
             ),
         ),
         (
@@ -574,7 +574,7 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 .size(12.0),
                         );
                         ui.label(
-                            RichText::new(money(payment.amount, currency))
+                            RichText::new(money(payment.amount, &currency))
                                 .color(palette.text)
                                 .size(12.5),
                         );

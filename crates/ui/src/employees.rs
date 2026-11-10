@@ -263,15 +263,19 @@ pub(crate) async fn fetch(
     query: &str,
     category: &str,
 ) -> Result<EmployeesList, ApiError> {
-    let mut pairs = url::form_urlencoded::Serializer::new(String::new());
-    pairs.append_pair("status", status);
-    if !query.trim().is_empty() {
-        pairs.append_pair("q", query.trim());
-    }
-    if !category.trim().is_empty() {
-        pairs.append_pair("category", category.trim());
-    }
-    let path = format!("/api/employees?{}", pairs.finish());
+    // The percent-encoding serializer holds a non-Sync encoder; build the
+    // path in its own scope so it is dropped before the first await.
+    let path = {
+        let mut pairs = url::form_urlencoded::Serializer::new(String::new());
+        pairs.append_pair("status", status);
+        if !query.trim().is_empty() {
+            pairs.append_pair("q", query.trim());
+        }
+        if !category.trim().is_empty() {
+            pairs.append_pair("category", category.trim());
+        }
+        format!("/api/employees?{}", pairs.finish())
+    };
     let envelope = request::<Vec<Employee>>(api, reqwest::Method::GET, &path, None).await?;
     if envelope.data.is_none() {
         return Err(ApiError::transport("Réponse des employés incomplète."));
