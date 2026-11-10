@@ -61,7 +61,11 @@ impl UpdateCache {
 
     pub fn save(&self, path: &Path) {
         let json = serde_json::to_vec_pretty(self).unwrap_or_default();
-        fastframe_file::write(path, json);
+        if let Err(error) = fastframe_file::write(path, json) {
+            // A cache that cannot be written only costs one extra request;
+            // never block an update or the interface for it.
+            log::warn!("update cache write failed: {error}");
+        }
     }
 
     /// Seconds still to wait when GitHub asked us to back off.
