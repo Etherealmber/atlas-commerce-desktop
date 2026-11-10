@@ -11,6 +11,59 @@ libraries:
   libasound.so.2:
     deb: libasound2t64
     rpm: alsa-lib
+  # The optional WebKitGTK helper (`atlas-commerce-webview`) links the engine,
+  # so native-packages resolves every one of its runtime libraries. Declaring
+  # them makes the DEB/RPM depend on the engine: an installed package always
+  # has the integrated login. The portable archive and the AppImage keep it
+  # optional and fall back to the system browser when it is absent.
+  libwebkitgtk-6.0.so.4:
+    deb: libwebkitgtk-6.0-4
+    rpm: webkitgtk6.0
+  libjavascriptcoregtk-6.0.so.4:
+    deb: libjavascriptcoregtk-6.0-4
+    rpm: javascriptcoregtk6.0
+  libsoup-3.0.so.0:
+    deb: libsoup-3.0-0
+    rpm: libsoup3
+  libgtk-4.so.1:
+    deb: libgtk-4-1
+    rpm: gtk4
+  libgdk_pixbuf-2.0.so.0:
+    deb: libgdk-pixbuf-2.0-0
+    rpm: gdk-pixbuf2
+  libpangocairo-1.0.so.0:
+    deb: libpangocairo-1.0-0
+    rpm: pango
+  libpango-1.0.so.0:
+    deb: libpango-1.0-0
+    rpm: pango
+  libharfbuzz.so.0:
+    deb: libharfbuzz0b
+    rpm: harfbuzz
+  libcairo-gobject.so.2:
+    deb: libcairo-gobject2
+    rpm: cairo-gobject
+  libcairo.so.2:
+    deb: libcairo2
+    rpm: cairo
+  libgraphene-1.0.so.0:
+    deb: libgraphene-1.0-0
+    rpm: graphene
+  libgio-2.0.so.0:
+    deb: libglib2.0-0t64
+    rpm: glib2
+  libgobject-2.0.so.0:
+    deb: libglib2.0-0t64
+    rpm: glib2
+  libglib-2.0.so.0:
+    deb: libglib2.0-0t64
+    rpm: glib2
+  libgmodule-2.0.so.0:
+    deb: libglib2.0-0t64
+    rpm: glib2
+  libatomic.so.1:
+    deb: libatomic1
+    rpm: libatomic
 nfpm:
   name: atlas-commerce-desktop
   maintainer: loxdpsy/Etherealmber <noreply@etherealmber.dev>
@@ -64,10 +117,10 @@ nfpm:
       - libxrandr2
       - libgcc-s1
       - libstdc++6
-      # Optional embedded engine: the application and the system-browser
-      # fallback work without it. Debian installs recommends by default.
+      # The engine arrives through `libraries` above because the helper links
+      # it. Kept here too so an explicit `--no-install-recommends` install of a
+      # future split package still resolves the GTK runtime.
       recommends:
-      - libwebkitgtk-6.0-4
       - libgtk-4-1
     rpm:
       depends:
