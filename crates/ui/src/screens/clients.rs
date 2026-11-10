@@ -415,6 +415,13 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         } else if let Some(error) = &app.client_invoices.error {
             error_banner(ui, error, palette);
         } else if let Some(invoices) = app.client_invoices.data.clone() {
+            // Match the web Factures page; the separate server situation
+            // report also includes quick-sale tickets and credit notes.
+            let invoices: Vec<_> = invoices
+                .into_iter()
+                .filter(crate::client_invoices::is_standard_invoice)
+                .collect();
+            ui.label(RichText::new(t!(app.locale, "This list excludes quotes, quick-sale tickets and credit notes; see Situation for the server report.")).color(palette.secondary).size(12.0));
             if invoices.is_empty() {
                 ui.label(
                     RichText::new(t!(app.locale, "No invoice for this client."))

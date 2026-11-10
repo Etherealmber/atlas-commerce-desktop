@@ -1576,3 +1576,6 @@ msgstr "Détail complet (produits)"
 
 msgid "Amounts and documents are provided by the server. Print / PDF opens the official report in your browser."
 msgstr "Les montants et les pièces proviennent du serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "This list excludes quotes, quick-sale tickets and credit notes; see Situation for the server report."
+msgstr "Cette liste exclut les devis, tickets de vente rapide et avoirs ; consultez Situation pour le rapport du serveur."
