@@ -223,6 +223,23 @@ fn quote_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
 }
 
+/// The web also recognises historical WR-numbered credits when older rows
+/// lack the status or document-kind marker.
+fn is_refund(invoice: &atlas_api::models::Invoice) -> bool {
+    invoice
+        .status
+        .as_deref()
+        .is_some_and(|value| value.eq_ignore_ascii_case("remboursement"))
+        || invoice
+            .doc_kind
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("remboursement"))
+        || invoice
+            .number
+            .as_deref()
+            .is_some_and(|number| number.to_ascii_uppercase().starts_with("WR"))
+}
+
 /// Credit notes (`status`/`doc_kind` = `remboursement`) from the same
 /// `/api/invoices?kind=all` list. Read-only: creating or deleting a refund
 /// stays in the web app and is password-gated there.
@@ -263,13 +280,7 @@ fn refund_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .as_ref()
             .map(|data| data.currency().to_owned())
             .unwrap_or_else(|| "MAD".to_owned());
-        let refunds: Vec<_> = invoices
-            .into_iter()
-            .filter(|invoice| {
-                invoice.status.as_deref() == Some("remboursement")
-                    || invoice.doc_kind.as_deref() == Some("remboursement")
-            })
-            .collect();
+        let refunds: Vec<_> = invoices.into_iter().filter(is_refund).collect();
         if refunds.is_empty() {
             ui.label(RichText::new(t!(app.locale, "No refund recorded.")).color(palette.secondary));
             return;
@@ -653,7 +664,8 @@ fn is_sale_history(invoice: &atlas_api::models::Invoice) -> bool {
         .to_ascii_lowercase();
     let status = invoice.status.as_deref().unwrap_or("").to_ascii_lowercase();
     let number = invoice.number.as_deref().unwrap_or("");
-    !matches!(kind.as_str(), "quote" | "devis" | "remboursement")
+    !is_refund(invoice)
+        && !matches!(kind.as_str(), "quote" | "devis" | "remboursement")
         && !matches!(status.as_str(), "quote" | "devis" | "remboursement")
         && !["DV", "DE", "WR"]
             .iter()
@@ -951,6 +963,20 @@ mod tests {
 mod invoice_search_tests {
     use super::invoice_matches;
     use atlas_api::models::Invoice;
+
+    #[test]
+    fn legacy_wr_numbers_are_credit_notes() {
+        let legacy = Invoice {
+            number: Some("wr-42".into()),
+            ..Default::default()
+        };
+        assert!(super::is_refund(&legacy));
+        let ordinary = Invoice {
+            number: Some("FA-42".into()),
+            ..Default::default()
+        };
+        assert!(!super::is_refund(&ordinary));
+    }
 
     #[test]
     fn history_keeps_sales_but_not_quotes_or_credits() {
