@@ -158,23 +158,29 @@ jobs:
           : > "$log"
           step="deb-liste"
           trap 'echo "::error title=linux-packages-content::étape ${step} en échec" ; tail -25 "$log" | while IFS= read -r line; do echo "::error title=linux-packages-content::${line:0:400}"; done' ERR
+          # `grep -q` would close the pipe early and, under `pipefail`, report
+          # a spurious failure; every listing is written once and then read.
           deb=$(find "$RUNNER_TEMP/packages" -name '*.deb' | head -1)
           test -n "$deb"
-          dpkg-deb -c "$deb" | tee -a "$log"
-          dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-webview$'
-          dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-desktop$'
+          dpkg-deb -c "$deb" > "$RUNNER_TEMP/deb-listing.txt"
+          cat "$RUNNER_TEMP/deb-listing.txt" >> "$log"
+          grep -F '/usr/bin/atlas-commerce-webview' "$RUNNER_TEMP/deb-listing.txt"
+          grep -F '/usr/bin/atlas-commerce-desktop' "$RUNNER_TEMP/deb-listing.txt"
           step="deb-dependances"
           echo "--- dépendances DEB ---" >> "$log"
-          dpkg-deb -f "$deb" Depends | tee -a "$log"
-          dpkg-deb -f "$deb" Depends | grep -q 'libwebkitgtk-6.0-4'
+          dpkg-deb -f "$deb" Depends > "$RUNNER_TEMP/deb-depends.txt"
+          tee -a "$log" < "$RUNNER_TEMP/deb-depends.txt"
+          grep -F 'libwebkitgtk-6.0-4' "$RUNNER_TEMP/deb-depends.txt"
           step="rpm"
           rpm=$(find "$RUNNER_TEMP/packages" -name '*.rpm' | head -1)
           if [ -n "$rpm" ]; then
             echo "--- contenu RPM ---" >> "$log"
-            rpm -qlp "$rpm" | tee -a "$log"
-            rpm -qlp "$rpm" | grep -q '/usr/bin/atlas-commerce-webview$'
-            rpm -qpR "$rpm" | tee -a "$log"
-            rpm -qpR "$rpm" | grep -q 'webkitgtk6.0'
+            rpm -qlp "$rpm" > "$RUNNER_TEMP/rpm-listing.txt"
+            cat "$RUNNER_TEMP/rpm-listing.txt" >> "$log"
+            grep -F '/usr/bin/atlas-commerce-webview' "$RUNNER_TEMP/rpm-listing.txt"
+            rpm -qpR "$rpm" > "$RUNNER_TEMP/rpm-depends.txt"
+            cat "$RUNNER_TEMP/rpm-depends.txt" >> "$log"
+            grep -F 'webkitgtk6.0' "$RUNNER_TEMP/rpm-depends.txt"
           fi
           step="appimage"
           appimage=$(find "$RUNNER_TEMP/packages" -name '*.AppImage' | head -1)
