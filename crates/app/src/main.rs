@@ -148,6 +148,26 @@ fn main() -> eframe::Result<()> {
         }
         log::info!("server fixed by the installer");
     }
+    // An installation made before the installer asked for a server keeps its
+    // saved choice, but becomes read-only now: the Inno uninstaller next to
+    // the executable proves this is an installed copy, not a portable one.
+    #[cfg(target_os = "windows")]
+    if !servers.is_locked()
+        && servers.selected_url().is_some()
+        && std::env::current_exe()
+            .ok()
+            .and_then(|exe| {
+                exe.parent()
+                    .map(|folder| folder.join("unins000.exe").is_file())
+            })
+            .unwrap_or(false)
+        && servers.lock_current()
+    {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to lock the existing server: {error}");
+        }
+        log::info!("existing installation locked to its saved server");
+    }
     let identity = DeviceIdentity::load_or_create(&paths.device_file());
     let accounts = AccountStore::load(&paths.accounts_file());
     let restore_mode = servers.selected_url().map(|base| {
