@@ -467,40 +467,119 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(t!(app.locale, "Client situation")).strong().color(palette.text));
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) { app.load_client_report(client, app.client_report_full); }
-            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) { app.open_client_situation(client, app.client_report_full); }
-            if secondary_button(ui, t!(app.locale, "Close"), palette) { app.client_report_id = None; app.client_report = Default::default(); }
+            ui.label(RichText::new(t!(app.locale, "Client situation")).strong().size(16.0).color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_client_report(client, app.client_report_full);
+            }
+            if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
+                app.open_client_situation(client, app.client_report_full);
+            }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.client_report_id = None;
+                app.client_report = Default::default();
+            }
         });
-        ui.label(RichText::new(t!(app.locale, "Native text view of the server report; formatting and printing are available in the browser.")).color(palette.secondary));
-        if app.client_report.loading { super::centered_spinner(ui, palette); return; }
-        if let Some(error) = &app.client_report.error { error_banner(ui, error, palette); return; }
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            let summary = t!(app.locale, "Summary");
+            let full = t!(app.locale, "Full detail (products)");
+            if let Some(choice) = widgets::segmented(ui, palette,
+                &[(summary.as_ref(), false), (full.as_ref(), true)],
+                Some(app.client_report_full))
+                && choice != app.client_report_full
+            {
+                app.load_client_report(client, choice);
+            }
+        });
+        ui.add_space(6.0);
+        ui.label(RichText::new(t!(app.locale, "Amounts and documents are provided by the server. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        ui.add_space(10.0);
+        if app.client_report.loading {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.client_report.error {
+            error_banner(ui, error, palette);
+            return;
+        }
         let Some(report) = &app.client_report.data else { return; };
-        for block in &report.blocks {
-            match block {
-                crate::client_report::ReportBlock::Text(value) => { ui.label(RichText::new(value).color(palette.text)); }
-                crate::client_report::ReportBlock::Table(rows) => {
+        use crate::client_report::ReportBlock;
+        let mut index = 0;
+        while index < report.blocks.len() {
+            match &report.blocks[index] {
+                ReportBlock::Heading(value) => {
+                    ui.add_space(12.0);
+                    ui.label(RichText::new(value).color(palette.text).strong().size(15.0));
                     ui.add_space(4.0);
-                    let mut headings: Option<&[String]> = None;
-                    for row in rows {
-                        if row.header {
-                            headings = Some(&row.cells);
-                            continue;
-                        }
-                        ui.separator();
-                        for (index, value) in row.cells.iter().enumerate() {
-                            let label = headings.filter(|h| h.len() == row.cells.len()).and_then(|h| h.get(index)).map_or_else(
-                                || value.clone(),
-                                |name| format!("{name} : {value}"),
-                            );
-                            ui.label(RichText::new(label).color(palette.text));
-                        }
+                    index += 1;
+                }
+                ReportBlock::Statistic { .. } => {
+                    let start = index;
+                    while index < report.blocks.len() && matches!(&report.blocks[index], ReportBlock::Statistic { .. }) {
+                        index += 1;
                     }
-                    ui.add_space(4.0);
+                    let columns = if ui.available_width() >= 640.0 { 4 } else if ui.available_width() >= 320.0 { 2 } else { 1 };
+                    for chunk in report.blocks[start..index].chunks(columns) {
+                        ui.columns(columns, |uis| {
+                            for (column, block) in uis.iter_mut().zip(chunk) {
+                                if let ReportBlock::Statistic { label, value } = block {
+                                    egui::Frame::NONE.fill(palette.surface_hover)
+                                        .corner_radius(8.0).inner_margin(egui::Margin::same(10))
+                                        .show(column, |ui| {
+                                            ui.set_width(ui.available_width());
+                                            ui.label(RichText::new(label).color(palette.secondary).size(11.0));
+                                            ui.label(RichText::new(value).color(palette.text).strong().size(15.0));
+                                        });
+                                }
+                            }
+                        });
+                        ui.add_space(6.0);
+                    }
+                }
+                ReportBlock::Text(value) => {
+                    ui.label(RichText::new(value).color(palette.secondary).size(12.5));
+                    index += 1;
+                }
+                ReportBlock::Table(rows) => {
+                    draw_report_rows(ui, palette, rows);
+                    index += 1;
                 }
             }
         }
     });
+}
+
+/// Use compact, wrapping rows rather than an unscrollable six-column table.
+/// Headings are retained verbatim from the report and an empty colspan row
+/// is displayed as-is instead of being mislabeled as a document number.
+fn draw_report_rows(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    rows: &[crate::client_report::ReportRow],
+) {
+    let mut headings: Option<&[String]> = None;
+    for row in rows {
+        if row.header {
+            headings = Some(&row.cells);
+            continue;
+        }
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(16.0, 6.0);
+            for (index, value) in row.cells.iter().enumerate() {
+                ui.vertical(|ui| {
+                    if let Some(name) = headings
+                        .filter(|h| h.len() == row.cells.len())
+                        .and_then(|h| h.get(index))
+                    {
+                        ui.label(RichText::new(name).color(palette.secondary).size(10.5));
+                    }
+                    ui.label(RichText::new(value).color(palette.text).size(12.5));
+                });
+            }
+        });
+        ui.add_space(6.0);
+    }
 }
 
 fn blank(value: &str) -> &str {

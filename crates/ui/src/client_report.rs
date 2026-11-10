@@ -6,6 +6,8 @@ use scraper::{ElementRef, Html, Selector};
 
 #[derive(Clone, Debug)]
 pub(crate) enum ReportBlock {
+    Heading(String),
+    Statistic { label: String, value: String },
     Text(String),
     Table(Vec<ReportRow>),
 }
@@ -75,9 +77,31 @@ fn collect(
             })
             .collect();
         blocks.push(ReportBlock::Table(rows));
-    } else if matches!(tag, "p" | "h1" | "h2" | "h3" | "th" | "td")
-        || element.value().classes().any(|c| c == "stat")
-    {
+    } else if element.value().classes().any(|c| c == "stat") {
+        // These labels and values come straight from reportShell's server
+        // output; never calculate or reinterpret client balances locally.
+        let label = element
+            .select(&Selector::parse(".l").expect("static selector"))
+            .next()
+            .map(text);
+        let value = element
+            .select(&Selector::parse(".v").expect("static selector"))
+            .next()
+            .map(text);
+        if let (Some(label), Some(value)) = (label, value) {
+            blocks.push(ReportBlock::Statistic { label, value });
+        } else {
+            let content = text(element);
+            if !content.is_empty() {
+                blocks.push(ReportBlock::Text(content));
+            }
+        }
+    } else if matches!(tag, "h1" | "h2" | "h3") {
+        let content = text(element);
+        if !content.is_empty() {
+            blocks.push(ReportBlock::Heading(content));
+        }
+    } else if matches!(tag, "p" | "th" | "td") {
         let content = text(element);
         if !content.is_empty() {
             blocks.push(ReportBlock::Text(content));
@@ -221,5 +245,45 @@ mod tests {
         assert!(!dump.contains("secret()"));
         assert!(!dump.contains("Imprimer"));
         assert!(parse_report("<html><h1>Connexion</h1></html>").is_err());
+    }
+    #[test]
+    fn retains_worker_summary_and_detailed_document_values() {
+        // Mirrors reportShell + client-situation markup (including WR, VR,
+        // an empty receipts row and the full-mode product table).
+        let html = r#"<div class="sheet"><div class="hdr"><div><div class="co">Entreprise</div><h1>Situation client (détail) — Client Exemple</h1><p>Synthèse</p></div></div>
+        <div class="grid"><div class="stat"><div class="l">Total facturé TTC</div><div class="v">1 200 MAD</div></div><div class="stat"><div class="l">Avoirs (WR)</div><div class="v">200 MAD</div></div><div class="stat"><div class="l">Déjà payé</div><div class="v">300 MAD</div></div><div class="stat"><div class="l">Reste dû</div><div class="v">900 MAD</div></div></div>
+        <h2>Pièces (factures, tickets VR, avoirs WR)</h2><table><tr><th>N°</th><th>Reste</th></tr><tr><td>WR-1<div>Avoir / remboursement</div></td><td>0</td></tr><tr><td>VR-1<div>Vente rapide</div></td><td>900</td></tr></table>
+        <h2>Détail produits par facture</h2><div>TTC 1200 · Payé 300 · <strong>Reste 900 MAD</strong></div><table><tr><th>Produit / service</th><th>Qté</th></tr><tr><td>Marbre <span>(SKU)</span></td><td>2</td></tr></table>
+        <h2>Reçus d’encaissement</h2><table><tr><th>N°</th><th>Date</th></tr><tr><td colspan="2">Aucun reçu</td></tr></table></div>"#;
+        let report = parse_report(html).unwrap();
+        let stats: Vec<_> = report
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                ReportBlock::Statistic { label, value } => Some((label.as_str(), value.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            stats,
+            vec![
+                ("Total facturé TTC", "1 200 MAD"),
+                ("Avoirs (WR)", "200 MAD"),
+                ("Déjà payé", "300 MAD"),
+                ("Reste dû", "900 MAD")
+            ]
+        );
+        let dump = format!("{:?}", report.blocks);
+        for expected in [
+            "WR-1",
+            "VR-1",
+            "Marbre",
+            "SKU",
+            "Reste 900 MAD",
+            "Aucun reçu",
+            "Détail produits par facture",
+        ] {
+            assert!(dump.contains(expected), "missing {expected}");
+        }
     }
 }
