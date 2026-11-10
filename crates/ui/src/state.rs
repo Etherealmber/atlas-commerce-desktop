@@ -533,7 +533,8 @@ pub struct AtlasApp {
     pub invoice_search: String,
     pub(crate) receipts: Cache<Vec<crate::client_invoices::Receipt>>,
     pub(crate) receipts_open: bool,
-    pub(crate) refunds_open: bool,
+    /// Public so the visual fixture can open the refunds panel.
+    pub refunds_open: bool,
     pub(crate) refund_search: String,
     pub(crate) receipt_search: String,
     pub alerts: Cache<Vec<Alert>>,
