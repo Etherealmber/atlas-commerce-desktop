@@ -95,6 +95,95 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  linux-packages:
+    # Builds the real DEB, RPM and AppImage from a release archive produced in
+    # this job, then checks that the optional WebKitGTK helper is packaged.
+    # Nothing is published: these packages are validation artifacts only.
+    name: Linux packages contain the WebView helper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        with:
+          key: packaging-linux-packages
+      - name: Build GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libwayland-dev \
+            libwebkitgtk-6.0-dev libx11-dev libx11-xcb-dev libxcursor-dev \
+            libxi-dev libxrandr-dev libarchive-tools squashfs-tools zsync
+      - name: Release binary and archive
+        run: |
+          set -euo pipefail
+          cargo build --release
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          name="atlas-commerce-desktop-v${version}-x86_64-unknown-linux-gnu"
+          mkdir -p "dist/$name"
+          cp target/release/atlas-commerce-desktop target/release/atlas-commerce-webview "dist/$name/"
+          cp README.md LICENSE packaging/atlas-commerce-desktop-portable.txt "dist/$name/"
+          cp --parents packaging/applications/atlas-commerce-desktop.desktop \
+            packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
+          tar czf "dist/$name.tar.gz" -C dist "$name"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Build DEB, RPM and AppImage
+        run: |
+          set -euo pipefail
+          gem install native-packages --version 0.10.0 --no-document
+          native-packages build --version "$VERSION" \
+            --target linux-amd64 --target appimage-amd64 \
+            --defer-recipes --output "$RUNNER_TEMP/packages"
+          find "$RUNNER_TEMP/packages" -type f \( -name '*.deb' -o -name '*.rpm' \
+            -o -name '*.AppImage' -o -name '*.zsync' \) -print
+      - name: Assert the helper ships in every Linux package
+        run: |
+          set -euo pipefail
+          log=packaging-linux-packages.log
+          : > "$log"
+          deb=$(find "$RUNNER_TEMP/packages" -name '*.deb' | head -1)
+          test -n "$deb"
+          dpkg-deb -c "$deb" | tee -a "$log"
+          dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-webview$'
+          dpkg-deb -c "$deb" | grep -q '/usr/bin/atlas-commerce-desktop$'
+          rpm=$(find "$RUNNER_TEMP/packages" -name '*.rpm' | head -1)
+          if [ -n "$rpm" ]; then
+            rpm -qlp "$rpm" | tee -a "$log"
+            rpm -qlp "$rpm" | grep -q '/usr/bin/atlas-commerce-webview$'
+          fi
+          appimage=$(find "$RUNNER_TEMP/packages" -name '*.AppImage' | head -1)
+          test -n "$appimage"
+          chmod +x "$appimage"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/bin/*' >/dev/null)
+          ls -l "$RUNNER_TEMP/squashfs-root/usr/bin/" | tee -a "$log"
+          test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-webview"
+          test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-desktop"
+          # The AppImage must not carry a private WebKit copy or it would
+          # silently diverge from the host engine.
+          if grep -rlE 'libwebkit2gtk|libwebkitgtk-6' "$RUNNER_TEMP/squashfs-root/usr/lib" 2>/dev/null; then
+            echo "::error title=packaging Linux::The AppImage bundles WebKitGTK."; exit 1
+          fi
+          echo "Assistant WebKitGTK présent dans le DEB et l'AppImage." | tee -a "$log"
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Paquets Linux — présence de l'assistant WebKitGTK"
+            echo
+            echo '```'
+            cat packaging-linux-packages.log 2>/dev/null || echo "(journal absent)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packaging-linux-packages
+          path: packaging-linux-packages.log
+          if-no-files-found: warn
+
   windows:
     name: Windows universal installer
     runs-on: windows-latest
