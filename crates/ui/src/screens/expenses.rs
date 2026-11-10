@@ -434,8 +434,8 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .dashboard
             .data
             .as_ref()
-            .map(|d| d.currency())
-            .unwrap_or("MAD");
+            .map(|d| d.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
         let query = crate::shortcuts::normalize(app.bill_search.trim());
         let mut found = false;
         for bill in bills {
@@ -472,9 +472,9 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 RichText::new(format!(
                     "{} : {} · {} : {}",
                     t!(app.locale, "Total"),
-                    money(bill.total, currency),
+                    money(bill.total, &currency),
                     t!(app.locale, "Paid"),
-                    money(bill.amount_paid.unwrap_or(0.0), currency)
+                    money(bill.amount_paid.unwrap_or(0.0), &currency)
                 ))
                 .color(palette.text),
             );
