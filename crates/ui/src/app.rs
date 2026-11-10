@@ -206,6 +206,17 @@ impl AtlasApp {
             self.load_alerts();
         }
         self.update.cache = crate::update::UpdateCache::load(&self.paths.update_state_file());
+        let cached_manifest = match self.settings.update_channel {
+            atlas_core::settings::UpdateChannel::Stable => {
+                self.update.cache.manifest_stable.clone()
+            }
+            atlas_core::settings::UpdateChannel::Prerelease => {
+                self.update.cache.manifest_prerelease.clone()
+            }
+        };
+        if let Some(manifest) = cached_manifest {
+            self.apply_manifest(manifest);
+        }
         self.schedule_update_checks();
         self.maybe_auto_check_updates();
     }
@@ -996,9 +1007,10 @@ impl AtlasApp {
         self.update.checking = true;
         self.update.error = None;
         let cache = self.update.cache.clone();
-        let job = self
-            .runner
-            .spawn(async move { crate::update::fetch_manifest(prerelease, cache).await });
+        let cache_path = self.paths.update_state_file();
+        let job = self.runner.spawn(async move {
+            crate::update::fetch_manifest(prerelease, cache, cache_path).await
+        });
         self.update.job = Some(job);
     }
 
@@ -1058,6 +1070,11 @@ impl AtlasApp {
         self.update.progress = Some((0, 0));
         self.update.stage = t!(self.locale, "Downloading…").into_owned();
         let locale = self.locale;
+        let expected = self
+            .update
+            .last_manifest
+            .as_ref()
+            .map(|manifest| manifest.version.clone());
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             // Pin the blocking closure's error type: without this, inference
             // starts from the &str guard below and resolves it to unsized str.
@@ -1075,7 +1092,9 @@ impl AtlasApp {
                 })?;
                 // A previous auto-download left its verified copy staged
                 // beside the app; reuse it instead of spending bandwidth.
-                let kept = updater.kept().ok().flatten();
+                let kept = updater.kept().ok().flatten().filter(|prepared| {
+                    expected.as_deref().is_none_or(|version| prepared.version().trim_start_matches('v') == version.trim_start_matches('v'))
+                });
                 let prepared = match kept {
                     Some(prepared) => prepared,
                     None => {
@@ -1085,6 +1104,9 @@ impl AtlasApp {
                             .ok_or_else(|| {
                                 t!(locale, "No published release found.").into_owned()
                             })?;
+                        if expected.as_deref().is_some_and(|version| release.version.trim_start_matches('v') != version.trim_start_matches('v')) {
+                            return Err("La version proposée par le programme de mise à jour ne correspond pas au manifeste ; réessayez plus tard.".to_owned());
+                        }
                         updater
                             .download(&release, |received, total| {
                                 if let Ok(mut guard) = progress.lock() {
@@ -1139,19 +1161,21 @@ impl AtlasApp {
                     let not_modified = checked.not_modified;
                     self.update.cache = checked.cache;
                     self.save_update_cache();
-                    if not_modified {
-                        // A matching ETag answers 304 without spending
-                        // GitHub's quota: nothing changed since last time.
-                        self.update.up_to_date_at = Some(Instant::now());
-                        self.update.error = None;
-                    } else if let Some(manifest) = checked.manifest {
+                    if let Some(manifest) = checked.manifest {
                         self.apply_manifest(manifest);
-                    } else {
+                    } else if !not_modified {
                         self.update.up_to_date_at = Some(Instant::now());
                         self.update.error = None;
                     }
                 }
                 Err(error) => {
+                    // Record failure as a check too, to avoid retrying every
+                    // frame offline; preserve any quota reset learned by HTTP.
+                    self.update.cache =
+                        crate::update::UpdateCache::load(&self.paths.update_state_file());
+                    self.update.cache.last_checked_unix = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |elapsed| elapsed.as_secs());
                     self.update.error = Some(error);
                     self.save_update_cache();
                 }

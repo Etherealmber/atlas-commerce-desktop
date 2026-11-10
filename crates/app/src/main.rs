@@ -160,21 +160,9 @@ fn main() -> eframe::Result<()> {
         }
         log::info!("server fixed by ATLAS_SERVER_URL");
     }
-    // An installation made before the installer asked for a server keeps its
-    // saved choice, but becomes read-only now: the Inno uninstaller next to
-    // the executable proves this is an installed copy, not a portable one.
-    #[cfg(target_os = "windows")]
-    if !servers.is_locked()
-        && servers.selected_url().is_some()
-        && std::env::current_exe()
-            .ok()
-            .and_then(|exe| {
-                exe.parent()
-                    .map(|folder| folder.join("unins000.exe").is_file())
-            })
-            .unwrap_or(false)
-        && servers.lock_current()
-    {
+    // Existing installations retain their configured server and no longer
+    // expose a server switch. Reprovisioning is an installer operation.
+    if !servers.is_locked() && servers.lock_current() {
         if let Err(error) = servers.save(&paths.servers_file()) {
             eprintln!("unable to lock the existing server: {error}");
         }

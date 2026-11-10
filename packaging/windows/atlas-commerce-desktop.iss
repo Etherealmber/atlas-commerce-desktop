@@ -211,6 +211,7 @@ var
   Existing: String;
   HadStoredServer: Boolean;
   ChosenForThisSetup: String;
+  PreviousInstall: Boolean;
 
 function ServerUrlFromParam: String;
 begin
@@ -244,6 +245,8 @@ begin
   // already uses (an upgrade keeps it), then the public default. The value
   // is written to the registry at the end of setup and removed by uninstall,
   // so a genuine reinstall starts from the default again.
+  PreviousInstall := RegKeyExists(HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{E74305A7-4960-45B6-93C9-CEA8D83B1517}_is1');
   HadStoredServer := RegQueryStringValue(HKCU, 'Software\{#AppIdentity}', 'Server', Existing);
   if ServerUrlFromParam <> '' then
     ServerPage.Values[0] := ServerUrlFromParam
@@ -275,14 +278,6 @@ begin
     Result := '{#DefaultServer}';
 end;
 
-// Inno's own uninstall key proves a previous installation of *this* product.
-// It never exists in a fresh install.
-function HasPreviousInstall: Boolean;
-begin
-  Result := RegKeyExists(HKCU,
-    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{E74305A7-4960-45B6-93C9-CEA8D83B1517}_is1');
-end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Data: String;
@@ -295,7 +290,7 @@ begin
   // explicit /SERVERURL we cannot know it, and guessing the public default
   // would silently move a shop to another worker. The app locks whatever it
   // already uses. A fresh install writes the chosen address.
-  if (ServerUrlFromParam = '') and (not HadStoredServer) and HasPreviousInstall then
+  if (ServerUrlFromParam = '') and (not HadStoredServer) and PreviousInstall then
     Exit;
   { Read once by the app, which then deletes this file and locks the
     address in its own servers.json. A silent install writes it too. }

@@ -42,6 +42,9 @@ pub struct UpdateCache {
     /// switching channel never reuses the other endpoint's validator.
     pub etag: Option<String>,
     pub etag_prerelease: Option<String>,
+    /// A 304 is meaningful only together with the previously parsed manifest.
+    pub manifest_stable: Option<UpdateManifest>,
+    pub manifest_prerelease: Option<UpdateManifest>,
     /// Unix timestamp of the last completed check, successful or not.
     pub last_checked_unix: u64,
     /// While set, GitHub answered that the quota was exhausted; no request
@@ -141,6 +144,7 @@ struct Asset {
 pub async fn fetch_manifest(
     prerelease: bool,
     mut cache: UpdateCache,
+    cache_path: std::path::PathBuf,
 ) -> Result<UpdateCheck, String> {
     let now = now_unix();
     if let Some(remaining) = cache.blocked_for(now) {
@@ -163,7 +167,11 @@ pub async fn fetch_manifest(
         let mut request = client
             .get(url)
             .header("Accept", "application/vnd.github+json");
-        if let Some(etag) = cache.etag_prerelease.clone() {
+        if let Some(etag) = cache
+            .etag_prerelease
+            .clone()
+            .filter(|_| cache.manifest_prerelease.is_some())
+        {
             request = request.header("If-None-Match", etag);
         }
         let response = request
@@ -173,12 +181,16 @@ pub async fn fetch_manifest(
         cache.last_checked_unix = now;
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(UpdateCheck {
-                manifest: None,
+                manifest: cache.manifest_prerelease.clone(),
                 cache,
                 not_modified: true,
             });
         }
+        let old_etag = cache.etag_prerelease.clone();
         remember_headers(&mut cache, response.headers(), true);
+        let new_etag = cache.etag_prerelease.take();
+        cache.etag_prerelease = old_etag;
+        cache.save(&cache_path);
         if !response.status().is_success() {
             return Err(format!("GitHub a répondu {}", response.status()));
         }
@@ -186,13 +198,19 @@ pub async fn fetch_manifest(
             .json()
             .await
             .map_err(|error| format!("Liste des versions illisible : {error}"))?;
-        releases.into_iter().find(|release| !release.draft)
+        let release = releases.into_iter().find(|release| !release.draft);
+        cache.etag_prerelease = new_etag;
+        release
     } else {
         let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
         let mut request = client
             .get(url)
             .header("Accept", "application/vnd.github+json");
-        if let Some(etag) = cache.etag.clone() {
+        if let Some(etag) = cache
+            .etag
+            .clone()
+            .filter(|_| cache.manifest_stable.is_some())
+        {
             request = request.header("If-None-Match", etag);
         }
         let response = match request.send().await {
@@ -202,7 +220,7 @@ pub async fn fetch_manifest(
         cache.last_checked_unix = now;
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(UpdateCheck {
-                manifest: None,
+                manifest: cache.manifest_stable.clone(),
                 cache,
                 not_modified: true,
             });
@@ -214,19 +232,28 @@ pub async fn fetch_manifest(
                 not_modified: false,
             });
         }
+        let old_etag = cache.etag.clone();
         remember_headers(&mut cache, response.headers(), false);
+        let new_etag = cache.etag.take();
+        cache.etag = old_etag;
+        cache.save(&cache_path);
         if !response.status().is_success() {
             return Err(format!("GitHub a répondu {}", response.status()));
         }
-        Some(
-            response
-                .json()
-                .await
-                .map_err(|error| format!("Version illisible : {error}"))?,
-        )
+        let release = response
+            .json()
+            .await
+            .map_err(|error| format!("Version illisible : {error}"))?;
+        cache.etag = new_etag;
+        Some(release)
     };
 
     let Some(release) = listing else {
+        if prerelease {
+            cache.etag_prerelease = None;
+        } else {
+            cache.etag = None;
+        }
         return Ok(UpdateCheck {
             manifest: None,
             cache,
@@ -238,6 +265,11 @@ pub async fn fetch_manifest(
         .iter()
         .find(|asset| asset.name == MANIFEST_ASSET)
     else {
+        if prerelease {
+            cache.etag_prerelease = None;
+        } else {
+            cache.etag = None;
+        }
         return Ok(UpdateCheck {
             manifest: None,
             cache,
@@ -253,6 +285,11 @@ pub async fn fetch_manifest(
     // has propagated (the workflow creates the release, then uploads files).
     // Treat that window as "no update yet", not as an error the user sees.
     if manifest_response.status() == reqwest::StatusCode::NOT_FOUND {
+        if prerelease {
+            cache.etag_prerelease = None;
+        } else {
+            cache.etag = None;
+        }
         return Ok(UpdateCheck {
             manifest: None,
             cache,
@@ -267,6 +304,11 @@ pub async fn fetch_manifest(
         .map_err(|error| format!("Manifeste illisible : {error}"))?;
     cache.last_checked_unix = now_unix();
     cache.last_version = Some(manifest.version.clone());
+    if prerelease {
+        cache.manifest_prerelease = Some(manifest.clone());
+    } else {
+        cache.manifest_stable = Some(manifest.clone());
+    }
     Ok(UpdateCheck {
         manifest: Some(manifest),
         cache,

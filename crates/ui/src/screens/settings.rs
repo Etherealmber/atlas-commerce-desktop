@@ -1204,12 +1204,8 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             app.settings.reduced_motion,
         ) {
             app.save_settings();
-            if app.settings.update_auto_download
-                && app.update.last_manifest.is_some()
-                && app.update.progress.is_none()
-            {
-                app.start_update_download();
-            }
+            // The next check starts a background download; changing this
+            // preference must never restart the app unexpectedly.
         }
 
         ui.add_space(10.0);
