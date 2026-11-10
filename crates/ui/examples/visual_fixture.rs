@@ -37,7 +37,9 @@ fn build(route: &str) -> AtlasApp {
     let settings = Settings {
         reduced_motion: true,
         theme: atlas_core::ThemeMode::Light,
-        update_check_on_start: false,
+        update_check_on_start: true,
+        update_auto_download: true,
+        autostart: true,
         notifications_enabled: false,
         ..Settings::default()
     };
@@ -46,7 +48,15 @@ fn build(route: &str) -> AtlasApp {
         JobRunner::new(),
         DeviceIdentity::fresh(),
         settings,
-        ServerStore::default(),
+        ServerStore {
+            selected: Some("https://stock.exemple.invalid".into()),
+            saved: vec![atlas_core::SavedServerEntry {
+                label: "Atlas Commerce — exemple".into(),
+                url: "https://stock.exemple.invalid".into(),
+            }],
+            onboarding_done: true,
+            locked: true,
+        },
         Some(session),
         AccountStore::default(),
         fastframe_shell::Waker::default(),
@@ -61,9 +71,24 @@ fn build(route: &str) -> AtlasApp {
         "expenses" => Route::Expenses,
         "vendors" => Route::Vendors,
         "employees" => Route::Employees,
+        "settings" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
+    if route == "settings" {
+        // Fictional update state: proves the title-bar icon and the
+        // "restart to install" banner without contacting GitHub.
+        let manifest = atlas_core::update_feed::UpdateManifest {
+            version: "0.2.0".into(),
+            mandatory: false,
+            minimum_version: None,
+            notes: "Correctifs fictifs pour la capture.".into(),
+            published_at: "2026-01-15T10:00:00Z".into(),
+        };
+        app.update.last_manifest = Some(manifest.clone());
+        app.update.release_notes = Some(manifest);
+        app.update.ready_version = Some("0.2.0".into());
+    }
     app.dashboard.data = Some(Dashboard {
         currency: Some("MAD".into()),
         current_balance: 42000.0,
