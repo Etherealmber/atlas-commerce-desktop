@@ -188,12 +188,19 @@ jobs:
           chmod +x "$appimage"
           rm -rf "$RUNNER_TEMP/squashfs-root"
           (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/bin/*' >/dev/null)
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract 'usr/lib/*' >/dev/null 2>&1 || true)
           echo "--- contenu AppImage ---" >> "$log"
           ls -l "$RUNNER_TEMP/squashfs-root/usr/bin/" | tee -a "$log"
           test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-webview"
           test -x "$RUNNER_TEMP/squashfs-root/usr/bin/atlas-commerce-desktop"
           step="appimage-propre"
-          if grep -rlE 'libwebkit2gtk|libwebkitgtk-6' "$RUNNER_TEMP/squashfs-root" 2>/dev/null | head -5 | tee -a "$log"; then
+          # Searches file names, not contents: the helper's ELF legitimately
+          # records the soname in its dynamic section.
+          bundled=$(find "$RUNNER_TEMP/squashfs-root" \
+            \( -name 'libwebkitgtk*' -o -name 'libwebkit2gtk*' -o -name 'libjavascriptcoregtk*' \) \
+            2>/dev/null | head -5)
+          if [ -n "$bundled" ]; then
+            printf '%s\n' "$bundled" | tee -a "$log"
             echo "::error title=packaging Linux::L'AppImage embarque WebKitGTK."; exit 1
           fi
           echo "Assistant WebKitGTK présent dans le DEB et l'AppImage ; dépendances déclarées." | tee -a "$log"
