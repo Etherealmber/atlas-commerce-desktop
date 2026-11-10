@@ -75,6 +75,13 @@ fn build(route: &str) -> AtlasApp {
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
+    if route == "login" {
+        // Error/retry state only: never start a network login in the fixture.
+        app.screen = Screen::Login;
+        app.session = None;
+        app.login.browser_auto_started = true;
+        app.login.error = Some("Connexion fictive indisponible.".into());
+    }
     if route == "settings" {
         // Fictional update state: proves the title-bar icon and the
         // "restart to install" banner without contacting GitHub.
