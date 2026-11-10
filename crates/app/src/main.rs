@@ -148,6 +148,18 @@ fn main() -> eframe::Result<()> {
         }
         log::info!("server fixed by the installer");
     }
+    // Managed Linux/macOS deployments have no installer page: an
+    // environment variable provisioned by the package or MDM tooling fixes
+    // the address before first launch, exactly like the Windows wizard.
+    if servers.selected_url().is_none()
+        && let Ok(url) = std::env::var("ATLAS_SERVER_URL")
+        && servers.apply_install_choice(&url, "").is_some()
+    {
+        if let Err(error) = servers.save(&paths.servers_file()) {
+            eprintln!("unable to save ATLAS_SERVER_URL: {error}");
+        }
+        log::info!("server fixed by ATLAS_SERVER_URL");
+    }
     // An installation made before the installer asked for a server keeps its
     // saved choice, but becomes read-only now: the Inno uninstaller next to
     // the executable proves this is an installed copy, not a portable one.

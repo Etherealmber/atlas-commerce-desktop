@@ -113,6 +113,9 @@ Sous Windows, l'installeur demande l'adresse du serveur et l'écrit dans
 `server.json` à côté de l'exécutable ; l'application l'importe une fois et le
 verrouille. Les paquets Linux et macOS n'ont pas de page d'installation : le
 premier écran de configuration joue ce rôle et verrouille le premier choix.
+Pour un déploiement géré, `ATLAS_SERVER_URL=https://…` fixe l'adresse avant le
+premier lancement, puis l'application la verrouille comme le fait l'installeur
+Windows.
 Dans les deux cas, les réglages affichent l'adresse en lecture seule. Pour en
 changer, il faut réinstaller l'application ; un utilisateur ne peut pas la
 modifier depuis les réglages. Le détail Windows se trouve dans

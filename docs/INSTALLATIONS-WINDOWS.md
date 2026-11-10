@@ -66,3 +66,7 @@ Ce choix n'est pas un secret. Il ne remplace ni TLS, ni la vérification
 d'origine, ni PKCE : l'application refuse toujours un document, un jeton ou
 une demande d'autorisation liés à une autre origine. Un fichier `server.json`
 invalide est ignoré et supprimé.
+
+Sous Linux et macOS, sans page d'installation, le premier écran de
+configuration verrouille le premier choix ; un déploiement géré peut fixer
+l'adresse avant le premier lancement avec `ATLAS_SERVER_URL=https://…`.
