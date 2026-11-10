@@ -11,6 +11,7 @@ const MAX_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Employee {
+    #[serde(default)]
     pub id: i64,
     #[serde(default)]
     pub emp_number: String,
