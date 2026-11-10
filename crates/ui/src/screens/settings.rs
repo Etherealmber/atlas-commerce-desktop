@@ -1329,31 +1329,6 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             });
         });
 
-        if app.update.last_manifest.is_some()
-            && app.update.progress.is_none()
-            && primary_button(ui, t!(app.locale, "Download and install"), palette, true)
-        {
-            app.start_update_download();
-        }
-
-        if let Some((received, total)) = app.update.progress {
-            ui.add_space(10.0);
-            let percent = if total > 0 {
-                (received as f64 / total as f64 * 100.0).round() as u8
-            } else {
-                0
-            };
-            ui.label(
-                RichText::new(format!(
-                    "{} : {percent} %",
-                    t!(app.locale, "Downloading update")
-                ))
-                .color(palette.secondary)
-                .size(12.5),
-            );
-            ui.add(egui::ProgressBar::new(f32::from(percent) / 100.0));
-        }
-
         ui.add_space(12.0);
         ui.label(
             RichText::new(t!(

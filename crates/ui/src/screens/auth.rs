@@ -787,11 +787,11 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         app.login.busy,
         app.qr.active,
     ) {
-        app.login.browser_auto_started = true;
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        crate::browser_auth::start_embedded(app);
+        let started = crate::browser_auth::start_embedded(app);
         #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-        crate::browser_auth::start(app);
+        let started = crate::browser_auth::start(app);
+        app.login.browser_auto_started = started;
     }
 
     ui.vertical_centered(|ui| {

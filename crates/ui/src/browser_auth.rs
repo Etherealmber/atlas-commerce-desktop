@@ -429,23 +429,23 @@ async fn run(
     Err("La demande a expiré. Recommencez.")
 }
 
-pub(crate) fn start(app: &mut AtlasApp) {
-    start_with_mode(app, false);
+pub(crate) fn start(app: &mut AtlasApp) -> bool {
+    start_with_mode(app, false)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-pub(crate) fn start_embedded(app: &mut AtlasApp) {
-    start_with_mode(app, true);
+pub(crate) fn start_embedded(app: &mut AtlasApp) -> bool {
+    start_with_mode(app, true)
 }
 
-fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
+fn start_with_mode(app: &mut AtlasApp, embedded: bool) -> bool {
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     let _ = embedded;
     if app.browser_login.active || app.login.busy {
-        return;
+        return false;
     }
     let Some(base) = app.server_store.selected_url().map(str::to_owned) else {
-        return;
+        return false;
     };
     let fingerprint = app.identity.fingerprint().to_owned();
     app.browser_login.server = Some(base.clone());
@@ -462,6 +462,7 @@ fn start_with_mode(app: &mut AtlasApp, embedded: bool) {
     app.browser_login.cancel = Some(cancelled.clone());
     app.browser_login.events = Some(rx);
     app.browser_login.job = Some(app.runner.spawn(run(base, fingerprint, cancelled, tx)));
+    true
 }
 /// Keep the existing v1 request and polling, but finish it in the system
 /// browser when the embedded engine cannot start. The URL was validated by
