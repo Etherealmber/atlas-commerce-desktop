@@ -131,6 +131,13 @@ jobs:
             packaging/icons/atlas-commerce-desktop.svg "dist/$name/"
           tar czf "dist/$name.tar.gz" -C dist "$name"
           echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install nFPM 2.47.0
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/nfpm.tar.gz" \
+            https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
+          sudo tar -C /usr/local/bin -xzf "$RUNNER_TEMP/nfpm.tar.gz" nfpm
+          nfpm --version
       - name: Build DEB, RPM and AppImage
         run: |
           set -euo pipefail
