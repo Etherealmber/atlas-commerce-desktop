@@ -76,15 +76,28 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
-        app.receipts_open = !app.receipts_open;
-        if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
-            app.load_receipts();
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
+            app.receipts_open = !app.receipts_open;
+            if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
+                app.load_receipts();
+            }
         }
-    }
+        if secondary_button(ui, t!(app.locale, "Refunds"), palette) {
+            app.refunds_open = !app.refunds_open;
+            if app.refunds_open && app.invoices.data.is_none() && !app.invoices.loading {
+                app.load_invoices();
+            }
+        }
+    });
     if app.receipts_open {
         ui.add_space(12.0);
         receipt_list(app, ui, palette);
+        ui.add_space(12.0);
+    }
+    if app.refunds_open {
+        ui.add_space(12.0);
+        refund_list(app, ui, palette);
         ui.add_space(12.0);
     }
 
@@ -102,6 +115,101 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         quick_sale_form(app, ui, palette);
+    });
+}
+
+/// Credit notes (`status`/`doc_kind` = `remboursement`) from the same
+/// `/api/invoices?kind=all` list. Read-only: creating or deleting a refund
+/// stays in the web app and is password-gated there.
+fn refund_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Refunds"))
+                    .color(palette.text)
+                    .strong(),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_invoices();
+            }
+            let width = (ui.available_width() - 220.0).clamp(160.0, 380.0);
+            widgets::search_field(
+                ui,
+                &mut app.refund_search,
+                t!(app.locale, "Number or client"),
+                width,
+            );
+        });
+        if app.invoices.loading && app.invoices.data.is_none() {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoices.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(invoices) = app.invoices.data.clone() else {
+            return;
+        };
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
+        let refunds: Vec<_> = invoices
+            .into_iter()
+            .filter(|invoice| {
+                invoice.status.as_deref() == Some("remboursement")
+                    || invoice.doc_kind.as_deref() == Some("remboursement")
+            })
+            .collect();
+        if refunds.is_empty() {
+            ui.label(RichText::new(t!(app.locale, "No refund recorded.")).color(palette.secondary));
+            return;
+        }
+        let query = crate::shortcuts::normalize(app.refund_search.trim());
+        let mut found = false;
+        for invoice in refunds {
+            let number = invoice
+                .number
+                .clone()
+                .unwrap_or_else(|| format!("#{}", invoice.id));
+            if !crate::shortcuts::normalize(&format!(
+                "{} {}",
+                number,
+                invoice.client_name.as_deref().unwrap_or("")
+            ))
+            .contains(&query)
+            {
+                continue;
+            }
+            found = true;
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.label(RichText::new(&number).color(palette.text).strong());
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        invoice.client_name.as_deref().unwrap_or("—"),
+                        invoice.issue_date.as_deref().unwrap_or("—"),
+                        money(invoice.total, &currency)
+                    ))
+                    .color(palette.secondary),
+                );
+                if secondary_button(ui, t!(app.locale, "Open"), palette) {
+                    app.open_invoice_detail(invoice.id);
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{}/print", invoice.id), &[]);
+                }
+            });
+        }
+        if !found {
+            ui.label(RichText::new(t!(app.locale, "No matching refund.")).color(palette.secondary));
+        }
     });
 }
 

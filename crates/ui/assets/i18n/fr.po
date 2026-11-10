@@ -1492,3 +1492,18 @@ msgstr "Masse salariale (actifs)"
 
 msgid "Print"
 msgstr "Imprimer"
+
+msgid "Refunds"
+msgstr "Remboursements"
+
+msgid "No refund recorded."
+msgstr "Aucun remboursement enregistré."
+
+msgid "No matching refund."
+msgstr "Aucun remboursement correspondant."
+
+msgid "Number or client"
+msgstr "Numéro ou client"
+
+msgid "Open"
+msgstr "Ouvrir"
