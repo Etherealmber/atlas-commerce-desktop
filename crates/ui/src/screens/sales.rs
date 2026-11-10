@@ -443,7 +443,7 @@ fn poll_sale_job(app: &mut AtlasApp) {
 
 fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.label(
-        RichText::new(t!(app.locale, "Invoice history"))
+        RichText::new(t!(app.locale, "Sales and invoice history"))
             .color(palette.text)
             .strong()
             .size(15.0),
@@ -487,7 +487,7 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let mut found = false;
     for invoice in invoices
         .into_iter()
-        .filter(|invoice| invoice_matches(invoice, &query))
+        .filter(|invoice| is_sale_history(invoice) && invoice_matches(invoice, &query))
     {
         found = true;
         ui.horizontal(|ui| {
@@ -641,6 +641,23 @@ pub(crate) fn draw_invoice_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette
             );
         }
     });
+}
+
+/// Sales history contains standard invoices and quick-sale tickets, not
+/// quotes or credit notes which have dedicated lists above.
+fn is_sale_history(invoice: &atlas_api::models::Invoice) -> bool {
+    let kind = invoice
+        .doc_kind
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let status = invoice.status.as_deref().unwrap_or("").to_ascii_lowercase();
+    let number = invoice.number.as_deref().unwrap_or("");
+    !matches!(kind.as_str(), "quote" | "devis" | "remboursement")
+        && !matches!(status.as_str(), "quote" | "devis" | "remboursement")
+        && !["DV", "DE", "WR"]
+            .iter()
+            .any(|prefix| number.starts_with(prefix))
 }
 
 /// Filter only the invoices already returned by the server; this is not a
@@ -934,6 +951,31 @@ mod tests {
 mod invoice_search_tests {
     use super::invoice_matches;
     use atlas_api::models::Invoice;
+
+    #[test]
+    fn history_keeps_sales_but_not_quotes_or_credits() {
+        for number in ["FA-1", "VR-1"] {
+            let doc = Invoice {
+                number: Some(number.into()),
+                ..Default::default()
+            };
+            assert!(super::is_sale_history(&doc));
+        }
+        for number in ["DV-1", "DE-1", "WR-1"] {
+            let doc = Invoice {
+                number: Some(number.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_sale_history(&doc));
+        }
+        for status in ["quote", "devis", "remboursement"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_sale_history(&doc));
+        }
+    }
 
     #[test]
     fn quote_list_only_includes_worker_quote_statuses() {

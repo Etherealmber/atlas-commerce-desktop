@@ -1594,3 +1594,6 @@ msgstr "Télécharger et installer la mise à jour"
 
 msgid "Update information is not available yet. Try again later."
 msgstr "Les informations de mise à jour ne sont pas encore disponibles. Réessayez plus tard."
+
+msgid "Sales and invoice history"
+msgstr "Historique des ventes et factures"
