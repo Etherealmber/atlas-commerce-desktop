@@ -133,19 +133,15 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
       - name: Build DEB, RPM and AppImage
         run: |
-          set -uo pipefail
+          set -euo pipefail
+          log="$RUNNER_TEMP/build-packages.log"
+          : > "$log"
+          trap 'tail -40 "$log" | while IFS= read -r line; do echo "::error title=linux-packages::${line:0:400}"; done' ERR
+          exec > >(tee -a "$log") 2>&1
           gem install native-packages --version 0.10.0 --no-document
           native-packages build --version "$VERSION" \
             --target linux-amd64 --target appimage-amd64 \
-            --defer-recipes --output "$RUNNER_TEMP/packages" \
-            2>&1 | tee "$RUNNER_TEMP/build-packages.log"
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            tail -40 "$RUNNER_TEMP/build-packages.log" | while IFS= read -r line; do
-              echo "::error title=linux-packages::${line:0:400}"
-            done
-            exit "$status"
-          fi
+            --defer-recipes --output "$RUNNER_TEMP/packages"
           find "$RUNNER_TEMP/packages" -type f \( -name '*.deb' -o -name '*.rpm' \
             -o -name '*.AppImage' -o -name '*.zsync' \) -print
       - name: Assert the helper ships in every Linux package
