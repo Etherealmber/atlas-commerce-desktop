@@ -272,6 +272,8 @@ pub struct UpdateState {
     /// Version already downloaded by the auto-download setting; the next
     /// install reuses fastframe-update's staged copy instead of downloading.
     pub ready_version: Option<String>,
+    /// Version requested by the active download, not the most recent check.
+    pub download_version: Option<String>,
 }
 
 /// Agent conversation.

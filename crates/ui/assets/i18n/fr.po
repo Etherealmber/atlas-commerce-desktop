@@ -1591,3 +1591,6 @@ msgstr "Aucun devis correspondant."
 
 msgid "Download and install update"
 msgstr "Télécharger et installer la mise à jour"
+
+msgid "Update information is not available yet. Try again later."
+msgstr "Les informations de mise à jour ne sont pas encore disponibles. Réessayez plus tard."

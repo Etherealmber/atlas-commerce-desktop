@@ -1075,6 +1075,7 @@ impl AtlasApp {
             .last_manifest
             .as_ref()
             .map(|manifest| manifest.version.clone());
+        self.update.download_version = expected.clone();
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             // Pin the blocking closure's error type: without this, inference
             // starts from the &str guard below and resolves it to unsized str.
@@ -1164,8 +1165,16 @@ impl AtlasApp {
                     if let Some(manifest) = checked.manifest {
                         self.apply_manifest(manifest);
                     } else if !not_modified {
-                        self.update.up_to_date_at = Some(Instant::now());
-                        self.update.error = None;
+                        // No manifest (e.g. an asset still being uploaded)
+                        // does not establish that the installation is current.
+                        self.update.up_to_date_at = None;
+                        self.update.error = Some(
+                            t!(
+                                self.locale,
+                                "Update information is not available yet. Try again later."
+                            )
+                            .into_owned(),
+                        );
                     }
                 }
                 Err(error) => {
@@ -1198,11 +1207,16 @@ impl AtlasApp {
                         self.update.progress = None;
                         self.update.stage =
                             t!(self.locale, "Update downloaded. Restart to install.").into_owned();
-                        self.update.ready_version = self
-                            .update
-                            .last_manifest
-                            .as_ref()
-                            .map(|manifest| manifest.version.clone());
+                        // A check may have completed while the download was
+                        // running. Never label the older staged file as the
+                        // newer manifest or the other channel.
+                        let downloaded = self.update.download_version.take();
+                        self.update.ready_version = downloaded.filter(|version| {
+                            self.update
+                                .last_manifest
+                                .as_ref()
+                                .is_some_and(|manifest| &manifest.version == version)
+                        });
                         if let Some(version) = self.update.ready_version.clone() {
                             self.notice(format!(
                                 "{} v{version}",
@@ -1211,11 +1225,13 @@ impl AtlasApp {
                         }
                     }
                     Ok(()) => {
+                        self.update.download_version = None;
                         self.update.stage = t!(self.locale, "Installing…").into_owned();
                         self.wants_quit = true;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     Err(error) => {
+                        self.update.download_version = None;
                         self.update.auto_download = false;
                         self.update.progress = None;
                         self.update.error = Some(error);
@@ -1233,14 +1249,19 @@ impl AtlasApp {
                 // Surface an explicit status in the About card instead of
                 // silently swallowing the answer.
                 self.update.up_to_date_at = Some(Instant::now());
+                self.update.last_manifest = None;
+                self.update.ready_version = None;
+                self.update.mandatory = None;
                 self.update.error = None;
             }
             UpdateDecision::Mandatory { .. } => {
+                self.update.up_to_date_at = None;
                 self.update.mandatory = Some(manifest.clone());
                 self.update.last_manifest = Some(manifest);
                 self.screen = Screen::UpdateGate;
             }
             UpdateDecision::Optional { .. } => {
+                self.update.up_to_date_at = None;
                 let auto = self.settings.update_auto_download;
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
                 self.update.last_manifest = Some(manifest);
