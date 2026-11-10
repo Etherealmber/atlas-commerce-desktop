@@ -499,11 +499,10 @@ pub(crate) fn printable_path(path: &str) -> bool {
     if id.is_empty() || !id.bytes().all(|byte| byte.is_ascii_digit()) {
         return false;
     }
-    match (kind, tail.as_str()) {
-        ("employees", "form/print") => true,
-        ("invoices" | "bills" | "receipts", "print" | "pdf") => true,
-        _ => false,
-    }
+    matches!(
+        (kind, tail.as_str()),
+        ("employees", "form/print") | ("invoices" | "bills" | "receipts", "print" | "pdf")
+    )
 }
 
 #[cfg(test)]
