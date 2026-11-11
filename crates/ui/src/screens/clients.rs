@@ -163,6 +163,24 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(12.0);
     }
 
+    if app.role_policy().can_view_reports() {
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, t!(app.locale, "Client receivables report"), palette) {
+                app.load_receivables_report();
+            }
+            ui.label(
+                RichText::new(t!(app.locale, "Official server report · administrators"))
+                    .color(palette.secondary)
+                    .size(12.0),
+            );
+        });
+        ui.add_space(12.0);
+        if app.receivables_open {
+            draw_receivables_report(app, ui, palette);
+            ui.add_space(12.0);
+        }
+    }
+
     // Full-width list, like the web page. The former horizontal card layout
     // allowed the first card to consume the remaining width, squeezing rows.
     card(palette).show(ui, |ui| {
@@ -475,6 +493,35 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 }
 
+/// The report is distinct from the sum of the currently loaded client list.
+fn draw_receivables_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Client receivables report")).strong().size(16.0).color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_receivables_report();
+            }
+            if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
+                app.open_printable("/api/reports/receivables", &[]);
+            }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.receivables_open = false;
+                app.receivables_report = Default::default();
+            }
+        });
+        ui.add_space(8.0);
+        ui.label(RichText::new(t!(app.locale, "Server figures may differ from the loaded client list. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        if app.receivables_report.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.receivables_report.error {
+            error_banner(ui, error, palette);
+        } else if let Some(report) = &app.receivables_report.data {
+            draw_report_blocks(ui, palette, report);
+        }
+    });
+}
+
 fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, client: &Client) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -515,50 +562,78 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
             return;
         }
         let Some(report) = &app.client_report.data else { return; };
-        use crate::client_report::ReportBlock;
-        let mut index = 0;
-        while index < report.blocks.len() {
-            match &report.blocks[index] {
-                ReportBlock::Heading(value) => {
-                    ui.add_space(12.0);
-                    ui.label(RichText::new(value).color(palette.text).strong().size(15.0));
-                    ui.add_space(4.0);
+        draw_report_blocks(ui, palette, report);
+    });
+}
+
+/// Render only inert text and values returned by the worker, without calculations.
+fn draw_report_blocks(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    report: &crate::client_report::ClientReport,
+) {
+    use crate::client_report::ReportBlock;
+    let mut index = 0;
+    while index < report.blocks.len() {
+        match &report.blocks[index] {
+            ReportBlock::Heading(value) => {
+                ui.add_space(12.0);
+                ui.label(RichText::new(value).color(palette.text).strong().size(15.0));
+                ui.add_space(4.0);
+                index += 1;
+            }
+            ReportBlock::Statistic { .. } => {
+                let start = index;
+                while index < report.blocks.len()
+                    && matches!(&report.blocks[index], ReportBlock::Statistic { .. })
+                {
                     index += 1;
                 }
-                ReportBlock::Statistic { .. } => {
-                    let start = index;
-                    while index < report.blocks.len() && matches!(&report.blocks[index], ReportBlock::Statistic { .. }) {
-                        index += 1;
-                    }
-                    let columns = if ui.available_width() >= 640.0 { 4 } else if ui.available_width() >= 320.0 { 2 } else { 1 };
-                    for chunk in report.blocks[start..index].chunks(columns) {
-                        ui.columns(columns, |uis| {
-                            for (column, block) in uis.iter_mut().zip(chunk) {
-                                if let ReportBlock::Statistic { label, value } = block {
-                                    egui::Frame::NONE.fill(palette.surface_hover)
-                                        .corner_radius(8.0).inner_margin(egui::Margin::same(10))
-                                        .show(column, |ui| {
-                                            ui.set_width(ui.available_width());
-                                            ui.label(RichText::new(label).color(palette.secondary).size(11.0));
-                                            ui.label(RichText::new(value).color(palette.text).strong().size(15.0));
-                                        });
-                                }
+                let columns = if ui.available_width() >= 640.0 {
+                    4
+                } else if ui.available_width() >= 320.0 {
+                    2
+                } else {
+                    1
+                };
+                for chunk in report.blocks[start..index].chunks(columns) {
+                    ui.columns(columns, |uis| {
+                        for (column, block) in uis.iter_mut().zip(chunk) {
+                            if let ReportBlock::Statistic { label, value } = block {
+                                egui::Frame::NONE
+                                    .fill(palette.surface_hover)
+                                    .corner_radius(8.0)
+                                    .inner_margin(egui::Margin::same(10))
+                                    .show(column, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.label(
+                                            RichText::new(label)
+                                                .color(palette.secondary)
+                                                .size(11.0),
+                                        );
+                                        ui.label(
+                                            RichText::new(value)
+                                                .color(palette.text)
+                                                .strong()
+                                                .size(15.0),
+                                        );
+                                    });
                             }
-                        });
-                        ui.add_space(6.0);
-                    }
-                }
-                ReportBlock::Text(value) => {
-                    ui.label(RichText::new(value).color(palette.secondary).size(12.5));
-                    index += 1;
-                }
-                ReportBlock::Table(rows) => {
-                    draw_report_rows(ui, palette, rows);
-                    index += 1;
+                        }
+                    });
+                    ui.add_space(6.0);
                 }
             }
+            ReportBlock::Text(value) => {
+                ui.label(RichText::new(value).color(palette.secondary).size(12.5));
+                index += 1;
+            }
+            ReportBlock::Table(rows) => {
+                draw_report_rows(ui, palette, rows);
+                index += 1;
+            }
         }
-    });
+    }
 }
 
 /// Use compact, wrapping rows rather than an unscrollable six-column table.

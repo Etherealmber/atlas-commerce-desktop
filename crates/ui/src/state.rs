@@ -174,6 +174,10 @@ impl RolePolicy {
             }
     }
 
+    pub(crate) fn can_view_reports(self) -> bool {
+        self.admin
+    }
+
     pub(crate) fn can_manage_stock(self) -> bool {
         self.office || self.stock
     }
@@ -496,6 +500,8 @@ pub struct AtlasApp {
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
     pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) receivables_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) receivables_open: bool,
     pub(crate) client_report_id: Option<i64>,
     pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
@@ -678,6 +684,8 @@ impl AtlasApp {
             key_create_job: None,
             report_job: None,
             client_report: Cache::default(),
+            receivables_report: Cache::default(),
+            receivables_open: false,
             client_report_id: None,
             client_report_full: false,
             assist: Cache::default(),
@@ -1333,6 +1341,8 @@ impl AtlasApp {
         self.key_create_job = None;
         self.report_job = None;
         self.client_report = Cache::default();
+        self.receivables_report = Cache::default();
+        self.receivables_open = false;
         self.client_report_id = None;
         self.client_report_full = false;
         self.assist = Cache::default();
@@ -1403,6 +1413,17 @@ mod role_policy_tests {
         ] {
             assert!(!stock.allows_route(route));
         }
+    }
+
+    #[test]
+    fn accounting_reports_are_shown_only_to_owners_and_admins() {
+        for role in ["owner", "admin", "OWNER"] {
+            assert!(RolePolicy::from_role(Some(role)).can_view_reports());
+        }
+        for role in ["secretaire", "stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).can_view_reports());
+        }
+        assert!(!RolePolicy::from_role(None).can_view_reports());
     }
 
     #[test]

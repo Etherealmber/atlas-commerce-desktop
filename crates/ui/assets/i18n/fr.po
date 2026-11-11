@@ -1603,3 +1603,12 @@ msgstr "Illimité"
 
 msgid "QR sign-in request received."
 msgstr "Demande de connexion QR reçue."
+
+msgid "Client receivables report"
+msgstr "Rapport des créances clients"
+
+msgid "Official server report · administrators"
+msgstr "Rapport officiel du serveur · administrateurs"
+
+msgid "Server figures may differ from the loaded client list. Print / PDF opens the official report in your browser."
+msgstr "Les chiffres du serveur peuvent différer de la liste des clients chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."

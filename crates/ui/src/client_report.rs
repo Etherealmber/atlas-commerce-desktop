@@ -130,24 +130,45 @@ fn collect(
         }
     }
 }
-fn parse_report(html: &str) -> Result<ClientReport, ApiError> {
+fn parse_document(
+    html: &str,
+    expected_title: &str,
+    min_tables: usize,
+) -> Result<ClientReport, ApiError> {
     let doc = Html::parse_document(html);
     let selector = |s: &str| Selector::parse(s).expect("static selector");
     let sheet = doc
         .select(&selector(".sheet"))
         .next()
-        .ok_or_else(|| ApiError::client("Format du rapport client non reconnu."))?;
+        .ok_or_else(|| ApiError::client("Format du rapport non reconnu."))?;
     let title = sheet
         .select(&selector("h1"))
         .next()
         .map(text)
         .unwrap_or_default();
-    if !title.starts_with("Situation client") || sheet.select(&selector("table")).count() < 2 {
-        return Err(ApiError::client("Format du rapport client non reconnu."));
+    if !title.starts_with(expected_title) || sheet.select(&selector("table")).count() < min_tables {
+        return Err(ApiError::client("Format du rapport non reconnu."));
     }
     let mut blocks = Vec::new();
     collect(sheet, &mut blocks, &selector("tr"), &selector("th, td"));
     Ok(ClientReport { blocks })
+}
+
+fn parse_report(html: &str) -> Result<ClientReport, ApiError> {
+    parse_document(html, "Situation client", 2)
+}
+
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_receivables() -> ClientReport {
+    parse_document(r#"<div class="sheet"><h1>Rapport créances clients</h1><div class="grid"><div class="stat"><div class="l">Total à recevoir</div><div class="v">4 750 MAD</div></div><div class="stat"><div class="l">Factures</div><div class="v">2</div></div></div><h2>Factures de vente impayées</h2><table><tr><th>N°</th><th>Client</th><th>Émission</th><th>Échéance</th><th>Statut</th><th>Reste dû</th></tr><tr><td>FA-DEMO-001</td><td>Client Exemple</td><td>2026-01-12</td><td>2026-02-12</td><td>partial</td><td>2 500 MAD</td></tr><tr><td>FA-DEMO-002</td><td>Société Démo</td><td>2026-01-20</td><td>—</td><td>sent</td><td>2 250 MAD</td></tr></table></div>"#, "Rapport créances clients", 1).expect("fixture is valid")
+}
+
+/// The server report is authoritative for the aggregate and the listed rows.
+pub(crate) async fn fetch_receivables(api: &ApiClient) -> Result<ClientReport, ApiError> {
+    let url = url::Url::parse(&format!("{}/api/reports/receivables", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    let html = fetch_html(api, url).await?;
+    parse_document(&html, "Rapport créances clients", 1)
 }
 
 pub(crate) async fn fetch(
@@ -158,9 +179,6 @@ pub(crate) async fn fetch(
     if client.id <= 0 {
         return Err(ApiError::client("Identifiant client invalide."));
     }
-    let token = api
-        .token()
-        .ok_or_else(|| ApiError::client("Session indisponible."))?;
     let mut url = url::Url::parse(&format!("{}/api/reports/client-situation", api.base_url()))
         .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
     url.query_pairs_mut()
@@ -170,6 +188,14 @@ pub(crate) async fn fetch(
     if full {
         url.query_pairs_mut().append_pair("detail", "full");
     }
+    let html = fetch_html(api, url).await?;
+    parse_report(&html)
+}
+
+async fn fetch_html(api: &ApiClient, url: url::Url) -> Result<String, ApiError> {
+    let token = api
+        .token()
+        .ok_or_else(|| ApiError::client("Session indisponible."))?;
     let http = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(30))
@@ -227,12 +253,31 @@ pub(crate) async fn fetch(
     }
     let html = std::str::from_utf8(&bytes)
         .map_err(|_| ApiError::client("Encodage du rapport invalide."))?;
-    parse_report(html)
+    Ok(html.to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn parses_receivables_without_recalculating_or_accepting_other_pages() {
+        let html = r#"<div class="sheet"><h1>Rapport créances clients</h1><div class="stat"><div class="l">Total à recevoir</div><div class="v">1 234 MAD</div></div><h2>Factures de vente impayées</h2><table><tr><th>N°</th><th>Reste dû</th></tr><tr><td>FA-1</td><td>1 234 MAD</td></tr></table><script>secret()</script></div>"#;
+        let report = parse_document(html, "Rapport créances clients", 1).unwrap();
+        let dump = format!("{:?}", report.blocks);
+        assert!(dump.contains("1 234 MAD"));
+        assert!(dump.contains("FA-1"));
+        assert!(!dump.contains("secret()"));
+        assert!(parse_report(html).is_err());
+        assert!(
+            parse_document(
+                "<div class=\"sheet\"><h1>Rapport créances clients</h1></div>",
+                "Rapport créances clients",
+                1
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn parses_server_amounts_without_executing_or_including_scripts() {
         let html = r#"<div class="sheet"><div class="actions">Imprimer</div><div class="hdr"><h1>Situation client — Exemple</h1></div><div class="stat"><div>Reste dû</div><div>123 MAD</div></div><h2>Pièces</h2><table><tr><th>N°</th><th>Reste</th></tr><tr><td>FA-1</td><td>123<script>secret()</script></td></tr></table><div>TTC 100 · Payé 20 · <strong>Reste 80</strong></div><h2>Reçus</h2><table><tr><td>Aucun reçu</td></tr></table><script>secret()</script></div>"#;

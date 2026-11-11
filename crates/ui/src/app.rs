@@ -873,6 +873,30 @@ impl AtlasApp {
         }
     }
 
+    /// Show an offline, fictional receivables report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_receivables(&mut self) {
+        self.receivables_open = true;
+        self.receivables_report.data = Some(crate::client_report::fictional_receivables());
+    }
+
+    /// Load the worker's authoritative receivables report for administrators.
+    pub(crate) fn load_receivables_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.receivables_open = true;
+        self.receivables_report = Default::default();
+        self.receivables_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_receivables(&api).await }),
+        );
+    }
+
     /// Load the server's report as inert native text and tables.
     pub(crate) fn load_client_report(&mut self, client: &atlas_api::models::Client, full: bool) {
         if !self.role_policy().allows_route(Route::Clients) {
@@ -1005,7 +1029,7 @@ impl AtlasApp {
             match result {
                 Ok(url) => {
                     if let Err(error) = open::that(url.as_str()) {
-                        log::warn!("open browser report: {error}");
+                        log::warn!("could not open browser report: {:?}", error.kind());
                         self.notice(
                             t!(self.locale, "The system could not open the browser.").into_owned(),
                         );
@@ -1427,6 +1451,9 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.receivables_report.poll() {
+            ctx.request_repaint();
+        }
         if self.client_report.poll() {
             ctx.request_repaint();
         }
@@ -1697,6 +1724,7 @@ impl AtlasApp {
             || self.products.loading
             || self.client_invoices.loading
             || self.client_report.loading
+            || self.receivables_report.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading

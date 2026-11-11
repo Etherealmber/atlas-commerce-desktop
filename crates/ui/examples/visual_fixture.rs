@@ -65,7 +65,7 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "client-editor" | "client-invoices" => Route::Clients,
+        "clients" | "client-editor" | "client-invoices" | "client-receivables" => Route::Clients,
         "products" | "stock" => Route::Products,
         "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
@@ -257,6 +257,10 @@ fn build(route: &str) -> AtlasApp {
     }
     if route == "quotes" {
         app.quotes_open = true;
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "client-receivables" {
+        app.show_fictional_receivables();
     }
     if route == "client-invoices" {
         app.selected_client = Some(1);
