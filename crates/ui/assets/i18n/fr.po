@@ -91,8 +91,8 @@ msgstr "Posez toutes vos questions sur votre boutique"
 msgid "Assistant provider"
 msgstr "Fournisseur de l'assistant"
 
-msgid "Atlas Cloud or your own hosted Atlas Commerce worker."
-msgstr "Atlas Cloud ou votre propre serveur Atlas Commerce hébergé."
+msgid "Enter the address of your Atlas Commerce server."
+msgstr "Saisissez l’adresse de votre serveur Atlas Commerce."
 
 msgid "Atlas Commerce Desktop"
 msgstr "Atlas Commerce Desktop"

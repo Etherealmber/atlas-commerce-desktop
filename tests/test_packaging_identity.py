@@ -16,6 +16,13 @@ class PackagingIdentityTests(unittest.TestCase):
         self.assertIn('AppVerName={#AppName}\n', script)
         self.assertIn('DefaultDirName={localappdata}\\Programs\\Atlas Commerce Desktop', script)
 
+    def test_fresh_inno_setup_has_no_default_server(self):
+        script = (ROOT / "packaging/windows/atlas-commerce-desktop.iss").read_text()
+        self.assertNotIn('#define DefaultServer', script)
+        self.assertIn("ServerPage.Values[0] := '';", script)
+        self.assertIn('not ValidServerUrl(ChosenServer)', script)
+        self.assertIn("PreviousInstall and (not HadStoredServer)", script)
+
     def test_msi_keeps_upgrade_identity_and_directory(self):
         spec = importlib.util.spec_from_file_location("atlas_msi", ROOT / "packaging/windows/build-msi.py")
         module = importlib.util.module_from_spec(spec)

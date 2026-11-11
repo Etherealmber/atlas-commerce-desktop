@@ -627,7 +627,9 @@ impl AtlasApp {
         let vault_worker =
             atlas_core::vault_worker::VaultWorker::new(paths.browser_authority_file());
         let locale = Locale::from_tag(&settings.language);
-        let screen = if session.is_some() {
+        let screen = if server_store.requires_verification {
+            Screen::ServerSetup
+        } else if session.is_some() {
             Screen::Splash
         } else if !server_store.onboarding_done || server_store.selected_url().is_none() {
             Screen::Onboarding

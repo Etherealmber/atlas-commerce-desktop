@@ -116,7 +116,9 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         } else if app.session.is_some() && app.client.is_some() {
             app.screen = Screen::Shell(crate::state::Route::Dashboard);
             app.bootstrap_shell();
-        } else if app.server_store.selected_url().is_none() {
+        } else if app.server_store.requires_verification
+            || app.server_store.selected_url().is_none()
+        {
             app.screen = Screen::ServerSetup;
         } else {
             app.screen = Screen::Login;
@@ -410,7 +412,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 ui.label(
                     RichText::new(t!(
                         app.locale,
-                        "Atlas Cloud or your own hosted Atlas Commerce worker."
+                        "Enter the address of your Atlas Commerce server."
                     ))
                     .color(palette.dim),
                 );
@@ -669,6 +671,17 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
 /// installation at another worker is to reinstall it.
 fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
     let url = app.server_store.selected_url().unwrap_or("—").to_owned();
+    if app.server_store.requires_verification
+        && let Some(job) = &app.server_form.probe_job
+        && let Some(report) = job.poll()
+    {
+        app.server_form.probe_job = None;
+        if probe_matches_current_url(&url, &report) {
+            app.server_store.requires_verification = false;
+            app.save_servers();
+        }
+        app.server_form.probe_report = Some(report);
+    }
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -693,7 +706,7 @@ fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                                 .color(palette.text)
                                 .strong(),
                             );
-                            ui.label(RichText::new(url).color(palette.dim).size(12.0));
+                            ui.label(RichText::new(&url).color(palette.dim).size(12.0));
                         });
                     });
                     ui.add_space(10.0);
@@ -707,7 +720,19 @@ fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                     );
                 });
                 ui.add_space(16.0);
-                if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
+                if app.server_store.requires_verification {
+                    if let Some(report) = &app.server_form.probe_report {
+                        ui.label(RichText::new(&report.message).color(palette.danger));
+                    }
+                    if primary_button(
+                        ui,
+                        t!(app.locale, "Check connection"),
+                        palette,
+                        app.server_form.probe_job.is_none(),
+                    ) {
+                        spawn_probe(app, url.clone());
+                    }
+                } else if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
                     app.screen = Screen::Login;
                 }
             });

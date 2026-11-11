@@ -56,6 +56,7 @@ fn build(route: &str) -> AtlasApp {
             }],
             onboarding_done: true,
             locked: true,
+            requires_verification: false,
         },
         Some(session),
         AccountStore::default(),

@@ -1,15 +1,8 @@
-//! Server choosing: the production Cloudflare entry, custom self-hosted
-//! workers, and the saved-server list. Mirrors the Android app's
-//! `ServerConfig` / `SavedServerEntry` architecture.
+//! Server choosing and the saved-server list for user-provided Atlas workers.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-
-/// The Atlas Cloud production worker.
-pub const PRODUCTION_URL: &str = "https://stock.afmarbre.com";
-/// Label of the prefilled production entry.
-pub const PRODUCTION_LABEL: &str = "Atlas Cloud";
 
 /// What the installer writes to `server.json` beside the executable.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -41,28 +34,18 @@ pub struct ServerStore {
     /// then read-only in Settings. Only a reinstall can pick another server.
     #[serde(default)]
     pub locked: bool,
+    /// Installer-provisioned origin must pass a health check before use.
+    /// Missing on older installations: retain their existing verified choice.
+    #[serde(default)]
+    pub requires_verification: bool,
 }
 
 impl ServerStore {
-    /// The list every fresh install starts from: Atlas Cloud first.
-    #[must_use]
-    pub fn with_production() -> Self {
-        Self {
-            selected: None,
-            saved: vec![SavedServerEntry {
-                label: PRODUCTION_LABEL.to_owned(),
-                url: PRODUCTION_URL.to_owned(),
-            }],
-            onboarding_done: false,
-            locked: false,
-        }
-    }
-
     #[must_use]
     pub fn load(path: &Path) -> Self {
         let text = std::fs::read_to_string(path).ok();
         text.and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_else(Self::with_production)
+            .unwrap_or_default()
     }
 
     /// Validates, normalizes and selects a server, adding it to the saved
@@ -94,6 +77,9 @@ impl ServerStore {
         if ServerUrl::is_cleartext(&normalized) && !ServerUrl::is_loopback(&normalized) {
             return None;
         }
+        let unchanged_verified =
+            self.selected.as_deref() == Some(normalized.as_str()) && !self.requires_verification;
+        self.requires_verification = !unchanged_verified;
         self.saved = vec![SavedServerEntry {
             label: if label.trim().is_empty() {
                 ServerUrl::host(&normalized)
@@ -261,11 +247,6 @@ impl ServerUrl {
             .unwrap_or_else(|| base.to_owned())
     }
 
-    #[must_use]
-    pub fn is_production(base: &str) -> bool {
-        base.trim_end_matches('/') == PRODUCTION_URL
-    }
-
     /// Joins a path such as `api/health` onto the base, exactly one slash.
     #[must_use]
     pub fn join(base: &str, path: &str) -> String {
@@ -283,7 +264,7 @@ mod tests {
 
     #[test]
     fn installer_choice_locks_the_only_server() {
-        let mut store = ServerStore::with_production();
+        let mut store = ServerStore::default();
         // Plain HTTP is refused except on loopback.
         assert_eq!(
             store.apply_install_choice("http://shop.example.com", ""),
@@ -320,7 +301,7 @@ mod tests {
             r#"{"url":"https://worker.example.dev/","label":"Boutique"}"#,
         )
         .unwrap();
-        let mut store = ServerStore::with_production();
+        let mut store = ServerStore::default();
         assert_eq!(
             store.import_install_file(&path).as_deref(),
             Some("https://worker.example.dev")
@@ -391,15 +372,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("atlas-servers-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("servers.json");
-        let mut store = ServerStore::with_production();
+        let mut store = ServerStore::default();
         let url = store
             .select("boutique.afmarbre.com", "Ma boutique")
             .unwrap();
         assert_eq!(url, "https://boutique.afmarbre.com");
-        assert_eq!(store.saved.len(), 2);
+        assert_eq!(store.saved.len(), 1);
         // Selecting the same URL again must not duplicate it.
         store.select("https://boutique.afmarbre.com", "").unwrap();
-        assert_eq!(store.saved.len(), 2);
+        assert_eq!(store.saved.len(), 1);
         store.save(&path).unwrap();
         let loaded = ServerStore::load(&path);
         assert_eq!(loaded, store);
@@ -409,10 +390,38 @@ mod tests {
     }
 
     #[test]
-    fn production_is_recognized() {
-        assert!(ServerUrl::is_production("https://stock.afmarbre.com/"));
-        assert!(!ServerUrl::is_production(
-            "https://stock.afmarbre.com.evil.test"
-        ));
+    fn legacy_server_store_remains_usable() {
+        let legacy = r#"{"selected":"https://shop.example.test","saved":[],"onboarding_done":true,"locked":true}"#;
+        let store: ServerStore = serde_json::from_str(legacy).unwrap();
+        assert!(!store.requires_verification);
+        assert_eq!(store.selected_url(), Some("https://shop.example.test"));
+    }
+
+    #[test]
+    fn fresh_store_has_no_default_server_and_provisioning_requires_probe() {
+        let mut store = ServerStore::load(
+            &std::env::temp_dir().join(format!("atlas-missing-{}", uuid::Uuid::new_v4())),
+        );
+        assert!(store.selected_url().is_none());
+        assert!(store.saved.is_empty());
+        store
+            .apply_install_choice("https://shop.example.test", "")
+            .unwrap();
+        assert!(store.requires_verification);
+        store.requires_verification = false;
+        store
+            .apply_install_choice("https://shop.example.test/", "")
+            .unwrap();
+        assert!(
+            !store.requires_verification,
+            "upgrade retains verified server"
+        );
+        store
+            .apply_install_choice("https://other.example.test", "")
+            .unwrap();
+        assert!(
+            store.requires_verification,
+            "a different server must be checked"
+        );
     }
 }

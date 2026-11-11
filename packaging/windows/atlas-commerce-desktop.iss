@@ -27,10 +27,8 @@
 #endif
 
 #define AppName "Atlas Commerce"
-; Default server written into server.json. The installer page lets the person
-; installing override it, including silently with /SERVERURL=https://...
+; Server chosen by the user, or supplied with /SERVERURL=https://...
 ; The app locks this address: Settings never offers another one.
-#define DefaultServer "https://stock.afmarble.com"
 #define AppExeName "atlas-commerce-desktop.exe"
 #define AppIdentity "AtlasCommerceDesktop"
 
@@ -253,9 +251,8 @@ begin
     'L''adresse est fixée par l''installateur : elle ne pourra plus être changée dans les réglages. Une réinstallation est nécessaire pour en choisir une autre.');
   ServerPage.Add('Adresse du serveur (HTTPS) :', False);
   // Pre-fill order: silent /SERVERURL, then the address this installation
-  // already uses (an upgrade keeps it), then the public default. The value
-  // is written to the registry at the end of setup and removed by uninstall,
-  // so a genuine reinstall starts from the default again.
+  // already uses (an upgrade keeps it), otherwise leave it blank. The value
+  // is written to the registry at the end of setup and removed by uninstall.
   PreviousInstall := RegKeyExists(HKCU,
     'Software\Microsoft\Windows\CurrentVersion\Uninstall\{E74305A7-4960-45B6-93C9-CEA8D83B1517}_is1');
   HadStoredServer := RegQueryStringValue(HKCU, 'Software\{#AppIdentity}', 'Server', Existing);
@@ -264,7 +261,7 @@ begin
   else if HadStoredServer then
     ServerPage.Values[0] := Existing
   else
-    ServerPage.Values[0] := '{#DefaultServer}';
+    ServerPage.Values[0] := '';
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -272,9 +269,10 @@ begin
   Result := True;
   if CurPageID = ServerPage.ID then
   begin
-    if not ValidServerUrl(ServerPage.Values[0]) then
+    if not ValidServerUrl(ServerPage.Values[0])
+      and not ((Trim(ServerPage.Values[0]) = '') and PreviousInstall and (not HadStoredServer)) then
     begin
-      MsgBox('Adresse invalide. Utilisez une adresse HTTPS telle que https://stock.afmarble.com, ou http://localhost uniquement pour un serveur local.', mbError, MB_OK);
+      MsgBox('Adresse invalide. Utilisez une adresse HTTPS telle que https://votre-serveur.example, ou http://localhost uniquement pour un serveur local.', mbError, MB_OK);
       Result := False;
     end;
   end;
@@ -290,7 +288,8 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not ValidServerUrl(ChosenServer) then
+  if not ValidServerUrl(ChosenServer)
+    and not ((ChosenServer = '') and PreviousInstall and (not HadStoredServer)) then
     Result := 'Adresse du serveur invalide. Indiquez une origine HTTPS valide sans chemin ni identifiants.';
 end;
 
@@ -306,7 +305,7 @@ begin
   // explicit /SERVERURL we cannot know it, and guessing the public default
   // would silently move a shop to another worker. The app locks whatever it
   // already uses. A fresh install writes the chosen address.
-  if (ServerUrlFromParam = '') and (not HadStoredServer) and PreviousInstall then
+  if (ChosenForThisSetup = '') and (not HadStoredServer) and PreviousInstall then
     Exit;
   { Read once by the app, which then deletes this file and locks the
     address in its own servers.json. A silent install writes it too. }

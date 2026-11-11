@@ -1360,7 +1360,7 @@ impl AtlasApp {
         let destination = update_gate_destination(
             self.vault_restore.is_some(),
             self.session.is_some() && self.client.is_some(),
-            self.server_store.selected_url().is_some(),
+            self.server_store.selected_url().is_some() && !self.server_store.requires_verification,
             self.role_policy().initial_route(),
         );
         if let Screen::Shell(route) = destination {
@@ -1411,6 +1411,11 @@ impl AtlasApp {
                 // headless loop turns this flag into Headless::Show; when a
                 // window already exists, poll_background makes it visible.
                 self.show_requested = true;
+                continue;
+            }
+            if self.server_store.requires_verification {
+                // Do not let a link bypass first-run server verification.
+                self.pending_deep_links.push(raw);
                 continue;
             }
             if let Some(link) = atlas_core::VerifyLink::parse(&raw)
