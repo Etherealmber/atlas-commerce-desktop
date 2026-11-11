@@ -23,6 +23,13 @@ impl eframe::App for Fixture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.route == "stock-shortcut" && ctx.input(|input| input.key_pressed(egui::Key::K)) {
+            println!(
+                "FIXTURE_KEY mods={:?} focus={:?}",
+                ctx.input(|input| input.modifiers),
+                ctx.memory(|memory| memory.focused())
+            );
+        }
         self.app.draw(ui, &ctx, &self.palette);
         if self.route == "stock-shortcut"
             && !self.shortcut_reported

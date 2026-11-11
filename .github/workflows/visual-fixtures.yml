@@ -56,6 +56,7 @@ jobs:
                 xdotool type --clearmodifiers SKU42
                 sleep 1
                 if ! grep -q FIXTURE_STOCK_SHORTCUT_OK "visual-output/$page.log"; then
+                  import -window root visual-output/stock-shortcut-failed.png
                   echo "Stock shortcut did not focus the product search"; kill "$pid"; exit 1
                 fi
                 import -window root visual-output/stock-shortcut-focused.png
