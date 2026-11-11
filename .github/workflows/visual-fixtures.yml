@@ -24,22 +24,6 @@ jobs:
           key: visual-fixtures
       - name: Build offline fixture
         run: cargo build -p atlas-ui --features visual-fixtures --example visual_fixture
-      - name: Exercise the isolated WebKitGTK window
-        run: |
-          # Ubuntu's runner restricts unprivileged namespaces via AppArmor,
-          # which prevents WebKit's bubblewrap sandbox from starting. Relax
-          # that VM-only restriction; WebKit's sandbox remains enabled.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          set +e
-          xvfb-run -a -s '-screen 0 1280x800x24' cargo test -p atlas-webview-linux --bin atlas-commerce-webview \
-            window::tests::opens_and_destroys_an_ephemeral_window -- --ignored --test-threads=1 > /tmp/webkit-smoke.log 2>&1
-          result=$?
-          if [ "$result" -ne 0 ]; then
-            tail -40 /tmp/webkit-smoke.log | while IFS= read -r line; do
-              echo "::error title=WebKitGTK::${line:0:400}"
-            done
-          fi
-          exit "$result"
       - name: Render fictional screens under Xvfb
         run: |
           mkdir -p visual-output
@@ -287,3 +271,19 @@ jobs:
           name: offline-desktop-screenshots
           path: visual-output/*.png
           retention-days: 14
+      - name: Exercise the isolated WebKitGTK window
+        run: |
+          # Ubuntu's runner restricts unprivileged namespaces via AppArmor,
+          # which prevents WebKit's bubblewrap sandbox from starting. Relax
+          # that VM-only restriction; WebKit's sandbox remains enabled.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          set +e
+          timeout 360s xvfb-run -a -s '-screen 0 1280x800x24' cargo test -p atlas-webview-linux --bin atlas-commerce-webview \
+            window::tests::opens_and_destroys_an_ephemeral_window -- --ignored --test-threads=1 > /tmp/webkit-smoke.log 2>&1
+          result=$?
+          if [ "$result" -ne 0 ]; then
+            tail -40 /tmp/webkit-smoke.log | while IFS= read -r line; do
+              echo "::error title=WebKitGTK::${line:0:400}"
+            done
+          fi
+          exit "$result"
