@@ -281,37 +281,38 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         return;
     }
 
-    // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS. This fork exposes the
-    // modifier fields directly rather than the upstream `command()` helper.
+    // Read modifiers from the key press itself, not the final state of the
+    // frame: a quick press and release can both arrive in the same frame.
+    let k_shift = ctx.input(|input| modified_k(&input.events));
+    let typing = ctx.memory(|memory| memory.focused().is_some());
+    if let Some(shift) = k_shift {
+        if stock_shortcut(shift, true, typing, app.palette_open) {
+            if app.role_policy().allows_route(Route::Products) {
+                app.close_palette();
+                app.go(Route::Products);
+                ctx.memory_mut(|memory| {
+                    memory.request_focus(crate::screens::products::product_search_id())
+                });
+            }
+            return;
+        }
+        // Ctrl+K toggles the palette even while typing. Shift+K never
+        // falls through and cannot steal input from another text field.
+        if !shift {
+            if app.palette_open {
+                app.close_palette();
+                clear_focus(ctx);
+            } else {
+                app.open_palette();
+                ctx.memory_mut(|memory| memory.request_focus(input_id()));
+            }
+        }
+        return;
+    }
+
+    // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS.
     let ctrl = ctx.input(|input| input.modifiers.ctrl || input.modifiers.mac_cmd);
     if !ctrl {
-        return;
-    }
-
-    let (shift, k_pressed) =
-        ctx.input(|input| (input.modifiers.shift, input.key_pressed(egui::Key::K)));
-    let typing = ctx.memory(|memory| memory.focused().is_some());
-    if stock_shortcut(shift, k_pressed, typing, app.palette_open) {
-        if app.role_policy().allows_route(Route::Products) {
-            app.close_palette();
-            app.go(Route::Products);
-            ctx.memory_mut(|memory| {
-                memory.request_focus(crate::screens::products::product_search_id())
-            });
-        }
-        return;
-    }
-
-    // Ctrl+K toggles the palette, stealing focus from any field when opening.
-    // Shift+K has its own meaning and never falls through to the palette.
-    if k_pressed && !shift {
-        if app.palette_open {
-            app.close_palette();
-            clear_focus(ctx);
-        } else {
-            app.open_palette();
-            ctx.memory_mut(|memory| memory.request_focus(input_id()));
-        }
         return;
     }
 
@@ -360,6 +361,20 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
             return;
         }
     }
+}
+
+/// The modifier snapshot belongs to the press, not to a later key release.
+fn modified_k(events: &[egui::Event]) -> Option<bool> {
+    events.iter().find_map(|event| match event {
+        egui::Event::Key {
+            key: egui::Key::K,
+            pressed: true,
+            repeat: false,
+            modifiers,
+            ..
+        } if modifiers.ctrl || modifiers.mac_cmd => Some(modifiers.shift),
+        _ => None,
+    })
 }
 
 /// Do not steal a modified keystroke from an unrelated focused text field.
@@ -605,6 +620,38 @@ mod tests {
             assert!(screen.contains_rect(card));
             assert!(card.width() <= 580.0 && card.height() <= 460.0);
         }
+    }
+
+    #[test]
+    fn modified_k_uses_press_modifiers_after_release_in_same_frame() {
+        let press = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers {
+                ctrl: true,
+                shift: true,
+                ..Default::default()
+            },
+        };
+        let release = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        };
+        assert_eq!(modified_k(&[press, release]), Some(true));
+        assert_eq!(modified_k(&[]), None);
+        let unmodified = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        };
+        assert_eq!(modified_k(&[unmodified]), None);
     }
 
     #[test]
