@@ -1600,3 +1600,6 @@ msgstr "Historique des ventes et factures"
 
 msgid "Unlimited"
 msgstr "Illimité"
+
+msgid "QR sign-in request received."
+msgstr "Demande de connexion QR reçue."

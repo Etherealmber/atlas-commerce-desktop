@@ -778,15 +778,20 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
     if !app.requires_password
+        && !app.browser_login.active
+        && !app.login.busy
         && let Some(link) = app.login.pending_link.take()
     {
+        app.login.browser_auto_started = true;
         start_verify_link(app, link);
     }
-    if should_start_hosted_login(
-        app.login.browser_auto_started,
-        app.login.busy,
-        app.qr.active,
-    ) {
+    if app.login.pending_link.is_none()
+        && should_start_hosted_login(
+            app.login.browser_auto_started,
+            app.login.busy,
+            app.qr.active,
+        )
+    {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         let started = crate::browser_auth::start_embedded(app);
         #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
@@ -798,7 +803,26 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space((ui.available_height() * 0.25).max(24.0));
         crate::branding::mark(ui, palette, 46.0);
         ui.add_space(16.0);
-        if app.browser_login.active {
+        if app.qr.active {
+            poll_qr_status(app, ui);
+            ui.label(
+                RichText::new(t!(app.locale, "QR sign-in request received.")).color(palette.text),
+            );
+            ui.add_space(8.0);
+            let message = match app.qr.status.as_str() {
+                "approved" => t!(app.locale, "Phone approved — finalizing…"),
+                "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
+                "denied" => t!(app.locale, "Login refused on the phone."),
+                "expired" | "consumed" => t!(app.locale, "Code expired."),
+                _ => t!(app.locale, "Waiting for the phone…"),
+            };
+            ui.label(RichText::new(message).color(palette.secondary));
+            ui.add_space(12.0);
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                app.qr = Default::default();
+                app.login.browser_auto_started = false;
+            }
+        } else if app.browser_login.active {
             ui.label(
                 RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
                     .color(palette.text)
@@ -1307,7 +1331,7 @@ fn draw_password_submit(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
     }
 }
 
-fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+fn poll_qr_status(app: &mut AtlasApp, ui: &mut egui::Ui) {
     // Status polling, at most every 1.5 s. It stops as soon as the one-time
     // completion exchange is in flight so a repeated "approved" poll cannot
     // spawn it twice.
@@ -1328,7 +1352,10 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     }
+}
 
+fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_qr_status(app, ui);
     // The login card already provides the surface; no nested card frame.
     ui.vertical_centered(|ui| {
         if app.qr.qr_url.is_empty() {

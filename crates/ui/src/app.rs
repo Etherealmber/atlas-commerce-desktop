@@ -15,6 +15,29 @@ use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
+/// Choose the screen to resume after a mandatory update is withdrawn.
+fn update_gate_destination(
+    restoring: bool,
+    signed_in: bool,
+    has_server: bool,
+    route: Route,
+) -> Screen {
+    if restoring {
+        Screen::Splash
+    } else if signed_in {
+        Screen::Shell(route)
+    } else if has_server {
+        Screen::Login
+    } else {
+        Screen::ServerSetup
+    }
+}
+
+/// A staged download may only be advertised for its own manifest version.
+fn staged_version_matches(staged: Option<&str>, manifest: &str) -> bool {
+    staged == Some(manifest)
+}
+
 impl AtlasApp {
     /// Opens a session: persist it, remember the account, rebuild the
     /// authenticated client and load the first shell data.
@@ -1243,6 +1266,11 @@ impl AtlasApp {
 
     fn apply_manifest(&mut self, manifest: UpdateManifest) {
         self.update.release_notes = Some(manifest.clone());
+        // A staged installer is only identified by the version that was
+        // actually downloaded, never by a later manifest.
+        if !staged_version_matches(self.update.ready_version.as_deref(), &manifest.version) {
+            self.update.ready_version = None;
+        }
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
             UpdateDecision::UpToDate => {
@@ -1253,6 +1281,7 @@ impl AtlasApp {
                 self.update.ready_version = None;
                 self.update.mandatory = None;
                 self.update.error = None;
+                self.leave_update_gate();
             }
             UpdateDecision::Mandatory { .. } => {
                 self.update.up_to_date_at = None;
@@ -1261,6 +1290,8 @@ impl AtlasApp {
                 self.screen = Screen::UpdateGate;
             }
             UpdateDecision::Optional { .. } => {
+                self.update.mandatory = None;
+                self.leave_update_gate();
                 self.update.up_to_date_at = None;
                 let auto = self.settings.update_auto_download;
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
@@ -1270,6 +1301,26 @@ impl AtlasApp {
                     self.begin_update_download(true);
                 }
             }
+        }
+    }
+
+    /// Resume the existing session when a previously mandatory update is withdrawn.
+    fn leave_update_gate(&mut self) {
+        if !matches!(self.screen, Screen::UpdateGate) {
+            return;
+        }
+        let destination = update_gate_destination(
+            self.vault_restore.is_some(),
+            self.session.is_some() && self.client.is_some(),
+            self.server_store.selected_url().is_some(),
+            self.role_policy().initial_route(),
+        );
+        if let Screen::Shell(route) = destination {
+            self.load_profile();
+            self.load_avatar();
+            self.go(route);
+        } else {
+            self.screen = destination;
         }
     }
 
@@ -1317,14 +1368,21 @@ impl AtlasApp {
             if let Some(link) = atlas_core::VerifyLink::parse(&raw)
                 && self.session.is_none()
                 && !self.requires_password
+                && self.login.job_link.is_none()
             {
-                // A verify link only makes sense on the login screen.
+                // A deep link supersedes an in-flight hosted login.
+                crate::browser_auth::cancel(self);
+                self.qr = Default::default();
                 self.login.pending_link = Some(link);
                 self.screen = Screen::Login;
             } else if let Some(token) = atlas_core::QrTokenParser::extract(&raw)
                 && self.session.is_none()
                 && !self.requires_password
+                && self.login.job_link.is_none()
             {
+                crate::browser_auth::cancel(self);
+                self.login.pending_link = None;
+                self.qr = Default::default();
                 self.qr.active = true;
                 self.qr.token = token;
                 self.qr.status = "pending".to_owned();
@@ -2106,5 +2164,37 @@ impl eframe::App for EframeShell {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.held.save_settings();
+    }
+}
+
+#[cfg(test)]
+mod update_gate_recovery_tests {
+    use super::{Route, Screen, staged_version_matches, update_gate_destination};
+
+    #[test]
+    fn staged_update_is_not_mislabelled_as_a_newer_release() {
+        assert!(staged_version_matches(Some("1.0.0"), "1.0.0"));
+        assert!(!staged_version_matches(Some("1.0.0"), "1.1.0"));
+        assert!(!staged_version_matches(None, "1.1.0"));
+    }
+
+    #[test]
+    fn restores_session_or_the_appropriate_startup_screen() {
+        assert_eq!(
+            update_gate_destination(false, true, true, Route::Products),
+            Screen::Shell(Route::Products)
+        );
+        assert_eq!(
+            update_gate_destination(true, false, true, Route::Dashboard),
+            Screen::Splash
+        );
+        assert_eq!(
+            update_gate_destination(false, false, true, Route::Dashboard),
+            Screen::Login
+        );
+        assert_eq!(
+            update_gate_destination(false, false, false, Route::Dashboard),
+            Screen::ServerSetup
+        );
     }
 }

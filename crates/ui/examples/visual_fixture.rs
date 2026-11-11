@@ -75,12 +75,18 @@ fn build(route: &str) -> AtlasApp {
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
-    if route == "login" {
+    if route == "login" || route == "login-qr" {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
         app.login.browser_auto_started = true;
         app.login.error = Some("Connexion fictive indisponible.".into());
+    }
+    if route == "login-qr" {
+        // Inert deep-link state: no token and no server request.
+        app.login.error = None;
+        app.qr.active = true;
+        app.qr.status = "claimed".into();
     }
     if route == "settings" {
         // Fictional update state: proves the title-bar icon and the
