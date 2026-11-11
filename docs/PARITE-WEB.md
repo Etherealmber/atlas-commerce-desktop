@@ -202,5 +202,7 @@ et actions mobiles toutes les 25 secondes, avec filtrage par rôle et auteur.
 Ce constat ne démontre pas l'existence d'une file locale de mutations ni d'un
 protocole de résolution de conflits. Le desktop ne prétend donc pas fournir
 une synchronisation hors ligne ou des notifications Android équivalentes.
-La création de factures, les raccourcis système globaux, l'impression ESC/POS
+La recherche de stock dispose de `Ctrl/⌘+Maj+K` dans la fenêtre active ;
+ce n'est pas un raccourci global du système. La création de factures, les
+raccourcis système globaux, l'impression ESC/POS
 et les tests matériels restent à réaliser et à valider sur chaque plateforme.

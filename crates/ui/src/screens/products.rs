@@ -156,17 +156,24 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 }
 
+/// Stable identifier for the catalogue search, including keyboard shortcuts.
+pub(crate) fn product_search_id() -> egui::Id {
+    egui::Id::new("product-search")
+}
+
 fn draw_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 18.0);
             let field_width = (ui.available_width() - 130.0).clamp(40.0, 320.0);
-            let response = widgets::search_field(
-                ui,
-                &mut app.product_search,
-                t!(app.locale, "Search by name, SKU or barcode"),
-                field_width,
+            let response = ui.add_sized(
+                [field_width, crate::theme::TARGET_MIN_HEIGHT],
+                egui::TextEdit::singleline(&mut app.product_search)
+                    .id(product_search_id())
+                    .hint_text(t!(app.locale, "Search by name, SKU or barcode"))
+                    .margin(egui::Margin::symmetric(14, 8))
+                    .clip_text(true),
             );
             if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 app.load_products();

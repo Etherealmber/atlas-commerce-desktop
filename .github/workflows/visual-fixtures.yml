@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
+            for page in palette-narrow vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -53,6 +53,17 @@ jobs:
               import -window root "visual-output/$page.png"
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = palette-narrow ]; then
+                # Exercise Escape in the actual narrow window, not a mock DOM.
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window" key Escape
+                sleep 1
+                import -window root visual-output/palette-narrow-closed.png
+                changed=$(compare -metric AE visual-output/palette-narrow.png visual-output/palette-narrow-closed.png null: 2>&1 || true)
+                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                  echo "Narrow palette did not close: $changed"; kill "$pid"; exit 1
+                fi
+              fi
               if [ "$page" = client-invoices ]; then
                 # Bring the selected client invoice section into view.
                 xdotool mousemove 900 500 click --repeat 5 --delay 80 5
@@ -99,6 +110,15 @@ jobs:
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
+      - name: Review narrow command palette
+        run: |
+          convert visual-output/palette-narrow.png -crop 640x480+0+0 -resize 480x360 -quality 25 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-palette-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
       - name: Review payables screenshot
         run: |
           convert visual-output/vendor-payables.png -resize 640x400 -quality 30 /tmp/review.jpg

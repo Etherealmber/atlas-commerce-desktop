@@ -324,12 +324,20 @@ fn build(route: &str) -> AtlasApp {
     if route == "agent" {
         app.agent_drawer_open = true;
     }
+    if route == "palette-narrow" {
+        app.palette_open = true;
+    }
     app
 }
 fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
+    let size = if route == "palette-narrow" {
+        [640.0, 480.0]
+    } else {
+        [1280.0, 800.0]
+    };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size(size),
         ..Default::default()
     };
     eframe::run_native(

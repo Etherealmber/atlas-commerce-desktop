@@ -35,6 +35,13 @@ clair et sombre, en français (avec catalogue anglais inclus).
 La connexion utilise un navigateur intégré ou le navigateur système. Aucune
 télémétrie n’est ajoutée et l’application ne stocke jamais de mot de passe.
 
+## Raccourcis dans la fenêtre
+
+`Ctrl+Maj+K` (ou `⌘+Maj+K` sur macOS) ouvre Produits et place le focus
+sur la recherche de stock. Le raccourci respecte les permissions et les
+formulaires ouverts ; il ne fonctionne pas comme raccourci global du système.
+`Ctrl+K` / `⌘+K` ouvre toujours la palette de commandes.
+
 ## Fonctionnalités
 
 | Fonction | Ce que vous pouvez faire |
