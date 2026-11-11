@@ -210,9 +210,10 @@ et les tests matériels restent à réaliser et à valider sur chaque plateforme
 ### Rapport natif de valorisation du stock
 
 Depuis Produits, owner/admin peuvent consulter le rapport officiel
-`GET /api/reports/stock?location_id=all` : valeurs et catégories proviennent
-exclusivement du serveur, en HTML rendu comme texte et tableaux inertes.
-L'inventaire vide reste un rapport valide. L'impression ouvre le rapport web
-avec un ticket court, sans JWT dans l'URL. La sélection d'un entrepôt précis
-reste dans le rapport web ; le rendu natif ne propose que tous les
-emplacements. La permission côté interface ne remplace pas celle du serveur.
+`GET /api/reports/stock?location_id=all` ou l'identifiant d'un entrepôt actif :
+valeurs et catégories proviennent exclusivement du serveur, en HTML rendu
+comme texte et tableaux inertes. Les emplacements proposés sont ceux du
+sélecteur officiel du rapport ; les champs et tickets cachés ne sont pas lus.
+L'inventaire vide reste un rapport valide. L'impression ouvre le même rapport
+avec un ticket court, sans JWT dans l'URL. La permission côté interface ne
+remplace pas celle du serveur.

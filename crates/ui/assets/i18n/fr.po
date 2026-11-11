@@ -1624,3 +1624,18 @@ msgstr "Rapport de valorisation du stock"
 
 msgid "All locations · values provided by the server. Print / PDF opens the official report in your browser."
 msgstr "Tous les emplacements · valeurs fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "All locations"
+msgstr "Tous les emplacements"
+
+msgid "Warehouse"
+msgstr "Entrepôt"
+
+msgid "Loading warehouses…"
+msgstr "Chargement des entrepôts…"
+
+msgid "Retry warehouses"
+msgstr "Réessayer les entrepôts"
+
+msgid "Values are provided by the server. Print / PDF opens the official report in your browser."
+msgstr "Les valeurs sont fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."

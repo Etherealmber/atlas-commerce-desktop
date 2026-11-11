@@ -898,9 +898,13 @@ impl AtlasApp {
     pub fn show_fictional_stock_report(&mut self) {
         self.stock_report_open = true;
         self.stock_report.data = Some(crate::client_report::fictional_stock());
+        self.stock_locations.data = Some(vec![crate::client_report::StockLocation {
+            id: 42,
+            label: "Entrepôt Exemple (défaut)".into(),
+        }]);
     }
 
-    /// Load the official stock valuation across all locations for administrators.
+    /// Load the official stock valuation for the selected location.
     pub(crate) fn load_stock_report(&mut self) {
         if !self.role_policy().can_view_reports() {
             return;
@@ -908,11 +912,30 @@ impl AtlasApp {
         let Some(api) = self.client.clone() else {
             return;
         };
+        if !self.stock_report_open {
+            self.load_stock_locations();
+        }
         self.stock_report_open = true;
         self.stock_report = Default::default();
+        let location = self.stock_report_location;
         self.stock_report.start(
             self.runner
-                .spawn(async move { crate::client_report::fetch_stock(&api).await }),
+                .spawn(async move { crate::client_report::fetch_stock(&api, location).await }),
+        );
+    }
+
+    /// Fetch the locations offered by the worker's official report chooser.
+    pub(crate) fn load_stock_locations(&mut self) {
+        if !self.role_policy().can_view_reports() || self.stock_locations.loading {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.stock_locations = Default::default();
+        self.stock_locations.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_stock_locations(&api).await }),
         );
     }
 
@@ -1510,6 +1533,9 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.stock_locations.poll() {
+            ctx.request_repaint();
+        }
         if self.stock_report.poll() {
             ctx.request_repaint();
         }
@@ -1792,6 +1818,7 @@ impl AtlasApp {
             || self.receivables_report.loading
             || self.payables_report.loading
             || self.stock_report.loading
+            || self.stock_locations.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading

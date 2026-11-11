@@ -190,11 +190,91 @@ fn parse_stock(html: &str) -> Result<ClientReport, ApiError> {
     Ok(report)
 }
 
-/// Ask the worker for its all-locations report, never calculate local totals.
-pub(crate) async fn fetch_stock(api: &ApiClient) -> Result<ClientReport, ApiError> {
+/// A stock location from the worker's printable-report chooser.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StockLocation {
+    pub id: i64,
+    pub label: String,
+}
+
+/// Extract only numeric location IDs and visible text. Hidden ticket fields,
+/// scripts, links and form actions are never read or executed.
+fn parse_stock_locations(html: &str) -> Result<Vec<StockLocation>, ApiError> {
+    let doc = Html::parse_document(html);
+    let selector = |s: &str| Selector::parse(s).expect("static selector");
+    let sheet = doc
+        .select(&selector(".sheet"))
+        .next()
+        .ok_or_else(|| ApiError::client("Liste des emplacements non reconnue."))?;
+    let title = sheet
+        .select(&selector("h1"))
+        .next()
+        .map(text)
+        .unwrap_or_default();
+    if !title.starts_with("Rapport stock — choisir l’entrepôt") {
+        return Err(ApiError::client("Liste des emplacements non reconnue."));
+    }
+    let select = sheet
+        .select(&selector("select[name=location_id]"))
+        .next()
+        .ok_or_else(|| ApiError::client("Liste des emplacements absente."))?;
+    let mut locations = Vec::new();
+    let mut has_all = false;
+    for option in select.select(&selector("option")) {
+        let value = option.value().attr("value").unwrap_or("");
+        if value == "all" {
+            has_all = true;
+            continue;
+        }
+        if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+            continue;
+        }
+        let Some(id) = value.parse::<i64>().ok().filter(|id| *id > 0) else {
+            continue;
+        };
+        let label: String = text(option).chars().take(160).collect();
+        if !label.is_empty()
+            && !locations
+                .iter()
+                .any(|location: &StockLocation| location.id == id)
+        {
+            locations.push(StockLocation { id, label });
+            if locations.len() >= 1000 {
+                return Err(ApiError::client("Liste des emplacements trop volumineuse."));
+            }
+        }
+    }
+    if !has_all {
+        return Err(ApiError::client("Liste des emplacements non reconnue."));
+    }
+    Ok(locations)
+}
+
+/// Load the same active locations the official stock report offers.
+pub(crate) async fn fetch_stock_locations(api: &ApiClient) -> Result<Vec<StockLocation>, ApiError> {
+    let url = url::Url::parse(&format!("{}/api/reports/stock", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    parse_stock_locations(&fetch_html(api, url).await?)
+}
+
+/// Validated query parameter for a report; None denotes all locations.
+pub(crate) fn stock_location_param(location: Option<i64>) -> Result<String, ApiError> {
+    match location {
+        None => Ok("all".to_owned()),
+        Some(id) if id > 0 => Ok(id.to_string()),
+        Some(_) => Err(ApiError::client("Emplacement invalide.")),
+    }
+}
+
+/// Ask the worker for the selected location; never calculate local totals.
+pub(crate) async fn fetch_stock(
+    api: &ApiClient,
+    location: Option<i64>,
+) -> Result<ClientReport, ApiError> {
+    let location = stock_location_param(location)?;
     let mut url = url::Url::parse(&format!("{}/api/reports/stock", api.base_url()))
         .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
-    url.query_pairs_mut().append_pair("location_id", "all");
+    url.query_pairs_mut().append_pair("location_id", &location);
     let html = fetch_html(api, url).await?;
     parse_stock(&html)
 }
@@ -325,6 +405,32 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn stock_location_chooser_uses_only_valid_options_and_ignores_secrets() {
+        let html = r#"<div class="sheet"><h1>Rapport stock — choisir l’entrepôt</h1><form><input type="hidden" name="rt" value="secret-ticket"><select name="location_id"><option value="all">Tous</option><option value="42">Dépôt principal (défaut)</option><option value="42">Doublon</option><option value="-1">Négatif</option><option value="abc">Invalide</option><option value="7">Entrepôt &amp; magasin<script>secret()</script></option></select></form></div>"#;
+        let locations = super::parse_stock_locations(html).unwrap();
+        assert_eq!(
+            locations,
+            vec![
+                super::StockLocation {
+                    id: 42,
+                    label: "Dépôt principal (défaut)".into()
+                },
+                super::StockLocation {
+                    id: 7,
+                    label: "Entrepôt & magasin".into()
+                }
+            ]
+        );
+        assert!(!format!("{locations:?}").contains("secret"));
+        assert!(super::parse_stock_locations(r#"<div class="sheet"><h1>Rapport stock — choisir l’entrepôt</h1><select name="location_id"><option value="1">A</option></select></div>"#).is_err());
+        assert!(super::parse_stock_locations("<h1>Connexion</h1>").is_err());
+        assert_eq!(super::stock_location_param(None).unwrap(), "all");
+        assert_eq!(super::stock_location_param(Some(42)).unwrap(), "42");
+        assert!(super::stock_location_param(Some(0)).is_err());
+        assert!(super::stock_location_param(Some(-1)).is_err());
     }
 
     #[test]

@@ -178,21 +178,55 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 fn draw_stock_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
+        ui.label(RichText::new(t!(app.locale, "Stock valuation report")).strong().size(16.0).color(palette.text));
+        ui.add_space(8.0);
+        let locations = app.stock_locations.data.clone().unwrap_or_default();
+        let selected = app.stock_report_location
+            .and_then(|id| locations.iter().find(|location| location.id == id))
+            .map(|location| location.label.clone())
+            .unwrap_or_else(|| t!(app.locale, "All locations").into_owned());
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(t!(app.locale, "Stock valuation report")).strong().size(16.0).color(palette.text));
+            ui.label(RichText::new(t!(app.locale, "Warehouse")).color(palette.secondary));
+            let before = app.stock_report_location;
+            egui::ComboBox::from_id_salt("stock-report-location")
+                .selected_text(selected)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut app.stock_report_location, None, t!(app.locale, "All locations"));
+                    for location in &locations {
+                        ui.selectable_value(&mut app.stock_report_location, Some(location.id), &location.label);
+                    }
+                });
+            if before != app.stock_report_location {
+                app.load_stock_report();
+            }
             if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_stock_report();
             }
-            if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
-                app.open_printable("/api/reports/stock", &[("location_id", "all".to_owned())]);
-            }
+            let printable = !app.stock_report.loading && app.stock_report.error.is_none() && app.stock_report.data.is_some() && app.report_job.is_none();
+            ui.add_enabled_ui(printable, |ui| {
+                if secondary_button(ui, t!(app.locale, "Print / PDF"), palette)
+                    && let Ok(location) = crate::client_report::stock_location_param(app.stock_report_location)
+                {
+                    app.open_printable("/api/reports/stock", &[("location_id", location)]);
+                }
+            });
             if secondary_button(ui, t!(app.locale, "Close"), palette) {
                 app.stock_report_open = false;
                 app.stock_report = Default::default();
+                app.stock_locations = Default::default();
+                app.stock_report_location = None;
             }
         });
+        if app.stock_locations.loading {
+            ui.label(RichText::new(t!(app.locale, "Loading warehouses…")).color(palette.secondary).size(12.0));
+        } else if let Some(error) = app.stock_locations.error.clone() {
+            error_banner(ui, &error, palette);
+            if secondary_button(ui, t!(app.locale, "Retry warehouses"), palette) {
+                app.load_stock_locations();
+            }
+        }
         ui.add_space(8.0);
-        ui.label(RichText::new(t!(app.locale, "All locations · values provided by the server. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        ui.label(RichText::new(t!(app.locale, "Values are provided by the server. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
         if app.stock_report.loading {
             super::centered_spinner(ui, palette);
         } else if let Some(error) = &app.stock_report.error {

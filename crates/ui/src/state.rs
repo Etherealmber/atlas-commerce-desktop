@@ -506,6 +506,8 @@ pub struct AtlasApp {
     pub(crate) payables_open: bool,
     pub(crate) stock_report: Cache<crate::client_report::ClientReport>,
     pub(crate) stock_report_open: bool,
+    pub(crate) stock_report_location: Option<i64>,
+    pub(crate) stock_locations: Cache<Vec<crate::client_report::StockLocation>>,
     pub(crate) client_report_id: Option<i64>,
     pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
@@ -696,6 +698,8 @@ impl AtlasApp {
             payables_open: false,
             stock_report: Cache::default(),
             stock_report_open: false,
+            stock_report_location: None,
+            stock_locations: Cache::default(),
             client_report_id: None,
             client_report_full: false,
             assist: Cache::default(),
@@ -1357,6 +1361,8 @@ impl AtlasApp {
         self.payables_open = false;
         self.stock_report = Cache::default();
         self.stock_report_open = false;
+        self.stock_report_location = None;
+        self.stock_locations = Cache::default();
         self.client_report_id = None;
         self.client_report_full = false;
         self.assist = Cache::default();
