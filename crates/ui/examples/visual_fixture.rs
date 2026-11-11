@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 struct Fixture {
     app: AtlasApp,
     palette: Palette,
+    route: String,
+    shortcut_reported: bool,
 }
 impl eframe::App for Fixture {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -22,6 +24,14 @@ impl eframe::App for Fixture {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.app.draw(ui, &ctx, &self.palette);
+        if self.route == "stock-shortcut"
+            && !self.shortcut_reported
+            && matches!(self.app.screen, Screen::Shell(Route::Products))
+            && self.app.product_search == "SKU42"
+        {
+            println!("FIXTURE_STOCK_SHORTCUT_OK");
+            self.shortcut_reported = true;
+        }
     }
 }
 fn build(route: &str) -> AtlasApp {
@@ -351,6 +361,8 @@ fn main() -> eframe::Result<()> {
             Ok(Box::new(Fixture {
                 app: build(&route),
                 palette,
+                route: route.clone(),
+                shortcut_reported: false,
             }))
         }),
     )

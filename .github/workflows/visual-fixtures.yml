@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in palette-narrow vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
+            for page in palette-narrow stock-shortcut vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -47,6 +47,18 @@ jobs:
                 if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
                   echo "Narrow palette did not close: $changed"; kill "$pid"; exit 1
                 fi
+              fi
+              if [ "$page" = stock-shortcut ]; then
+                # Check navigation AND keyboard focus using only fictional input.
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window" key ctrl+shift+k
+                sleep 1
+                xdotool type --clearmodifiers SKU42
+                sleep 1
+                if ! grep -q FIXTURE_STOCK_SHORTCUT_OK "visual-output/$page.log"; then
+                  echo "Stock shortcut did not focus the product search"; kill "$pid"; exit 1
+                fi
+                import -window root visual-output/stock-shortcut-focused.png
               fi
               if [ "$page" = client-invoices ]; then
                 # Bring the selected client invoice section into view.
