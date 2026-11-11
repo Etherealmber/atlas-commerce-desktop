@@ -407,6 +407,71 @@ mod tests {
         );
     }
 
+    // Exercise the actual bounded HTTP client with fictional credentials and a
+    // local server; no real account, worker or printable ticket is involved.
+    fn stock_http_fixture(
+        response: Vec<u8>,
+        location: Option<i64>,
+    ) -> (Result<ClientReport, ApiError>, String) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut buffer).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..n]);
+                assert!(request.len() <= 16 * 1024);
+            }
+            let _ = stream.write_all(&response);
+            String::from_utf8(request).unwrap()
+        });
+        let api =
+            ApiClient::new(&format!("http://{address}"), "fixture-device", "Atlas-test").unwrap();
+        api.set_token(Some("fictional-token".into()));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(fetch_stock(&api, location));
+        (result, server.join().unwrap())
+    }
+
+    fn html_response(body: &str) -> Vec<u8> {
+        format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn stock_http_requests_selected_location_with_authentication() {
+        let body = r#"<div class="sheet"><h1>Rapport stock par catégories</h1><div class="stat"><div class="l">Valeur au coût</div><div class="v">99 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">101 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">2 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">0</div></div></div>"#;
+        for (location, path) in [
+            (None, "/api/reports/stock?location_id=all"),
+            (Some(42), "/api/reports/stock?location_id=42"),
+        ] {
+            let (report, request) = stock_http_fixture(html_response(body), location);
+            assert!(report.is_ok());
+            let request = request.to_ascii_lowercase();
+            assert!(request.starts_with(&format!("get {path} http/1.1\r\n")));
+            assert!(request.contains("authorization: bearer fictional-token\r\n"));
+            assert!(request.contains("x-device-fingerprint: fixture-device\r\n"));
+            assert!(!request.lines().next().unwrap().contains("fictional-token"));
+        }
+    }
+
+    #[test]
+    fn stock_http_rejects_redirects_and_non_html() {
+        let redirect = b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+        let (result, _) = stock_http_fixture(redirect, Some(42));
+        assert_eq!(result.unwrap_err().status, 302);
+        let json = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".to_vec();
+        assert!(stock_http_fixture(json, None).0.is_err());
+    }
+
     #[test]
     fn stock_location_chooser_uses_only_valid_options_and_ignores_secrets() {
         let html = r#"<div class="sheet"><h1>Rapport stock — choisir l’entrepôt</h1><form><input type="hidden" name="rt" value="secret-ticket"><select name="location_id"><option value="all">Tous</option><option value="42">Dépôt principal (défaut)</option><option value="42">Doublon</option><option value="-1">Négatif</option><option value="abc">Invalide</option><option value="7">Entrepôt &amp; magasin<script>secret()</script></option></select></form></div>"#;
