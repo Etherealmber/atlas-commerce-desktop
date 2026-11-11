@@ -315,6 +315,9 @@ impl AtlasApp {
     /// Mints a short-lived ticket and opens one allowlisted printable
     /// document in the system browser. The ticket is never logged.
     pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
+        if path == "/api/reports/stock" && !self.role_policy().can_view_reports() {
+            return;
+        }
         if !crate::employees::printable_path(path) {
             self.notice("Document imprimable non autorisé.".to_owned());
             return;
@@ -887,6 +890,30 @@ impl AtlasApp {
     pub fn show_fictional_payables(&mut self) {
         self.payables_open = true;
         self.payables_report.data = Some(crate::client_report::fictional_payables());
+    }
+
+    /// Show an offline, fictional stock report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_stock_report(&mut self) {
+        self.stock_report_open = true;
+        self.stock_report.data = Some(crate::client_report::fictional_stock());
+    }
+
+    /// Load the official stock valuation across all locations for administrators.
+    pub(crate) fn load_stock_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.stock_report_open = true;
+        self.stock_report = Default::default();
+        self.stock_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_stock(&api).await }),
+        );
     }
 
     /// Load the worker's authoritative supplier payables report.
@@ -1483,6 +1510,9 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.stock_report.poll() {
+            ctx.request_repaint();
+        }
         if self.payables_report.poll() {
             ctx.request_repaint();
         }
@@ -1761,6 +1791,7 @@ impl AtlasApp {
             || self.client_report.loading
             || self.receivables_report.loading
             || self.payables_report.loading
+            || self.stock_report.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading

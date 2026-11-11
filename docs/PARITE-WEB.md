@@ -206,3 +206,13 @@ La recherche de stock dispose de `Ctrl/⌘+Maj+K` dans la fenêtre active ;
 ce n'est pas un raccourci global du système. La création de factures, les
 raccourcis système globaux, l'impression ESC/POS
 et les tests matériels restent à réaliser et à valider sur chaque plateforme.
+
+### Rapport natif de valorisation du stock
+
+Depuis Produits, owner/admin peuvent consulter le rapport officiel
+`GET /api/reports/stock?location_id=all` : valeurs et catégories proviennent
+exclusivement du serveur, en HTML rendu comme texte et tableaux inertes.
+L'inventaire vide reste un rapport valide. L'impression ouvre le rapport web
+avec un ticket court, sans JWT dans l'URL. La sélection d'un entrepôt précis
+reste dans le rapport web ; le rendu natif ne propose que tous les
+emplacements. La permission côté interface ne remplace pas celle du serveur.

@@ -482,12 +482,13 @@ fn valid_date(value: &str) -> bool {
 /// explicit allowlist so a server-provided string can never become a
 /// generic authenticated URL.
 pub(crate) fn printable_path(path: &str) -> bool {
-    const FIXED: [&str; 5] = [
+    const FIXED: [&str; 6] = [
         "/api/employees/form/print",
         "/api/reports/employee-situation",
         "/api/reports/client-situation",
         "/api/reports/receivables",
         "/api/reports/payables",
+        "/api/reports/stock",
     ];
     if FIXED.contains(&path) {
         return true;
@@ -544,6 +545,7 @@ mod tests {
             "/api/reports/client-situation",
             "/api/reports/receivables",
             "/api/reports/payables",
+            "/api/reports/stock",
         ] {
             assert!(printable_path(path), "{path}");
         }

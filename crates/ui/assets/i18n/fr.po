@@ -1618,3 +1618,9 @@ msgstr "Rapport des dettes fournisseurs"
 
 msgid "Server figures may differ from the loaded vendor list. Print / PDF opens the official report in your browser."
 msgstr "Les chiffres du serveur peuvent différer de la liste des fournisseurs chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "Stock valuation report"
+msgstr "Rapport de valorisation du stock"
+
+msgid "All locations · values provided by the server. Print / PDF opens the official report in your browser."
+msgstr "Tous les emplacements · valeurs fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."

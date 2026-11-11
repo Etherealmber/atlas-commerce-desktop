@@ -168,6 +168,42 @@ pub(crate) fn fictional_payables() -> ClientReport {
     parse_document(r#"<div class="sheet"><h1>Rapport dettes fournisseurs</h1><div class="grid"><div class="stat"><div class="l">Total à payer</div><div class="v">3 200 MAD</div></div><div class="stat"><div class="l">Factures d'achat</div><div class="v">1</div></div></div><h2>Factures d'achat impayées</h2><table><tr><th>N°</th><th>Fournisseur</th><th>Émission</th><th>Échéance</th><th>Statut</th><th>Reste dû</th></tr><tr><td>AF-DEMO-001</td><td>Fournisseur Exemple</td><td>2026-01-12</td><td>2026-02-12</td><td>partial</td><td>3 200 MAD</td></tr></table></div>"#, "Rapport dettes fournisseurs", 1).expect("fixture is valid")
 }
 
+/// The stock report can legitimately contain no product table. Require its
+/// four summary labels so the warehouse chooser or a proxy page is not shown
+/// as a valuation report. Values remain exactly as supplied by the worker.
+fn parse_stock(html: &str) -> Result<ClientReport, ApiError> {
+    let report = parse_document(html, "Rapport stock par catégories", 0)?;
+    for expected in [
+        "Valeur au coût",
+        "Valeur à la vente",
+        "Marge potentielle",
+        "Alertes stock bas",
+    ] {
+        if !report
+            .blocks
+            .iter()
+            .any(|block| matches!(block, ReportBlock::Statistic { label, .. } if label == expected))
+        {
+            return Err(ApiError::client("Format du rapport de stock non reconnu."));
+        }
+    }
+    Ok(report)
+}
+
+/// Ask the worker for its all-locations report, never calculate local totals.
+pub(crate) async fn fetch_stock(api: &ApiClient) -> Result<ClientReport, ApiError> {
+    let mut url = url::Url::parse(&format!("{}/api/reports/stock", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    url.query_pairs_mut().append_pair("location_id", "all");
+    let html = fetch_html(api, url).await?;
+    parse_stock(&html)
+}
+
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_stock() -> ClientReport {
+    parse_stock(r#"<div class="sheet"><h1>Rapport stock par catégories</h1><p>Entrepôt : Tous les emplacements</p><div class="grid"><div class="stat"><div class="l">Valeur au coût</div><div class="v">3 200 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">5 000 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">1 800 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">1</div></div></div><h2>1. Marbre</h2><table><tr><th>Réf.</th><th>Produit</th><th>Qté</th><th>Coût unit.</th><th>Prix unit.</th><th>Valeur coût</th><th>Valeur vente</th><th>Marge</th></tr><tr><td>SKU-DÉMO</td><td>Pierre Exemple</td><td>10</td><td>320</td><td>500</td><td>3 200</td><td>5 000</td><td>1 800</td></tr></table></div>"#).expect("fixture is valid")
+}
+
 /// The server supplies the payable amounts and applies its own bill filters.
 pub(crate) async fn fetch_payables(api: &ApiClient) -> Result<ClientReport, ApiError> {
     let url = url::Url::parse(&format!("{}/api/reports/payables", api.base_url()))
@@ -289,6 +325,36 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn stock_report_accepts_empty_inventory_but_rejects_a_chooser() {
+        let body = r#"<div class="sheet"><h1>Rapport stock par catégories</h1><div class="stat"><div class="l">Valeur au coût</div><div class="v">0 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">0 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">0 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">0</div></div><p>Aucun produit actif sur cet emplacement.</p><script>secret()</script></div>"#;
+        let report = super::parse_stock(body).unwrap();
+        let dump = format!("{:?}", report.blocks);
+        assert!(dump.contains("Aucun produit actif"));
+        assert!(dump.contains("0 MAD"));
+        assert!(!dump.contains("secret()"));
+        assert!(
+            super::parse_stock(
+                r#"<div class="sheet"><h1>Rapport stock — choisir l’entrepôt</h1></div>"#
+            )
+            .is_err()
+        );
+        assert!(
+            super::parse_stock(r#"<div class="sheet"><h1>Rapport stock par catégories</h1></div>"#)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn stock_report_preserves_server_rows_and_values() {
+        let body = r#"<div class="sheet"><h1>Rapport stock par catégories</h1><div class="stat"><div class="l">Valeur au coût</div><div class="v">99 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">101 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">2 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">1</div></div><h2>Marbre</h2><table><tr><th>Produit</th><th>Qté</th></tr><tr><td>Exemple</td><td>7</td></tr></table></div>"#;
+        let report = super::parse_stock(body).unwrap();
+        let dump = format!("{:?}", report.blocks);
+        for value in ["99 MAD", "101 MAD", "2 MAD", "Exemple", "7"] {
+            assert!(dump.contains(value), "missing {value}");
+        }
     }
 
     #[test]

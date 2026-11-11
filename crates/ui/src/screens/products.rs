@@ -118,6 +118,24 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
+    if app.role_policy().can_view_reports() {
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, t!(app.locale, "Stock valuation report"), palette) {
+                app.load_stock_report();
+            }
+            ui.label(
+                RichText::new(t!(app.locale, "Official server report · administrators"))
+                    .color(palette.secondary)
+                    .size(12.0),
+            );
+        });
+        ui.add_space(12.0);
+        if app.stock_report_open {
+            draw_stock_report(app, ui, palette);
+            ui.add_space(12.0);
+        }
+    }
+
     super::scan::draw_scan_bar(app, ui, palette);
     ui.add_space(10.0);
 
@@ -154,6 +172,35 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.stock_dialog.is_some() {
         draw_stock_dialog(app, ui, palette);
     }
+}
+
+/// Values and inventory rows are supplied by the worker, not local caches.
+fn draw_stock_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Stock valuation report")).strong().size(16.0).color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_stock_report();
+            }
+            if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
+                app.open_printable("/api/reports/stock", &[("location_id", "all".to_owned())]);
+            }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.stock_report_open = false;
+                app.stock_report = Default::default();
+            }
+        });
+        ui.add_space(8.0);
+        ui.label(RichText::new(t!(app.locale, "All locations · values provided by the server. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        if app.stock_report.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.stock_report.error {
+            error_banner(ui, error, palette);
+        } else if let Some(report) = &app.stock_report.data {
+            super::clients::draw_report_blocks(ui, palette, report);
+        }
+    });
 }
 
 /// Stable identifier for the catalogue search, including keyboard shortcuts.
