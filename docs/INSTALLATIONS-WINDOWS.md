@@ -57,8 +57,8 @@ l'exécutable et mémorise l'adresse dans
 et verrouille cette adresse. Le réglage est ensuite en lecture seule :
 l'interface explique qu'une **réinstallation** est nécessaire pour changer de
 serveur. Lors d'une mise à jour, la page est préremplie avec l'adresse
-mémorisée : un serveur auto-hébergé n'est donc jamais remplacé par la valeur
-par une adresse prédéfinie. La désinstallation supprime la valeur de registre, si bien qu'une
+mémorisée : un serveur auto-hébergé n'est donc jamais remplacé par une
+adresse prédéfinie. La désinstallation supprime la valeur de registre, si bien qu'une
 nouvelle installation repart de la page de choix.
 
 Ce choix n'est pas un secret. Il ne remplace ni TLS, ni la vérification

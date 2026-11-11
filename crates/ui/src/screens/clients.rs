@@ -486,7 +486,16 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             }
         }
-        if app.invoice_detail_id.is_some() {
+        let detail_in_list = app.invoice_detail_id.is_some_and(|id| {
+            !app.client_invoices.loading
+                && app.client_invoices.error.is_none()
+                && app.client_invoices.data.as_ref().is_some_and(|invoices| {
+                    invoices.iter().any(|invoice| {
+                        invoice.id == id && crate::client_invoices::is_standard_invoice(invoice)
+                    })
+                })
+        });
+        if detail_in_list {
             ui.add_space(12.0);
             super::sales::draw_invoice_detail(app, ui, palette);
         }

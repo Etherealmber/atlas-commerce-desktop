@@ -1413,8 +1413,11 @@ impl AtlasApp {
                 self.show_requested = true;
                 continue;
             }
-            if self.server_store.requires_verification {
-                // Do not let a link bypass first-run server verification.
+            if self.server_store.requires_verification
+                || self.server_store.selected_url().is_none()
+                || matches!(self.screen, Screen::ServerSetup)
+            {
+                // Preserve links until the server choice and verification are complete.
                 self.pending_deep_links.push(raw);
                 continue;
             }
