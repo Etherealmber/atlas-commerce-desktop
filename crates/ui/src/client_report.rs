@@ -163,6 +163,19 @@ pub(crate) fn fictional_receivables() -> ClientReport {
     parse_document(r#"<div class="sheet"><h1>Rapport créances clients</h1><div class="grid"><div class="stat"><div class="l">Total à recevoir</div><div class="v">4 750 MAD</div></div><div class="stat"><div class="l">Factures</div><div class="v">2</div></div></div><h2>Factures de vente impayées</h2><table><tr><th>N°</th><th>Client</th><th>Émission</th><th>Échéance</th><th>Statut</th><th>Reste dû</th></tr><tr><td>FA-DEMO-001</td><td>Client Exemple</td><td>2026-01-12</td><td>2026-02-12</td><td>partial</td><td>2 500 MAD</td></tr><tr><td>FA-DEMO-002</td><td>Société Démo</td><td>2026-01-20</td><td>—</td><td>sent</td><td>2 250 MAD</td></tr></table></div>"#, "Rapport créances clients", 1).expect("fixture is valid")
 }
 
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_payables() -> ClientReport {
+    parse_document(r#"<div class="sheet"><h1>Rapport dettes fournisseurs</h1><div class="grid"><div class="stat"><div class="l">Total à payer</div><div class="v">3 200 MAD</div></div><div class="stat"><div class="l">Factures d'achat</div><div class="v">1</div></div></div><h2>Factures d'achat impayées</h2><table><tr><th>N°</th><th>Fournisseur</th><th>Émission</th><th>Échéance</th><th>Statut</th><th>Reste dû</th></tr><tr><td>AF-DEMO-001</td><td>Fournisseur Exemple</td><td>2026-01-12</td><td>2026-02-12</td><td>partial</td><td>3 200 MAD</td></tr></table></div>"#, "Rapport dettes fournisseurs", 1).expect("fixture is valid")
+}
+
+/// The server supplies the payable amounts and applies its own bill filters.
+pub(crate) async fn fetch_payables(api: &ApiClient) -> Result<ClientReport, ApiError> {
+    let url = url::Url::parse(&format!("{}/api/reports/payables", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    let html = fetch_html(api, url).await?;
+    parse_document(&html, "Rapport dettes fournisseurs", 1)
+}
+
 /// The server report is authoritative for the aggregate and the listed rows.
 pub(crate) async fn fetch_receivables(api: &ApiClient) -> Result<ClientReport, ApiError> {
     let url = url::Url::parse(&format!("{}/api/reports/receivables", api.base_url()))
@@ -272,6 +285,25 @@ mod tests {
             parse_document(
                 "<div class=\"sheet\"><h1>Rapport créances clients</h1></div>",
                 "Rapport créances clients",
+                1
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn payables_use_the_server_amount_and_reject_other_report_types() {
+        let html = r#"<div class="sheet"><h1>Rapport dettes fournisseurs</h1><div class="stat"><div class="l">Total à payer</div><div class="v">3 200 MAD</div></div><table><tr><th>N°</th><th>Reste dû</th></tr><tr><td>AF-1</td><td>3 200 MAD</td></tr></table><script>do_not_run()</script></div>"#;
+        let report = parse_document(html, "Rapport dettes fournisseurs", 1).unwrap();
+        let dump = format!("{:?}", report.blocks);
+        assert!(dump.contains("3 200 MAD"));
+        assert!(dump.contains("AF-1"));
+        assert!(!dump.contains("do_not_run"));
+        assert!(parse_document(html, "Rapport créances clients", 1).is_err());
+        assert!(
+            parse_document(
+                "<div class=\"sheet\"><h1>Rapport dettes fournisseurs</h1></div>",
+                "Rapport dettes fournisseurs",
                 1
             )
             .is_err()

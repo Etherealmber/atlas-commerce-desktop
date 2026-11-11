@@ -118,7 +118,7 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; factures fournisseurs en lecture seule avec impression/PDF officiels. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Partiel — liste, recherche, statut et catégorie, détail avec historique des paiements, paiement, acompte, démission et réactivation, fiche d'embauche et situation RH imprimables ; création réduite aux champs essentiels. Manquent édition complète, pièce d'identité chiffrée et pointage |
-| `Reports`, `Balance` | Partiel — `client-situation` et le rapport officiel de créances clients sont lus dans l’application ; impression officielle ouverte dans le navigateur via `link-ticket`. Les autres rapports et la balance restent à couvrir |
+| `Reports`, `Balance` | Partiel — `client-situation` et les rapports officiels de créances clients et dettes fournisseurs sont lus dans l’application ; impression officielle ouverte dans le navigateur via `link-ticket`. Les autres rapports et la balance restent à couvrir |
 | `Bank` | Non (rapprochement CSV) |
 | `Reimbursements` | Partiel — les avoirs `remboursement` sont listés dans Ventes (recherche numéro/client, ouverture de la facture liée, impression officielle) ; création, suppression OTP et envoi d'e-mail restent dans le web |
 | `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |

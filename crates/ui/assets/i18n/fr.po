@@ -1612,3 +1612,9 @@ msgstr "Rapport officiel du serveur · administrateurs"
 
 msgid "Server figures may differ from the loaded client list. Print / PDF opens the official report in your browser."
 msgstr "Les chiffres du serveur peuvent différer de la liste des clients chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "Supplier payables report"
+msgstr "Rapport des dettes fournisseurs"
+
+msgid "Server figures may differ from the loaded vendor list. Print / PDF opens the official report in your browser."
+msgstr "Les chiffres du serveur peuvent différer de la liste des fournisseurs chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."

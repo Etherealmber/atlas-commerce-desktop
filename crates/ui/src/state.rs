@@ -502,6 +502,8 @@ pub struct AtlasApp {
     pub(crate) client_report: Cache<crate::client_report::ClientReport>,
     pub(crate) receivables_report: Cache<crate::client_report::ClientReport>,
     pub(crate) receivables_open: bool,
+    pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) payables_open: bool,
     pub(crate) client_report_id: Option<i64>,
     pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
@@ -686,6 +688,8 @@ impl AtlasApp {
             client_report: Cache::default(),
             receivables_report: Cache::default(),
             receivables_open: false,
+            payables_report: Cache::default(),
+            payables_open: false,
             client_report_id: None,
             client_report_full: false,
             assist: Cache::default(),
@@ -1343,6 +1347,8 @@ impl AtlasApp {
         self.client_report = Cache::default();
         self.receivables_report = Cache::default();
         self.receivables_open = false;
+        self.payables_report = Cache::default();
+        self.payables_open = false;
         self.client_report_id = None;
         self.client_report_full = false;
         self.assist = Cache::default();

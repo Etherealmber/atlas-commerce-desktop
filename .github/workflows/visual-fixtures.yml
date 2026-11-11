@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
+            for page in vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -99,6 +99,15 @@ jobs:
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
+      - name: Review payables screenshot
+        run: |
+          convert visual-output/vendor-payables.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-payables-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
       - name: Review receivables screenshot
         run: |
           convert visual-output/client-receivables.png -resize 640x400 -quality 30 /tmp/review.jpg

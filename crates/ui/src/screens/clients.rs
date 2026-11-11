@@ -567,7 +567,7 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
 }
 
 /// Render only inert text and values returned by the worker, without calculations.
-fn draw_report_blocks(
+pub(crate) fn draw_report_blocks(
     ui: &mut egui::Ui,
     palette: &Palette,
     report: &crate::client_report::ClientReport,

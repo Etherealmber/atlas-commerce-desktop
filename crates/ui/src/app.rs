@@ -881,6 +881,30 @@ impl AtlasApp {
         self.receivables_report.data = Some(crate::client_report::fictional_receivables());
     }
 
+    /// Show an offline, fictional payables report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_payables(&mut self) {
+        self.payables_open = true;
+        self.payables_report.data = Some(crate::client_report::fictional_payables());
+    }
+
+    /// Load the worker's authoritative supplier payables report.
+    pub(crate) fn load_payables_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.payables_open = true;
+        self.payables_report = Default::default();
+        self.payables_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_payables(&api).await }),
+        );
+    }
+
     /// Load the worker's authoritative receivables report for administrators.
     pub(crate) fn load_receivables_report(&mut self) {
         if !self.role_policy().can_view_reports() {
@@ -1451,6 +1475,9 @@ impl AtlasApp {
         if self.clients.poll() {
             ctx.request_repaint();
         }
+        if self.payables_report.poll() {
+            ctx.request_repaint();
+        }
         if self.receivables_report.poll() {
             ctx.request_repaint();
         }
@@ -1725,6 +1752,7 @@ impl AtlasApp {
             || self.client_invoices.loading
             || self.client_report.loading
             || self.receivables_report.loading
+            || self.payables_report.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading
