@@ -618,11 +618,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 if report.ok {
                                     ui.label(
                                         RichText::new(format!(
-                                            "{} · D1: {} · R2: {}",
-                                            report
-                                                .environment
-                                                .clone()
-                                                .unwrap_or_else(|| "env ?".to_owned()),
+                                            "D1: {} · R2: {}",
                                             if report.database { "✓" } else { "✗" },
                                             if report.storage { "✓" } else { "✗" }
                                         ))
@@ -755,11 +751,10 @@ fn start_probe(app: &mut AtlasApp) {
 }
 
 fn spawn_probe(app: &mut AtlasApp, url: String) {
-    let fingerprint = app.identity.fingerprint().to_owned();
     let ua = atlas_core::DeviceIdentity::user_agent();
     let job = app
         .runner
-        .spawn(async move { probe::probe(&url, &fingerprint, &ua).await });
+        .spawn(async move { crate::server_probe::probe(&url, &ua).await });
     app.server_form.probe_job = Some(job);
     app.server_form.probe_report = None;
 }

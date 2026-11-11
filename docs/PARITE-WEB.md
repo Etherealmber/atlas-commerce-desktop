@@ -177,3 +177,30 @@ entrée de navigation, et ne modifie jamais le contrat du worker.
    et les écrans natifs remplaçant About/WhatsNew. *L'édition du profil
    (`PATCH /api/auth/me`, nom affiché, e-mail, téléphone, note, URL d'avatar)
    est livrée ; le mot de passe reste verrouillé côté serveur.*
+
+## Audit du blueprint desktop et de l'application Android
+
+Audit statique des dépôts `atlas-commerce` à `cf951397553dc8749f15c96b33abf02d4a360e35`
+et `atlas-commerce-android` à `21aa6cf3435f694ee54366674d4bd4d2bfc48060`.
+Le desktop actuel utilise Rust/egui, pas Tauri, React ou Axum. Son coffre v1
+utilise le magasin d'identifiants du système, pas une base SQLite chiffrée.
+
+Les migrations D1 réelles sont `0001_audit_indexes_and_money.sql`,
+`0002_phase2_indexes.sql`, `0003_phase3_observability.sql`,
+`0004_last_purchase_cost.sql`, `0005_qr_privacy.sql`,
+`0006_receipt_client_situation.sql`, `0007_product_list_indexes.sql` et
+`0008_app_users_profile_columns.sql`. Leurs noms et contenus diffèrent de
+ceux du blueprint ; `0001` documente notamment les montants en unités
+majeures, et `0006` ajoute un champ à `receipts`. Elles dépendent du schéma D1
+serveur et ne constituent pas un moteur de synchronisation local. Les recopier
+sur une base desktop vide ou recalculer les finances en centimes ne prouverait
+pas la parité et pourrait créer des écarts financiers.
+
+Sur Android, `OfflineCache.kt` chiffre des instantanés produits et financiers
+et les isole par serveur et compte ; `ShellViewModel.kt` interroge les alertes
+et actions mobiles toutes les 25 secondes, avec filtrage par rôle et auteur.
+Ce constat ne démontre pas l'existence d'une file locale de mutations ni d'un
+protocole de résolution de conflits. Le desktop ne prétend donc pas fournir
+une synchronisation hors ligne ou des notifications Android équivalentes.
+La création de factures, les raccourcis système globaux, l'impression ESC/POS
+et les tests matériels restent à réaliser et à valider sur chaque plateforme.
