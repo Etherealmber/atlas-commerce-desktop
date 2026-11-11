@@ -133,7 +133,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 /// the web Quotes page. Loading kind=all includes both historical statuses.
 /// Creating, converting and deleting quotes remain in the web application.
 fn is_quote(invoice: &atlas_api::models::Invoice) -> bool {
-    matches!(invoice.status.as_deref(), Some("quote" | "devis"))
+    invoice.status.as_deref().is_some_and(|status| {
+        status.eq_ignore_ascii_case("quote") || status.eq_ignore_ascii_case("devis")
+    })
 }
 
 fn quote_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -1005,7 +1007,7 @@ mod invoice_search_tests {
 
     #[test]
     fn quote_list_only_includes_worker_quote_statuses() {
-        for status in ["quote", "devis"] {
+        for status in ["quote", "devis", "Quote", "DEVIS"] {
             let doc = Invoice {
                 status: Some(status.into()),
                 ..Default::default()
