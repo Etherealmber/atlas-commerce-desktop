@@ -174,6 +174,10 @@ impl RolePolicy {
             }
     }
 
+    pub(crate) fn can_view_reports(self) -> bool {
+        self.admin
+    }
+
     pub(crate) fn can_manage_stock(self) -> bool {
         self.office || self.stock
     }
@@ -227,6 +231,9 @@ pub struct ServerSetupForm {
 /// Login form and its in-flight calls.
 #[derive(Default)]
 pub struct LoginState {
+    /// Auto-start only once per login entry; errors and cancellation must
+    /// remain visible until the user explicitly retries.
+    pub browser_auto_started: bool,
     pub username: String,
     pub password: String,
     pub otp: String,
@@ -269,6 +276,8 @@ pub struct UpdateState {
     /// Version already downloaded by the auto-download setting; the next
     /// install reuses fastframe-update's staged copy instead of downloading.
     pub ready_version: Option<String>,
+    /// Version requested by the active download, not the most recent check.
+    pub download_version: Option<String>,
 }
 
 /// Agent conversation.
@@ -491,6 +500,14 @@ pub struct AtlasApp {
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
     pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) receivables_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) receivables_open: bool,
+    pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) payables_open: bool,
+    pub(crate) stock_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) stock_report_open: bool,
+    pub(crate) stock_report_location: Option<i64>,
+    pub(crate) stock_locations: Cache<Vec<crate::client_report::StockLocation>>,
     pub(crate) client_report_id: Option<i64>,
     pub(crate) client_report_full: bool,
     pub assist: Cache<AssistProvider>,
@@ -545,6 +562,9 @@ pub struct AtlasApp {
     pub(crate) receipts_open: bool,
     /// Public so the visual fixture can open the refunds panel.
     pub refunds_open: bool,
+    /// Open the read-only quotes list within Sales.
+    pub quotes_open: bool,
+    pub(crate) quote_search: String,
     pub(crate) refund_search: String,
     pub(crate) receipt_search: String,
     pub alerts: Cache<Vec<Alert>>,
@@ -611,7 +631,9 @@ impl AtlasApp {
         let vault_worker =
             atlas_core::vault_worker::VaultWorker::new(paths.browser_authority_file());
         let locale = Locale::from_tag(&settings.language);
-        let screen = if session.is_some() {
+        let screen = if server_store.requires_verification {
+            Screen::ServerSetup
+        } else if session.is_some() {
             Screen::Splash
         } else if !server_store.onboarding_done || server_store.selected_url().is_none() {
             Screen::Onboarding
@@ -670,6 +692,14 @@ impl AtlasApp {
             key_create_job: None,
             report_job: None,
             client_report: Cache::default(),
+            receivables_report: Cache::default(),
+            receivables_open: false,
+            payables_report: Cache::default(),
+            payables_open: false,
+            stock_report: Cache::default(),
+            stock_report_open: false,
+            stock_report_location: None,
+            stock_locations: Cache::default(),
             client_report_id: None,
             client_report_full: false,
             assist: Cache::default(),
@@ -733,6 +763,8 @@ impl AtlasApp {
             receipts: Cache::default(),
             receipts_open: false,
             refunds_open: false,
+            quotes_open: false,
+            quote_search: String::new(),
             refund_search: String::new(),
             receipt_search: String::new(),
             alerts: Cache::default(),
@@ -1305,6 +1337,8 @@ impl AtlasApp {
         self.receipt_search.clear();
         self.refunds_open = false;
         self.refund_search.clear();
+        self.quotes_open = false;
+        self.quote_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
         self.nav_badges_retry_at = None;
@@ -1321,6 +1355,14 @@ impl AtlasApp {
         self.key_create_job = None;
         self.report_job = None;
         self.client_report = Cache::default();
+        self.receivables_report = Cache::default();
+        self.receivables_open = false;
+        self.payables_report = Cache::default();
+        self.payables_open = false;
+        self.stock_report = Cache::default();
+        self.stock_report_open = false;
+        self.stock_report_location = None;
+        self.stock_locations = Cache::default();
         self.client_report_id = None;
         self.client_report_full = false;
         self.assist = Cache::default();
@@ -1391,6 +1433,17 @@ mod role_policy_tests {
         ] {
             assert!(!stock.allows_route(route));
         }
+    }
+
+    #[test]
+    fn accounting_reports_are_shown_only_to_owners_and_admins() {
+        for role in ["owner", "admin", "OWNER"] {
+            assert!(RolePolicy::from_role(Some(role)).can_view_reports());
+        }
+        for role in ["secretaire", "stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).can_view_reports());
+        }
+        assert!(!RolePolicy::from_role(None).can_view_reports());
     }
 
     #[test]

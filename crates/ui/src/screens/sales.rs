@@ -77,6 +77,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(12.0);
 
     ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Quotes"), palette) {
+            app.quotes_open = !app.quotes_open;
+            if app.quotes_open && app.invoices.data.is_none() && !app.invoices.loading {
+                app.load_invoices();
+            }
+        }
         if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
             app.receipts_open = !app.receipts_open;
             if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
@@ -90,6 +96,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     });
+    if app.quotes_open {
+        ui.add_space(12.0);
+        quote_list(app, ui, palette);
+        ui.add_space(12.0);
+    }
     if app.receipts_open {
         ui.add_space(12.0);
         receipt_list(app, ui, palette);
@@ -116,6 +127,119 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         quick_sale_form(app, ui, palette);
     });
+}
+
+/// Quotes are invoices whose status is `quote` or legacy `devis`, as in
+/// the web Quotes page. Loading kind=all includes both historical statuses.
+/// Creating, converting and deleting quotes remain in the web application.
+fn is_quote(invoice: &atlas_api::models::Invoice) -> bool {
+    invoice.status.as_deref().is_some_and(|status| {
+        status.eq_ignore_ascii_case("quote") || status.eq_ignore_ascii_case("devis")
+    })
+}
+
+fn quote_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(t!(app.locale, "Quotes"))
+                    .strong()
+                    .color(palette.text),
+            );
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_invoices();
+            }
+            let width = (ui.available_width() - 220.0).clamp(160.0, 380.0);
+            widgets::search_field(
+                ui,
+                &mut app.quote_search,
+                t!(app.locale, "Number or client"),
+                width,
+            );
+        });
+        ui.label(
+            RichText::new(t!(
+                app.locale,
+                "Read-only. Create or convert a quote in the web application."
+            ))
+            .color(palette.secondary)
+            .size(12.0),
+        );
+        if app.invoices.loading && app.invoices.data.is_none() {
+            super::centered_spinner(ui, palette);
+            return;
+        }
+        if let Some(error) = &app.invoices.error {
+            error_banner(ui, error, palette);
+            return;
+        }
+        let Some(invoices) = app.invoices.data.clone() else {
+            return;
+        };
+        let query = crate::shortcuts::normalize(app.quote_search.trim());
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|data| data.currency().to_owned())
+            .unwrap_or_else(|| "MAD".to_owned());
+        let mut found = false;
+        for quote in invoices
+            .into_iter()
+            .filter(|invoice| is_quote(invoice) && invoice_matches(invoice, &query))
+        {
+            found = true;
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(
+                        quote
+                            .number
+                            .clone()
+                            .unwrap_or_else(|| format!("#{}", quote.id)),
+                    )
+                    .strong()
+                    .color(palette.text),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        quote.client_name.as_deref().unwrap_or("—"),
+                        quote.issue_date.as_deref().unwrap_or("—"),
+                        money(quote.total, &currency)
+                    ))
+                    .color(palette.secondary),
+                );
+                if secondary_button(ui, t!(app.locale, "Open"), palette) {
+                    app.open_invoice_detail(quote.id);
+                }
+                if secondary_button(ui, t!(app.locale, "Print"), palette) {
+                    app.open_printable(&format!("/api/invoices/{}/print", quote.id), &[]);
+                }
+            });
+        }
+        if !found {
+            ui.label(RichText::new(t!(app.locale, "No matching quote.")).color(palette.secondary));
+        }
+    });
+}
+
+/// The web also recognises historical WR-numbered credits when older rows
+/// lack the status or document-kind marker.
+fn is_refund(invoice: &atlas_api::models::Invoice) -> bool {
+    invoice
+        .status
+        .as_deref()
+        .is_some_and(|value| value.eq_ignore_ascii_case("remboursement"))
+        || invoice
+            .doc_kind
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("remboursement"))
+        || invoice
+            .number
+            .as_deref()
+            .is_some_and(|number| number.to_ascii_uppercase().starts_with("WR"))
 }
 
 /// Credit notes (`status`/`doc_kind` = `remboursement`) from the same
@@ -158,13 +282,7 @@ fn refund_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .as_ref()
             .map(|data| data.currency().to_owned())
             .unwrap_or_else(|| "MAD".to_owned());
-        let refunds: Vec<_> = invoices
-            .into_iter()
-            .filter(|invoice| {
-                invoice.status.as_deref() == Some("remboursement")
-                    || invoice.doc_kind.as_deref() == Some("remboursement")
-            })
-            .collect();
+        let refunds: Vec<_> = invoices.into_iter().filter(is_refund).collect();
         if refunds.is_empty() {
             ui.label(RichText::new(t!(app.locale, "No refund recorded.")).color(palette.secondary));
             return;
@@ -338,7 +456,7 @@ fn poll_sale_job(app: &mut AtlasApp) {
 
 fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.label(
-        RichText::new(t!(app.locale, "Invoice history"))
+        RichText::new(t!(app.locale, "Sales and invoice history"))
             .color(palette.text)
             .strong()
             .size(15.0),
@@ -382,7 +500,7 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let mut found = false;
     for invoice in invoices
         .into_iter()
-        .filter(|invoice| invoice_matches(invoice, &query))
+        .filter(|invoice| is_sale_history(invoice) && invoice_matches(invoice, &query))
     {
         found = true;
         ui.horizontal(|ui| {
@@ -536,6 +654,24 @@ pub(crate) fn draw_invoice_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette
             );
         }
     });
+}
+
+/// Sales history contains standard invoices and quick-sale tickets, not
+/// quotes or credit notes which have dedicated lists above.
+fn is_sale_history(invoice: &atlas_api::models::Invoice) -> bool {
+    let kind = invoice
+        .doc_kind
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let status = invoice.status.as_deref().unwrap_or("").to_ascii_lowercase();
+    let number = invoice.number.as_deref().unwrap_or("");
+    !is_refund(invoice)
+        && !matches!(kind.as_str(), "quote" | "devis" | "remboursement")
+        && !matches!(status.as_str(), "quote" | "devis" | "remboursement")
+        && !["DV", "DE", "WR"]
+            .iter()
+            .any(|prefix| number.starts_with(prefix))
 }
 
 /// Filter only the invoices already returned by the server; this is not a
@@ -829,6 +965,63 @@ mod tests {
 mod invoice_search_tests {
     use super::invoice_matches;
     use atlas_api::models::Invoice;
+
+    #[test]
+    fn legacy_wr_numbers_are_credit_notes() {
+        let legacy = Invoice {
+            number: Some("wr-42".into()),
+            ..Default::default()
+        };
+        assert!(super::is_refund(&legacy));
+        let ordinary = Invoice {
+            number: Some("FA-42".into()),
+            ..Default::default()
+        };
+        assert!(!super::is_refund(&ordinary));
+    }
+
+    #[test]
+    fn history_keeps_sales_but_not_quotes_or_credits() {
+        for number in ["FA-1", "VR-1"] {
+            let doc = Invoice {
+                number: Some(number.into()),
+                ..Default::default()
+            };
+            assert!(super::is_sale_history(&doc));
+        }
+        for number in ["DV-1", "DE-1", "WR-1"] {
+            let doc = Invoice {
+                number: Some(number.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_sale_history(&doc));
+        }
+        for status in ["quote", "devis", "remboursement"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_sale_history(&doc));
+        }
+    }
+
+    #[test]
+    fn quote_list_only_includes_worker_quote_statuses() {
+        for status in ["quote", "devis", "Quote", "DEVIS"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(super::is_quote(&doc));
+        }
+        for status in ["paid", "cancelled", "remboursement"] {
+            let doc = Invoice {
+                status: Some(status.into()),
+                ..Default::default()
+            };
+            assert!(!super::is_quote(&doc));
+        }
+    }
 
     #[test]
     fn matches_number_and_accent_folded_client_name() {

@@ -21,6 +21,27 @@ pub(crate) async fn fetch(api: &ApiClient, client_id: i64) -> Result<Vec<Invoice
     fetch_path(api, &format!("/api/invoices?client={client_id}"), None).await
 }
 
+/// Mirrors `isStandardInvoice` in the web Invoices page. The worker's
+/// client filter alone also returns quotes and credit notes; those are not
+/// sales invoices and must not be presented as such. The situation report is
+/// deliberately different: the server includes VR tickets and WR credits.
+pub(crate) fn is_standard_invoice(invoice: &Invoice) -> bool {
+    let kind = invoice
+        .doc_kind
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let status = invoice.status.as_deref().unwrap_or("").to_ascii_lowercase();
+    let number = invoice.number.as_deref().unwrap_or("");
+    !matches!(
+        kind.as_str(),
+        "quick_sale" | "ticket" | "quote" | "devis" | "remboursement"
+    ) && !matches!(status.as_str(), "quote" | "devis" | "remboursement")
+        && !["VR", "WR", "DV", "DE"]
+            .iter()
+            .any(|prefix| number.starts_with(prefix))
+}
+
 /// Native, read-only representation of the invoice detail endpoint.
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct InvoiceDetail {
@@ -241,6 +262,41 @@ async fn fetch_path<T: serde::de::DeserializeOwned>(
 mod tests {
     use super::{BankReconciliation, Bill, Envelope, InvoiceDetail, LedgerReconciliation, Receipt};
     use atlas_api::models::Invoice;
+
+    #[test]
+    fn client_invoices_follow_web_document_classification() {
+        let invoice = Invoice {
+            number: Some("FA-1".into()),
+            ..Default::default()
+        };
+        assert!(super::is_standard_invoice(&invoice));
+        for number in ["VR-1", "WR-1", "DV-1", "DE-1"] {
+            let other = Invoice {
+                number: Some(number.into()),
+                ..invoice.clone()
+            };
+            assert!(!super::is_standard_invoice(&other));
+        }
+        for kind in ["quick_sale", "ticket", "quote", "devis", "remboursement"] {
+            let other = Invoice {
+                doc_kind: Some(kind.into()),
+                ..invoice.clone()
+            };
+            assert!(!super::is_standard_invoice(&other));
+        }
+        for status in ["quote", "devis", "remboursement"] {
+            let other = Invoice {
+                status: Some(status.into()),
+                ..invoice.clone()
+            };
+            assert!(!super::is_standard_invoice(&other));
+        }
+        let cancelled = Invoice {
+            status: Some("cancelled".into()),
+            ..invoice
+        };
+        assert!(super::is_standard_invoice(&cancelled));
+    }
 
     #[test]
     fn decodes_the_worker_list_envelope() {

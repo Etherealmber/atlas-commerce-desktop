@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 struct Fixture {
     app: AtlasApp,
     palette: Palette,
+    route: String,
+    shortcut_reported: bool,
 }
 impl eframe::App for Fixture {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -21,7 +23,23 @@ impl eframe::App for Fixture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.route == "stock-shortcut" && ctx.input(|input| input.key_pressed(egui::Key::K)) {
+            println!(
+                "FIXTURE_KEY mods={:?} events={:?} focus={:?}",
+                ctx.input(|input| input.modifiers),
+                ctx.input(|input| input.events.clone()),
+                ctx.memory(|memory| memory.focused())
+            );
+        }
         self.app.draw(ui, &ctx, &self.palette);
+        if self.route == "stock-shortcut"
+            && !self.shortcut_reported
+            && matches!(self.app.screen, Screen::Shell(Route::Products))
+            && self.app.product_search == "SKU42"
+        {
+            println!("FIXTURE_STOCK_SHORTCUT_OK");
+            self.shortcut_reported = true;
+        }
     }
 }
 fn build(route: &str) -> AtlasApp {
@@ -56,6 +74,7 @@ fn build(route: &str) -> AtlasApp {
             }],
             onboarding_done: true,
             locked: true,
+            requires_verification: false,
         },
         Some(session),
         AccountStore::default(),
@@ -65,16 +84,29 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "client-editor" => Route::Clients,
-        "products" | "stock" => Route::Products,
-        "sales" => Route::Sales,
+        "clients" | "client-editor" | "client-invoices" | "client-receivables" => Route::Clients,
+        "products" | "stock" | "stock-report" => Route::Products,
+        "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
-        "vendors" => Route::Vendors,
+        "vendors" | "vendor-payables" => Route::Vendors,
         "employees" => Route::Employees,
         "settings" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
+    if route == "login" || route == "login-qr" {
+        // Error/retry state only: never start a network login in the fixture.
+        app.screen = Screen::Login;
+        app.session = None;
+        app.login.browser_auto_started = true;
+        app.login.error = Some("Connexion fictive indisponible.".into());
+    }
+    if route == "login-qr" {
+        // Inert deep-link state: no token and no server request.
+        app.login.error = None;
+        app.qr.active = true;
+        app.qr.status = "claimed".into();
+    }
     if route == "settings" {
         // Fictional update state: proves the title-bar icon and the
         // "restart to install" banner without contacting GitHub.
@@ -145,6 +177,15 @@ fn build(route: &str) -> AtlasApp {
             total: 1500.0,
             amount_paid: Some(250.0),
             status: Some("partial".into()),
+            ..Invoice::default()
+        },
+        Invoice {
+            id: 3,
+            number: Some("DV-DEMO-001".into()),
+            client_name: Some("Client Exemple".into()),
+            issue_date: Some("2026-01-21".into()),
+            total: 2500.0,
+            status: Some("quote".into()),
             ..Invoice::default()
         },
         Invoice {
@@ -233,6 +274,26 @@ fn build(route: &str) -> AtlasApp {
     if route == "sales" {
         app.refunds_open = true;
     }
+    if route == "quotes" {
+        app.quotes_open = true;
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "client-receivables" {
+        app.show_fictional_receivables();
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "vendor-payables" {
+        app.show_fictional_payables();
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "stock-report" {
+        app.show_fictional_stock_report();
+    }
+    if route == "client-invoices" {
+        app.selected_client = Some(1);
+        app.client_invoice_id = Some(1);
+        app.client_invoices.data = app.invoices.data.clone();
+    }
     if route == "employees" {
         app.employee_detail_id = Some(1);
         app.employee_detail.data = Some(
@@ -285,12 +346,20 @@ fn build(route: &str) -> AtlasApp {
     if route == "agent" {
         app.agent_drawer_open = true;
     }
+    if route == "palette-narrow" {
+        app.palette_open = true;
+    }
     app
 }
 fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
+    let size = if route == "palette-narrow" {
+        [640.0, 480.0]
+    } else {
+        [1280.0, 800.0]
+    };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size(size),
         ..Default::default()
     };
     eframe::run_native(
@@ -304,6 +373,8 @@ fn main() -> eframe::Result<()> {
             Ok(Box::new(Fixture {
                 app: build(&route),
                 palette,
+                route: route.clone(),
+                shortcut_reported: false,
             }))
         }),
     )

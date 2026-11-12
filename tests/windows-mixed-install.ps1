@@ -29,7 +29,7 @@ try {
     if ($p.ExitCode -ne 0) { throw "MSI install failed: $($p.ExitCode)" }
     $msiInstalled = $true
     if (-not (Test-Path (Join-Path $msiDir 'atlas-commerce-desktop.exe'))) { throw 'MSI binary missing' }
-    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$innoDir`"")
+    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SERVERURL=https://shop.example.invalid', "/DIR=`"$innoDir`"")
     $p = Start-Process -FilePath $InnoSetup -ArgumentList $args -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "Inno install failed: $($p.ExitCode)" }
     if (-not (Test-Path $key) -or -not (Test-Path (Join-Path $innoDir 'atlas-commerce-desktop.exe'))) { throw 'Inno install missing' }

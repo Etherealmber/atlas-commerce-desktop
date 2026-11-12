@@ -15,6 +15,29 @@ use crate::t;
 use crate::theme::Palette;
 use crate::tray::TrayCommand;
 
+/// Choose the screen to resume after a mandatory update is withdrawn.
+fn update_gate_destination(
+    restoring: bool,
+    signed_in: bool,
+    has_server: bool,
+    route: Route,
+) -> Screen {
+    if restoring {
+        Screen::Splash
+    } else if signed_in {
+        Screen::Shell(route)
+    } else if has_server {
+        Screen::Login
+    } else {
+        Screen::ServerSetup
+    }
+}
+
+/// A staged download may only be advertised for its own manifest version.
+fn staged_version_matches(staged: Option<&str>, manifest: &str) -> bool {
+    staged == Some(manifest)
+}
+
 impl AtlasApp {
     /// Opens a session: persist it, remember the account, rebuild the
     /// authenticated client and load the first shell data.
@@ -292,6 +315,9 @@ impl AtlasApp {
     /// Mints a short-lived ticket and opens one allowlisted printable
     /// document in the system browser. The ticket is never logged.
     pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
+        if path == "/api/reports/stock" && !self.role_policy().can_view_reports() {
+            return;
+        }
         if !crate::employees::printable_path(path) {
             self.notice("Document imprimable non autorisé.".to_owned());
             return;
@@ -850,6 +876,101 @@ impl AtlasApp {
         }
     }
 
+    /// Show an offline, fictional receivables report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_receivables(&mut self) {
+        self.receivables_open = true;
+        self.receivables_report.data = Some(crate::client_report::fictional_receivables());
+    }
+
+    /// Show an offline, fictional payables report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_payables(&mut self) {
+        self.payables_open = true;
+        self.payables_report.data = Some(crate::client_report::fictional_payables());
+    }
+
+    /// Show an offline, fictional stock report in the visual fixture only.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_stock_report(&mut self) {
+        self.stock_report_open = true;
+        self.stock_report.data = Some(crate::client_report::fictional_stock());
+        self.stock_locations.data = Some(vec![crate::client_report::StockLocation {
+            id: 42,
+            label: "Entrepôt Exemple (défaut)".into(),
+        }]);
+    }
+
+    /// Load the official stock valuation for the selected location.
+    pub(crate) fn load_stock_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        if !self.stock_report_open {
+            self.load_stock_locations();
+        }
+        self.stock_report_open = true;
+        self.stock_report = Default::default();
+        let location = self.stock_report_location;
+        self.stock_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_stock(&api, location).await }),
+        );
+    }
+
+    /// Fetch the locations offered by the worker's official report chooser.
+    pub(crate) fn load_stock_locations(&mut self) {
+        if !self.role_policy().can_view_reports() || self.stock_locations.loading {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.stock_locations = Default::default();
+        self.stock_locations.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_stock_locations(&api).await }),
+        );
+    }
+
+    /// Load the worker's authoritative supplier payables report.
+    pub(crate) fn load_payables_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.payables_open = true;
+        self.payables_report = Default::default();
+        self.payables_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_payables(&api).await }),
+        );
+    }
+
+    /// Load the worker's authoritative receivables report for administrators.
+    pub(crate) fn load_receivables_report(&mut self) {
+        if !self.role_policy().can_view_reports() {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.receivables_open = true;
+        self.receivables_report = Default::default();
+        self.receivables_report.start(
+            self.runner
+                .spawn(async move { crate::client_report::fetch_receivables(&api).await }),
+        );
+    }
+
     /// Load the server's report as inert native text and tables.
     pub(crate) fn load_client_report(&mut self, client: &atlas_api::models::Client, full: bool) {
         if !self.role_policy().allows_route(Route::Clients) {
@@ -982,7 +1103,7 @@ impl AtlasApp {
             match result {
                 Ok(url) => {
                     if let Err(error) = open::that(url.as_str()) {
-                        log::warn!("open browser report: {error}");
+                        log::warn!("could not open browser report: {:?}", error.kind());
                         self.notice(
                             t!(self.locale, "The system could not open the browser.").into_owned(),
                         );
@@ -1075,6 +1196,7 @@ impl AtlasApp {
             .last_manifest
             .as_ref()
             .map(|manifest| manifest.version.clone());
+        self.update.download_version = expected.clone();
         let job: atlas_core::Job<Result<(), String>> = self.runner.spawn(async move {
             // Pin the blocking closure's error type: without this, inference
             // starts from the &str guard below and resolves it to unsized str.
@@ -1164,8 +1286,16 @@ impl AtlasApp {
                     if let Some(manifest) = checked.manifest {
                         self.apply_manifest(manifest);
                     } else if !not_modified {
-                        self.update.up_to_date_at = Some(Instant::now());
-                        self.update.error = None;
+                        // No manifest (e.g. an asset still being uploaded)
+                        // does not establish that the installation is current.
+                        self.update.up_to_date_at = None;
+                        self.update.error = Some(
+                            t!(
+                                self.locale,
+                                "Update information is not available yet. Try again later."
+                            )
+                            .into_owned(),
+                        );
                     }
                 }
                 Err(error) => {
@@ -1198,11 +1328,16 @@ impl AtlasApp {
                         self.update.progress = None;
                         self.update.stage =
                             t!(self.locale, "Update downloaded. Restart to install.").into_owned();
-                        self.update.ready_version = self
-                            .update
-                            .last_manifest
-                            .as_ref()
-                            .map(|manifest| manifest.version.clone());
+                        // A check may have completed while the download was
+                        // running. Never label the older staged file as the
+                        // newer manifest or the other channel.
+                        let downloaded = self.update.download_version.take();
+                        self.update.ready_version = downloaded.filter(|version| {
+                            self.update
+                                .last_manifest
+                                .as_ref()
+                                .is_some_and(|manifest| &manifest.version == version)
+                        });
                         if let Some(version) = self.update.ready_version.clone() {
                             self.notice(format!(
                                 "{} v{version}",
@@ -1211,11 +1346,13 @@ impl AtlasApp {
                         }
                     }
                     Ok(()) => {
+                        self.update.download_version = None;
                         self.update.stage = t!(self.locale, "Installing…").into_owned();
                         self.wants_quit = true;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     Err(error) => {
+                        self.update.download_version = None;
                         self.update.auto_download = false;
                         self.update.progress = None;
                         self.update.error = Some(error);
@@ -1227,20 +1364,33 @@ impl AtlasApp {
 
     fn apply_manifest(&mut self, manifest: UpdateManifest) {
         self.update.release_notes = Some(manifest.clone());
+        // A staged installer is only identified by the version that was
+        // actually downloaded, never by a later manifest.
+        if !staged_version_matches(self.update.ready_version.as_deref(), &manifest.version) {
+            self.update.ready_version = None;
+        }
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
             UpdateDecision::UpToDate => {
                 // Surface an explicit status in the About card instead of
                 // silently swallowing the answer.
                 self.update.up_to_date_at = Some(Instant::now());
+                self.update.last_manifest = None;
+                self.update.ready_version = None;
+                self.update.mandatory = None;
                 self.update.error = None;
+                self.leave_update_gate();
             }
             UpdateDecision::Mandatory { .. } => {
+                self.update.up_to_date_at = None;
                 self.update.mandatory = Some(manifest.clone());
                 self.update.last_manifest = Some(manifest);
                 self.screen = Screen::UpdateGate;
             }
             UpdateDecision::Optional { .. } => {
+                self.update.mandatory = None;
+                self.leave_update_gate();
+                self.update.up_to_date_at = None;
                 let auto = self.settings.update_auto_download;
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
                 self.update.last_manifest = Some(manifest);
@@ -1249,6 +1399,26 @@ impl AtlasApp {
                     self.begin_update_download(true);
                 }
             }
+        }
+    }
+
+    /// Resume the existing session when a previously mandatory update is withdrawn.
+    fn leave_update_gate(&mut self) {
+        if !matches!(self.screen, Screen::UpdateGate) {
+            return;
+        }
+        let destination = update_gate_destination(
+            self.vault_restore.is_some(),
+            self.session.is_some() && self.client.is_some(),
+            self.server_store.selected_url().is_some() && !self.server_store.requires_verification,
+            self.role_policy().initial_route(),
+        );
+        if let Screen::Shell(route) = destination {
+            self.load_profile();
+            self.load_avatar();
+            self.go(route);
+        } else {
+            self.screen = destination;
         }
     }
 
@@ -1293,17 +1463,32 @@ impl AtlasApp {
                 self.show_requested = true;
                 continue;
             }
+            if self.server_store.requires_verification
+                || self.server_store.selected_url().is_none()
+                || matches!(self.screen, Screen::ServerSetup)
+            {
+                // Preserve links until the server choice and verification are complete.
+                self.pending_deep_links.push(raw);
+                continue;
+            }
             if let Some(link) = atlas_core::VerifyLink::parse(&raw)
                 && self.session.is_none()
                 && !self.requires_password
+                && self.login.job_link.is_none()
             {
-                // A verify link only makes sense on the login screen.
+                // A deep link supersedes an in-flight hosted login.
+                crate::browser_auth::cancel(self);
+                self.qr = Default::default();
                 self.login.pending_link = Some(link);
                 self.screen = Screen::Login;
             } else if let Some(token) = atlas_core::QrTokenParser::extract(&raw)
                 && self.session.is_none()
                 && !self.requires_password
+                && self.login.job_link.is_none()
             {
+                crate::browser_auth::cancel(self);
+                self.login.pending_link = None;
+                self.qr = Default::default();
                 self.qr.active = true;
                 self.qr.token = token;
                 self.qr.status = "pending".to_owned();
@@ -1346,6 +1531,18 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.clients.poll() {
+            ctx.request_repaint();
+        }
+        if self.stock_locations.poll() {
+            ctx.request_repaint();
+        }
+        if self.stock_report.poll() {
+            ctx.request_repaint();
+        }
+        if self.payables_report.poll() {
+            ctx.request_repaint();
+        }
+        if self.receivables_report.poll() {
             ctx.request_repaint();
         }
         if self.client_report.poll() {
@@ -1618,6 +1815,10 @@ impl AtlasApp {
             || self.products.loading
             || self.client_invoices.loading
             || self.client_report.loading
+            || self.receivables_report.loading
+            || self.payables_report.loading
+            || self.stock_report.loading
+            || self.stock_locations.loading
             || self.invoice_detail.loading
             || self.business_search.loading
             || self.bills.loading
@@ -2085,5 +2286,37 @@ impl eframe::App for EframeShell {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.held.save_settings();
+    }
+}
+
+#[cfg(test)]
+mod update_gate_recovery_tests {
+    use super::{Route, Screen, staged_version_matches, update_gate_destination};
+
+    #[test]
+    fn staged_update_is_not_mislabelled_as_a_newer_release() {
+        assert!(staged_version_matches(Some("1.0.0"), "1.0.0"));
+        assert!(!staged_version_matches(Some("1.0.0"), "1.1.0"));
+        assert!(!staged_version_matches(None, "1.1.0"));
+    }
+
+    #[test]
+    fn restores_session_or_the_appropriate_startup_screen() {
+        assert_eq!(
+            update_gate_destination(false, true, true, Route::Products),
+            Screen::Shell(Route::Products)
+        );
+        assert_eq!(
+            update_gate_destination(true, false, true, Route::Dashboard),
+            Screen::Splash
+        );
+        assert_eq!(
+            update_gate_destination(false, false, true, Route::Dashboard),
+            Screen::Login
+        );
+        assert_eq!(
+            update_gate_destination(false, false, false, Route::Dashboard),
+            Screen::ServerSetup
+        );
     }
 }

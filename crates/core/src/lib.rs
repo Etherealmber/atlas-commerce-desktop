@@ -23,7 +23,7 @@ pub use deep_link::{QrTokenParser, VerifyLink};
 pub use device::DeviceIdentity;
 pub use dirs::{APP_ID, APP_NAME, AppPaths, SLUG};
 pub use jobs::{Job, JobRunner};
-pub use servers::{PRODUCTION_URL, SavedServerEntry, ServerError, ServerStore, ServerUrl};
+pub use servers::{SavedServerEntry, ServerError, ServerStore, ServerUrl};
 pub use session::{AccountStore, SavedAccount, SessionRecord};
 pub use settings::{Settings, ThemeMode, UpdateChannel};
 pub use update_feed::{MANIFEST_ASSET, UpdateDecision, UpdateManifest};

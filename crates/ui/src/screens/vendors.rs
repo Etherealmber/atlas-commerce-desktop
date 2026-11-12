@@ -107,6 +107,24 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.add_space(10.0);
     }
 
+    if app.role_policy().can_view_reports() {
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, t!(app.locale, "Supplier payables report"), palette) {
+                app.load_payables_report();
+            }
+            ui.label(
+                RichText::new(t!(app.locale, "Official server report · administrators"))
+                    .color(palette.secondary)
+                    .size(12.0),
+            );
+        });
+        ui.add_space(12.0);
+        if app.payables_open {
+            draw_payables_report(app, ui, palette);
+            ui.add_space(12.0);
+        }
+    }
+
     // Stack full-width sections rather than squeezing the detail pane at
     // narrow window sizes; the selected record stays below the list.
     card(palette).show(ui, |ui| {
@@ -124,6 +142,35 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.vendor_editor.is_some() {
         draw_editor(app, ui, palette);
     }
+}
+
+/// Show the worker's payable totals without deriving them from cached vendors.
+fn draw_payables_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Supplier payables report")).strong().size(16.0).color(palette.text));
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_payables_report();
+            }
+            if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
+                app.open_printable("/api/reports/payables", &[]);
+            }
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.payables_open = false;
+                app.payables_report = Default::default();
+            }
+        });
+        ui.add_space(8.0);
+        ui.label(RichText::new(t!(app.locale, "Server figures may differ from the loaded vendor list. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        if app.payables_report.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.payables_report.error {
+            error_banner(ui, error, palette);
+        } else if let Some(report) = &app.payables_report.data {
+            super::clients::draw_report_blocks(ui, palette, report);
+        }
+    });
 }
 
 fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {

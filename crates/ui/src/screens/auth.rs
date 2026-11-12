@@ -116,7 +116,9 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         } else if app.session.is_some() && app.client.is_some() {
             app.screen = Screen::Shell(crate::state::Route::Dashboard);
             app.bootstrap_shell();
-        } else if app.server_store.selected_url().is_none() {
+        } else if app.server_store.requires_verification
+            || app.server_store.selected_url().is_none()
+        {
             app.screen = Screen::ServerSetup;
         } else {
             app.screen = Screen::Login;
@@ -410,7 +412,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                 ui.label(
                     RichText::new(t!(
                         app.locale,
-                        "Atlas Cloud or your own hosted Atlas Commerce worker."
+                        "Enter the address of your Atlas Commerce server."
                     ))
                     .color(palette.dim),
                 );
@@ -616,11 +618,7 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                                 if report.ok {
                                     ui.label(
                                         RichText::new(format!(
-                                            "{} · D1: {} · R2: {}",
-                                            report
-                                                .environment
-                                                .clone()
-                                                .unwrap_or_else(|| "env ?".to_owned()),
+                                            "D1: {} · R2: {}",
                                             if report.database { "✓" } else { "✗" },
                                             if report.storage { "✓" } else { "✗" }
                                         ))
@@ -669,6 +667,17 @@ pub fn draw_server_setup(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
 /// installation at another worker is to reinstall it.
 fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, embedded: bool) {
     let url = app.server_store.selected_url().unwrap_or("—").to_owned();
+    if app.server_store.requires_verification
+        && let Some(job) = &app.server_form.probe_job
+        && let Some(report) = job.poll()
+    {
+        app.server_form.probe_job = None;
+        if probe_matches_current_url(&url, &report) {
+            app.server_store.requires_verification = false;
+            app.save_servers();
+        }
+        app.server_form.probe_report = Some(report);
+    }
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -693,7 +702,7 @@ fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                                 .color(palette.text)
                                 .strong(),
                             );
-                            ui.label(RichText::new(url).color(palette.dim).size(12.0));
+                            ui.label(RichText::new(&url).color(palette.dim).size(12.0));
                         });
                     });
                     ui.add_space(10.0);
@@ -707,7 +716,19 @@ fn draw_locked_server(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
                     );
                 });
                 ui.add_space(16.0);
-                if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
+                if app.server_store.requires_verification {
+                    if let Some(report) = &app.server_form.probe_report {
+                        ui.label(RichText::new(&report.message).color(palette.danger));
+                    }
+                    if primary_button(
+                        ui,
+                        t!(app.locale, "Check connection"),
+                        palette,
+                        app.server_form.probe_job.is_none(),
+                    ) {
+                        spawn_probe(app, url.clone());
+                    }
+                } else if primary_button(ui, t!(app.locale, "Continue"), palette, true) {
                     app.screen = Screen::Login;
                 }
             });
@@ -730,11 +751,10 @@ fn start_probe(app: &mut AtlasApp) {
 }
 
 fn spawn_probe(app: &mut AtlasApp, url: String) {
-    let fingerprint = app.identity.fingerprint().to_owned();
     let ua = atlas_core::DeviceIdentity::user_agent();
     let job = app
         .runner
-        .spawn(async move { probe::probe(&url, &fingerprint, &ua).await });
+        .spawn(async move { crate::server_probe::probe(&url, &ua).await });
     app.server_form.probe_job = Some(job);
     app.server_form.probe_report = None;
 }
@@ -770,7 +790,114 @@ enum LoginTab {
     Qr,
 }
 
+/// Start the hosted login automatically, never the legacy native form. The
+/// local screen only reports progress/errors and offers an explicit fallback.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_login_jobs(app);
+    if !matches!(app.screen, Screen::Login) {
+        return;
+    }
+    if !app.requires_password
+        && !app.browser_login.active
+        && !app.login.busy
+        && let Some(link) = app.login.pending_link.take()
+    {
+        app.login.browser_auto_started = true;
+        start_verify_link(app, link);
+    }
+    if app.login.pending_link.is_none()
+        && should_start_hosted_login(
+            app.login.browser_auto_started,
+            app.login.busy,
+            app.qr.active,
+        )
+    {
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        let started = crate::browser_auth::start_embedded(app);
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+        let started = crate::browser_auth::start(app);
+        app.login.browser_auto_started = started;
+    }
+
+    ui.vertical_centered(|ui| {
+        ui.add_space((ui.available_height() * 0.25).max(24.0));
+        crate::branding::mark(ui, palette, 46.0);
+        ui.add_space(16.0);
+        if app.qr.active {
+            poll_qr_status(app, ui);
+            ui.label(
+                RichText::new(t!(app.locale, "QR sign-in request received.")).color(palette.text),
+            );
+            ui.add_space(8.0);
+            let message = match app.qr.status.as_str() {
+                "approved" => t!(app.locale, "Phone approved — finalizing…"),
+                "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
+                "denied" => t!(app.locale, "Login refused on the phone."),
+                "expired" | "consumed" => t!(app.locale, "Code expired."),
+                _ => t!(app.locale, "Waiting for the phone…"),
+            };
+            ui.label(RichText::new(message).color(palette.secondary));
+            ui.add_space(12.0);
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                app.qr = Default::default();
+                app.login.browser_auto_started = false;
+            }
+        } else if app.browser_login.active {
+            ui.label(
+                RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
+                    .color(palette.text)
+                    .size(16.0),
+            );
+            if let Some(code) = &app.browser_login.pairing_code {
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new(t!(app.locale, "Compare this code with your browser:"))
+                        .color(palette.secondary),
+                );
+                ui.label(
+                    RichText::new(code)
+                        .font(crate::fonts::mono_semibold(20.0))
+                        .color(palette.text),
+                );
+            }
+            ui.add_space(16.0);
+            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                crate::browser_auth::cancel(app);
+            }
+        } else {
+            if let Some(error) = &app.login.error {
+                ui.label(RichText::new(error).color(palette.danger));
+                ui.add_space(12.0);
+            }
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            if primary_button(
+                ui,
+                t!(app.locale, "Retry integrated sign-in"),
+                palette,
+                !app.login.busy,
+            ) {
+                crate::browser_auth::start_embedded(app);
+            }
+            ui.add_space(8.0);
+            if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
+                && !app.login.busy
+            {
+                crate::browser_auth::start(app);
+            }
+        }
+    });
+}
+
+/// Do not retry automatically after cancellation or failure, and do not race
+/// an existing deep-link or QR operation.
+fn should_start_hosted_login(started: bool, busy: bool, qr_active: bool) -> bool {
+    !started && !busy && !qr_active
+}
+
+// The earlier native login implementation is retained for its existing QR,
+// password and deep-link helpers, but is not rendered as the login page.
+#[allow(dead_code)]
+fn draw_legacy_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
     if !matches!(app.screen, Screen::Login) {
         return;
@@ -1224,7 +1351,7 @@ fn draw_password_submit(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
     }
 }
 
-fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+fn poll_qr_status(app: &mut AtlasApp, ui: &mut egui::Ui) {
     // Status polling, at most every 1.5 s. It stops as soon as the one-time
     // completion exchange is in flight so a repeated "approved" poll cannot
     // spawn it twice.
@@ -1245,7 +1372,10 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         }
     }
+}
 
+fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_qr_status(app, ui);
     // The login card already provides the surface; no nested card frame.
     ui.vertical_centered(|ui| {
         if app.qr.qr_url.is_empty() {
@@ -1822,4 +1952,17 @@ pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palett
             }
         });
     });
+}
+
+#[cfg(test)]
+mod hosted_login_entry_tests {
+    use super::should_start_hosted_login;
+
+    #[test]
+    fn starts_once_and_never_races_an_existing_flow() {
+        assert!(should_start_hosted_login(false, false, false));
+        assert!(!should_start_hosted_login(true, false, false));
+        assert!(!should_start_hosted_login(false, true, false));
+        assert!(!should_start_hosted_login(false, false, true));
+    }
 }

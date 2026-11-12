@@ -5,6 +5,7 @@
 //!
 //! * `Ctrl/⌘+1…9` — switch between the nine rail sections,
 //! * `Ctrl/⌘+K` — open the command palette (jump to any screen or action),
+//! * `Ctrl/⌘+Shift+K` — open and focus the stock search, while the window is active,
 //! * `Ctrl/⌘+R` and `F5` — reload the current screen's data,
 //! * `Ctrl/⌘+F` — focus the title-bar product search,
 //! * `Ctrl/⌘+,` — open Settings,
@@ -17,7 +18,7 @@
 //! hijacked. All filtering logic lives in pure functions so it is
 //! unit-tested without a window (`cargo test -p atlas-ui shortcuts`).
 
-use egui::{Color32, RichText, Sense, TextWrapMode};
+use egui::{Color32, RichText, Sense};
 
 use crate::i18n::Locale;
 use crate::icons::Icon;
@@ -280,27 +281,42 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         return;
     }
 
-    // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS. This fork exposes the
-    // modifier fields directly rather than the upstream `command()` helper.
+    // Read modifiers from the key press itself, not the final state of the
+    // frame: a quick press and release can both arrive in the same frame.
+    let k_shift = ctx.input(|input| modified_k(&input.events));
+    let typing = ctx.memory(|memory| memory.focused().is_some());
+    if let Some(shift) = k_shift {
+        if stock_shortcut(shift, true, typing, app.palette_open) {
+            if app.role_policy().allows_route(Route::Products) {
+                app.close_palette();
+                app.go(Route::Products);
+                ctx.memory_mut(|memory| {
+                    memory.request_focus(crate::screens::products::product_search_id())
+                });
+            }
+            return;
+        }
+        // Ctrl+K toggles the palette even while typing. Shift+K never
+        // falls through and cannot steal input from another text field.
+        if !shift {
+            if app.palette_open {
+                app.close_palette();
+                clear_focus(ctx);
+            } else {
+                app.open_palette();
+                ctx.memory_mut(|memory| memory.request_focus(input_id()));
+            }
+        }
+        return;
+    }
+
+    // Ctrl on Windows/Linux, ⌘ (mac_cmd) on macOS.
     let ctrl = ctx.input(|input| input.modifiers.ctrl || input.modifiers.mac_cmd);
     if !ctrl {
         return;
     }
 
-    // Ctrl+K toggles the palette, stealing focus from any field when opening.
-    if ctx.input(|input| input.key_pressed(egui::Key::K)) {
-        if app.palette_open {
-            app.close_palette();
-            clear_focus(ctx);
-        } else {
-            app.open_palette();
-            ctx.memory_mut(|memory| memory.request_focus(input_id()));
-        }
-        return;
-    }
-
     // Any other Ctrl+combination belongs to the focused text field.
-    let typing = ctx.memory(|memory| memory.focused().is_some());
     if typing && !app.palette_open {
         return;
     }
@@ -347,6 +363,36 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
     }
 }
 
+/// The modifier snapshot belongs to the press, not to a later key release.
+fn modified_k(events: &[egui::Event]) -> Option<bool> {
+    events.iter().find_map(|event| match event {
+        egui::Event::Key {
+            key: egui::Key::K,
+            pressed: true,
+            repeat: false,
+            modifiers,
+            ..
+        } if modifiers.ctrl || modifiers.mac_cmd => Some(modifiers.shift),
+        _ => None,
+    })
+}
+
+/// Do not steal a modified keystroke from an unrelated focused text field.
+fn stock_shortcut(shift: bool, k_pressed: bool, typing: bool, palette_open: bool) -> bool {
+    shift && k_pressed && (!typing || palette_open)
+}
+
+/// Keep the command palette inside the viewport, including small windows.
+fn palette_rect(screen: egui::Rect) -> egui::Rect {
+    let width = (screen.width() - 24.0).clamp(0.0, 580.0);
+    let height = (screen.height() - 24.0).clamp(0.0, 460.0);
+    let top = ((screen.height() - height) * 0.5).min(96.0);
+    egui::Rect::from_min_size(
+        egui::pos2(screen.center().x - width / 2.0, screen.top() + top),
+        egui::vec2(width, height),
+    )
+}
+
 /// Ctrl/Cmd+P: print the document the user is currently viewing. The
 /// desktop shell has no document viewer of its own, so the printable
 /// document is the selected client record; its full situation report opens
@@ -376,12 +422,9 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
     }
     // viewport_rect() (not Context::screen_rect, which this egui fork omits).
     let screen = ctx.input(|input| input.viewport_rect());
-    let width = 580.0;
-    let max_height = 460.0;
-    let card_rect = egui::Rect::from_min_size(
-        egui::pos2(screen.center().x - width / 2.0, screen.top() + 96.0),
-        egui::vec2(width, max_height),
-    );
+    let card_rect = palette_rect(screen);
+    let width = card_rect.width();
+    let max_height = card_rect.height();
 
     // Register the full-screen backdrop as an interaction target first: this
     // consumes the press so a rail row underneath cannot retain it and
@@ -431,15 +474,16 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
     let activate = ui.input(|input| input.key_pressed(egui::Key::Enter));
 
     widgets::overlay_at(ui, card_rect, |ui| {
+        ui.set_clip_rect(ui.clip_rect().intersect(card_rect));
         ui.set_max_width(width);
         ui.set_max_height(max_height);
         widgets::dialog_frame(palette).show(ui, |ui| {
-            ui.set_width(width - 44.0);
+            ui.set_width((width - 44.0).max(0.0));
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 widgets::icon(ui, Icon::Search, palette.secondary, 17.0);
                 ui.add_sized(
-                    [width - 110.0, crate::theme::TARGET_MIN_HEIGHT],
+                    [(width - 110.0).max(0.0), crate::theme::TARGET_MIN_HEIGHT],
                     egui::TextEdit::singleline(&mut app.palette_query)
                         .id(input_id())
                         .frame(egui::Frame::NONE)
@@ -467,7 +511,7 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
                     None
                 };
                 egui::ScrollArea::vertical()
-                    .max_height(max_height - 150.0)
+                    .max_height((max_height - 150.0).max(0.0))
                     .show(ui, |ui| {
                         for (position, entry_index) in matches.iter().enumerate() {
                             let entry = &entries[*entry_index];
@@ -532,12 +576,18 @@ fn palette_row(
             ui.horizontal(|ui| {
                 ui.set_height(height);
                 ui.add_space(10.0);
-                // One line even for long translated labels.
-                ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-                ui.label(
-                    RichText::new(entry.label.clone())
-                        .color(palette.text)
-                        .size(13.5),
+                // Reserve the key hint and elide long translated labels rather
+                // than letting them extend past the card on narrow windows.
+                let hint_width = if entry.hint.is_some() { 70.0 } else { 0.0 };
+                let label_width = (ui.available_width() - hint_width - 10.0).max(0.0);
+                ui.add_sized(
+                    [label_width, height],
+                    egui::Label::new(
+                        RichText::new(entry.label.clone())
+                            .color(palette.text)
+                            .size(13.5),
+                    )
+                    .truncate(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if let Some(hint) = entry.hint {
@@ -554,6 +604,64 @@ fn palette_row(
 mod tests {
     use super::*;
     use crate::i18n::Locale;
+
+    #[test]
+    fn palette_fits_large_small_and_offset_viewports() {
+        for (origin, size) in [
+            ([0.0, 0.0], [1280.0, 800.0]),
+            ([20.0, 30.0], [320.0, 220.0]),
+            ([0.0, 0.0], [20.0, 20.0]),
+        ] {
+            let screen = egui::Rect::from_min_size(
+                egui::pos2(origin[0], origin[1]),
+                egui::vec2(size[0], size[1]),
+            );
+            let card = palette_rect(screen);
+            assert!(screen.contains_rect(card));
+            assert!(card.width() <= 580.0 && card.height() <= 460.0);
+        }
+    }
+
+    #[test]
+    fn modified_k_uses_press_modifiers_after_release_in_same_frame() {
+        let press = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers {
+                ctrl: true,
+                shift: true,
+                ..Default::default()
+            },
+        };
+        let release = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        };
+        assert_eq!(modified_k(&[press, release]), Some(true));
+        assert_eq!(modified_k(&[]), None);
+        let unmodified = egui::Event::Key {
+            key: egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        };
+        assert_eq!(modified_k(&[unmodified]), None);
+    }
+
+    #[test]
+    fn stock_shortcut_respects_text_and_palette_focus() {
+        assert!(stock_shortcut(true, true, false, false));
+        assert!(stock_shortcut(true, true, true, true));
+        assert!(!stock_shortcut(true, true, true, false));
+        assert!(!stock_shortcut(false, true, false, false));
+        assert!(!stock_shortcut(true, false, false, false));
+    }
 
     #[test]
     fn rail_shortcuts_follow_visible_sections() {

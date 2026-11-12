@@ -111,14 +111,14 @@ rédaction, pas une nouvelle mesure effectuée lors de cet audit.
 | `Dashboard` | Oui |
 | `Products`, `ProductHistory` | Partiel — lecture + ajustement de stock ; manque CRUD, variantes, images, historique mouvements |
 | `Invoices`, `InvoiceDetail` | Partiel — liste, détail natif, impression et PDF officiels ouverts dans le navigateur via un ticket `rt` de 30 minutes ; manque création, paiements, statuts et UBL |
-| `Quotes` | Non (devis) |
+| `Quotes` | Partiel — liste en lecture seule dans Ventes, recherche, détail et impression officiels ; création, édition, conversion et suppression restent dans le web |
 | `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
 | `Receipts` | Partiel — liste en lecture seule, ouverture de la facture liée et impression officielle via ticket ; création et suppression restent à couvrir |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche une liste filtrée par identifiant dans l'application avec option navigateur. `Situation` ouvre encore le rapport imprimable via ticket `link-ticket` ; manque détail de facture, prix par client, imports et suppressions OTP |
+| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche les factures standard filtrées par identifiant et leur détail natif, avec option navigateur ; `Situation` affiche les valeurs du rapport serveur en synthèse ou détail produits, avec impression officielle via ticket `link-ticket`. Prix par client, imports et suppressions OTP restent à couvrir |
 | `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; factures fournisseurs en lecture seule avec impression/PDF officiels. Création, paiements, réception et rapprochement restent à couvrir |
 | `InventoryOps` | Non (opérations de stock multi-emplacements) |
 | `Employees`, `Attendance` | Partiel — liste, recherche, statut et catégorie, détail avec historique des paiements, paiement, acompte, démission et réactivation, fiche d'embauche et situation RH imprimables ; création réduite aux champs essentiels. Manquent édition complète, pièce d'identité chiffrée et pointage |
-| `Reports`, `Balance` | Partiel — `client-situation` ouvert dans le navigateur via `link-ticket` ; les 16 autres rapports et la balance restent à couvrir |
+| `Reports`, `Balance` | Partiel — `client-situation` et les rapports officiels de créances clients et dettes fournisseurs sont lus dans l’application ; impression officielle ouverte dans le navigateur via `link-ticket`. Les autres rapports et la balance restent à couvrir |
 | `Bank` | Non (rapprochement CSV) |
 | `Reimbursements` | Partiel — les avoirs `remboursement` sont listés dans Ventes (recherche numéro/client, ouverture de la facture liée, impression officielle) ; création, suppression OTP et envoi d'e-mail restent dans le web |
 | `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
@@ -177,3 +177,43 @@ entrée de navigation, et ne modifie jamais le contrat du worker.
    et les écrans natifs remplaçant About/WhatsNew. *L'édition du profil
    (`PATCH /api/auth/me`, nom affiché, e-mail, téléphone, note, URL d'avatar)
    est livrée ; le mot de passe reste verrouillé côté serveur.*
+
+## Audit du blueprint desktop et de l'application Android
+
+Audit statique des dépôts `atlas-commerce` à `cf951397553dc8749f15c96b33abf02d4a360e35`
+et `atlas-commerce-android` à `21aa6cf3435f694ee54366674d4bd4d2bfc48060`.
+Le desktop actuel utilise Rust/egui, pas Tauri, React ou Axum. Son coffre v1
+utilise le magasin d'identifiants du système, pas une base SQLite chiffrée.
+
+Les migrations D1 réelles sont `0001_audit_indexes_and_money.sql`,
+`0002_phase2_indexes.sql`, `0003_phase3_observability.sql`,
+`0004_last_purchase_cost.sql`, `0005_qr_privacy.sql`,
+`0006_receipt_client_situation.sql`, `0007_product_list_indexes.sql` et
+`0008_app_users_profile_columns.sql`. Leurs noms et contenus diffèrent de
+ceux du blueprint ; `0001` documente notamment les montants en unités
+majeures, et `0006` ajoute un champ à `receipts`. Elles dépendent du schéma D1
+serveur et ne constituent pas un moteur de synchronisation local. Les recopier
+sur une base desktop vide ou recalculer les finances en centimes ne prouverait
+pas la parité et pourrait créer des écarts financiers.
+
+Sur Android, `OfflineCache.kt` chiffre des instantanés produits et financiers
+et les isole par serveur et compte ; `ShellViewModel.kt` interroge les alertes
+et actions mobiles toutes les 25 secondes, avec filtrage par rôle et auteur.
+Ce constat ne démontre pas l'existence d'une file locale de mutations ni d'un
+protocole de résolution de conflits. Le desktop ne prétend donc pas fournir
+une synchronisation hors ligne ou des notifications Android équivalentes.
+La recherche de stock dispose de `Ctrl/⌘+Maj+K` dans la fenêtre active ;
+ce n'est pas un raccourci global du système. La création de factures, les
+raccourcis système globaux, l'impression ESC/POS
+et les tests matériels restent à réaliser et à valider sur chaque plateforme.
+
+### Rapport natif de valorisation du stock
+
+Depuis Produits, owner/admin peuvent consulter le rapport officiel
+`GET /api/reports/stock?location_id=all` ou l'identifiant d'un entrepôt actif :
+valeurs et catégories proviennent exclusivement du serveur, en HTML rendu
+comme texte et tableaux inertes. Les emplacements proposés sont ceux du
+sélecteur officiel du rapport ; les champs et tickets cachés ne sont pas lus.
+L'inventaire vide reste un rapport valide. L'impression ouvre le même rapport
+avec un ticket court, sans JWT dans l'URL. La permission côté interface ne
+remplace pas celle du serveur.

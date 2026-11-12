@@ -170,9 +170,12 @@ fn main() -> eframe::Result<()> {
     }
     let identity = DeviceIdentity::load_or_create(&paths.device_file());
     let accounts = AccountStore::load(&paths.accounts_file());
-    let restore_mode = servers.selected_url().map(|base| {
-        atlas_core::vault_authority::restore_mode(&paths.browser_authority_file(), base)
-    });
+    let restore_mode = servers
+        .selected_url()
+        .filter(|_| !servers.requires_verification)
+        .map(|base| {
+            atlas_core::vault_authority::restore_mode(&paths.browser_authority_file(), base)
+        });
     let session = if matches!(
         restore_mode,
         Some(atlas_core::vault_authority::RestoreMode::Legacy)

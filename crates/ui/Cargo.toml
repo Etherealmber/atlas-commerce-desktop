@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "egui + fastframe interface for Atlas Commerce Desktop."
 
+[features]
+visual-fixtures = []
+
 [dependencies]
 atlas-core.workspace = true
 atlas-api.workspace = true

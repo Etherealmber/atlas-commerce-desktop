@@ -91,8 +91,8 @@ msgstr "Posez toutes vos questions sur votre boutique"
 msgid "Assistant provider"
 msgstr "Fournisseur de l'assistant"
 
-msgid "Atlas Cloud or your own hosted Atlas Commerce worker."
-msgstr "Atlas Cloud ou votre propre serveur Atlas Commerce hébergé."
+msgid "Enter the address of your Atlas Commerce server."
+msgstr "Saisissez l’adresse de votre serveur Atlas Commerce."
 
 msgid "Atlas Commerce Desktop"
 msgstr "Atlas Commerce Desktop"
@@ -1561,3 +1561,81 @@ msgstr "Redémarrer et installer"
 
 msgid "Update ready — restart to install"
 msgstr "Mise à jour prête — redémarrez pour l'installer"
+
+msgid "Retry integrated sign-in"
+msgstr "Réessayer la connexion intégrée"
+
+msgid "Print / PDF"
+msgstr "Imprimer / PDF"
+
+msgid "Summary"
+msgstr "Synthèse"
+
+msgid "Full detail (products)"
+msgstr "Détail complet (produits)"
+
+msgid "Amounts and documents are provided by the server. Print / PDF opens the official report in your browser."
+msgstr "Les montants et les pièces proviennent du serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "This list excludes quotes, quick-sale tickets and credit notes; see Situation for the server report."
+msgstr "Cette liste exclut les devis, tickets de vente rapide et avoirs ; consultez Situation pour le rapport du serveur."
+
+msgid "Quotes"
+msgstr "Devis"
+
+msgid "Read-only. Create or convert a quote in the web application."
+msgstr "Lecture seule. Créez ou convertissez un devis dans l’application web."
+
+msgid "No matching quote."
+msgstr "Aucun devis correspondant."
+
+msgid "Download and install update"
+msgstr "Télécharger et installer la mise à jour"
+
+msgid "Update information is not available yet. Try again later."
+msgstr "Les informations de mise à jour ne sont pas encore disponibles. Réessayez plus tard."
+
+msgid "Sales and invoice history"
+msgstr "Historique des ventes et factures"
+
+msgid "Unlimited"
+msgstr "Illimité"
+
+msgid "QR sign-in request received."
+msgstr "Demande de connexion QR reçue."
+
+msgid "Client receivables report"
+msgstr "Rapport des créances clients"
+
+msgid "Official server report · administrators"
+msgstr "Rapport officiel du serveur · administrateurs"
+
+msgid "Server figures may differ from the loaded client list. Print / PDF opens the official report in your browser."
+msgstr "Les chiffres du serveur peuvent différer de la liste des clients chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "Supplier payables report"
+msgstr "Rapport des dettes fournisseurs"
+
+msgid "Server figures may differ from the loaded vendor list. Print / PDF opens the official report in your browser."
+msgstr "Les chiffres du serveur peuvent différer de la liste des fournisseurs chargés. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "Stock valuation report"
+msgstr "Rapport de valorisation du stock"
+
+msgid "All locations · values provided by the server. Print / PDF opens the official report in your browser."
+msgstr "Tous les emplacements · valeurs fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "All locations"
+msgstr "Tous les emplacements"
+
+msgid "Warehouse"
+msgstr "Entrepôt"
+
+msgid "Loading warehouses…"
+msgstr "Chargement des entrepôts…"
+
+msgid "Retry warehouses"
+msgstr "Réessayer les entrepôts"
+
+msgid "Values are provided by the server. Print / PDF opens the official report in your browser."
+msgstr "Les valeurs sont fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."

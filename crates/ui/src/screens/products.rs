@@ -118,6 +118,24 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
+    if app.role_policy().can_view_reports() {
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, t!(app.locale, "Stock valuation report"), palette) {
+                app.load_stock_report();
+            }
+            ui.label(
+                RichText::new(t!(app.locale, "Official server report · administrators"))
+                    .color(palette.secondary)
+                    .size(12.0),
+            );
+        });
+        ui.add_space(12.0);
+        if app.stock_report_open {
+            draw_stock_report(app, ui, palette);
+            ui.add_space(12.0);
+        }
+    }
+
     super::scan::draw_scan_bar(app, ui, palette);
     ui.add_space(10.0);
 
@@ -156,17 +174,87 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 }
 
+/// Values and inventory rows are supplied by the worker, not local caches.
+fn draw_stock_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(t!(app.locale, "Stock valuation report")).strong().size(16.0).color(palette.text));
+        ui.add_space(8.0);
+        let locations = app.stock_locations.data.clone().unwrap_or_default();
+        let selected = app.stock_report_location
+            .and_then(|id| locations.iter().find(|location| location.id == id))
+            .map(|location| location.label.clone())
+            .unwrap_or_else(|| t!(app.locale, "All locations").into_owned());
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(t!(app.locale, "Warehouse")).color(palette.secondary));
+            let before = app.stock_report_location;
+            egui::ComboBox::from_id_salt("stock-report-location")
+                .selected_text(selected)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut app.stock_report_location, None, t!(app.locale, "All locations"));
+                    for location in &locations {
+                        ui.selectable_value(&mut app.stock_report_location, Some(location.id), &location.label);
+                    }
+                });
+            if before != app.stock_report_location {
+                app.load_stock_report();
+            }
+            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                app.load_stock_report();
+            }
+            let printable = !app.stock_report.loading && app.stock_report.error.is_none() && app.stock_report.data.is_some() && app.report_job.is_none();
+            ui.add_enabled_ui(printable, |ui| {
+                if secondary_button(ui, t!(app.locale, "Print / PDF"), palette)
+                    && let Ok(location) = crate::client_report::stock_location_param(app.stock_report_location)
+                {
+                    app.open_printable("/api/reports/stock", &[("location_id", location)]);
+                }
+            });
+            if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                app.stock_report_open = false;
+                app.stock_report = Default::default();
+                app.stock_locations = Default::default();
+                app.stock_report_location = None;
+            }
+        });
+        if app.stock_locations.loading {
+            ui.label(RichText::new(t!(app.locale, "Loading warehouses…")).color(palette.secondary).size(12.0));
+        } else if let Some(error) = app.stock_locations.error.clone() {
+            error_banner(ui, &error, palette);
+            if secondary_button(ui, t!(app.locale, "Retry warehouses"), palette) {
+                app.load_stock_locations();
+            }
+        }
+        ui.add_space(8.0);
+        ui.label(RichText::new(t!(app.locale, "Values are provided by the server. Print / PDF opens the official report in your browser.")).color(palette.secondary).size(12.0));
+        if app.stock_report.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.stock_report.error {
+            error_banner(ui, error, palette);
+        } else if let Some(report) = &app.stock_report.data {
+            super::clients::draw_report_blocks(ui, palette, report);
+        }
+    });
+}
+
+/// Stable identifier for the catalogue search, including keyboard shortcuts.
+pub(crate) fn product_search_id() -> egui::Id {
+    egui::Id::new("product-search")
+}
+
 fn draw_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 18.0);
             let field_width = (ui.available_width() - 130.0).clamp(40.0, 320.0);
-            let response = widgets::search_field(
-                ui,
-                &mut app.product_search,
-                t!(app.locale, "Search by name, SKU or barcode"),
-                field_width,
+            let response = ui.add_sized(
+                [field_width, crate::theme::TARGET_MIN_HEIGHT],
+                egui::TextEdit::singleline(&mut app.product_search)
+                    .id(product_search_id())
+                    .hint_text(t!(app.locale, "Search by name, SKU or barcode"))
+                    .margin(egui::Margin::symmetric(14, 8))
+                    .clip_text(true),
             );
             if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                 app.load_products();

@@ -26,20 +26,27 @@ Un client de bureau léger pour Windows, macOS et Linux, sans moteur de navigate
 
 Atlas Commerce Desktop est un client natif Rust + [egui](https://www.egui.rs)
 construit sur [fastframe](https://fastframe.dev), la même fondation que
-ZapFast et Spotifast. Il se connecte à un espace Atlas Commerce — Atlas Cloud
-(`https://stock.afmarbre.com`) ou votre propre Worker auto-hébergé — et donne
+ZapFast et Spotifast. Il se connecte au serveur Atlas Commerce choisi par
+l’utilisateur et donne
 accès au tableau de bord, au catalogue produits, aux ventes rapides, aux
 alertes de stock et à l'agent IA, dans une interface zinc déclinée en thèmes
 clair et sombre, en français (avec catalogue anglais inclus).
 
-Aucun moteur de navigateur, aucune télémétrie : tout le réseau passe par
-`reqwest` avec rustls, et l'application ne stocke jamais de mot de passe.
+La connexion utilise un navigateur intégré ou le navigateur système. Aucune
+télémétrie n’est ajoutée et l’application ne stocke jamais de mot de passe.
+
+## Raccourcis dans la fenêtre
+
+`Ctrl+Maj+K` (ou `⌘+Maj+K` sur macOS) ouvre Produits et place le focus
+sur la recherche de stock. Le raccourci respecte les permissions et les
+formulaires ouverts ; il ne fonctionne pas comme raccourci global du système.
+`Ctrl+K` / `⌘+K` ouvre toujours la palette de commandes.
 
 ## Fonctionnalités
 
 | Fonction | Ce que vous pouvez faire |
 |---|---|
-| **Démarrage guidé** | Splash, bienvenue, choix du serveur avec sonde `/api/health` en direct, puis connexion. Atlas Cloud est prérempli ; vos serveurs sont enregistrés et oubliables. |
+| **Démarrage guidé** | Splash, bienvenue, choix du serveur avec sonde `/api/health` en direct, puis connexion. Aucune adresse n’est préremplie sur une nouvelle installation ; le serveur choisi est ensuite verrouillé. |
 | **Connexion** | Mot de passe + code OTP, lien de vérification par e-mail via `atlascommerce://verify`, ou appairage QR depuis le téléphone (côté PC). |
 | **Tableau de bord** | Solde, valeur du stock, compteurs, ventes impayées, activité mensuelle et dernières factures. |
 | **Produits** | Recherche, création, seuils de stock et mouvements d'entrée/sortie/ajustement via l'API du Worker. |
