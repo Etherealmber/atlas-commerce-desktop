@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8

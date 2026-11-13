@@ -819,72 +819,119 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         app.login.browser_auto_started = started;
     }
 
-    ui.vertical_centered(|ui| {
-        ui.add_space((ui.available_height() * 0.25).max(24.0));
-        crate::branding::mark(ui, palette, 46.0);
-        ui.add_space(16.0);
-        if app.qr.active {
-            poll_qr_status(app, ui);
-            ui.label(
-                RichText::new(t!(app.locale, "QR sign-in request received.")).color(palette.text),
-            );
-            ui.add_space(8.0);
-            let message = match app.qr.status.as_str() {
-                "approved" => t!(app.locale, "Phone approved — finalizing…"),
-                "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
-                "denied" => t!(app.locale, "Login refused on the phone."),
-                "expired" | "consumed" => t!(app.locale, "Code expired."),
-                _ => t!(app.locale, "Waiting for the phone…"),
-            };
-            ui.label(RichText::new(message).color(palette.secondary));
-            ui.add_space(12.0);
-            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                app.qr = Default::default();
-                app.login.browser_auto_started = false;
-            }
-        } else if app.browser_login.active {
-            ui.label(
-                RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
-                    .color(palette.text)
-                    .size(16.0),
-            );
-            if let Some(code) = &app.browser_login.pairing_code {
-                ui.add_space(12.0);
-                ui.label(
-                    RichText::new(t!(app.locale, "Compare this code with your browser:"))
-                        .color(palette.secondary),
-                );
-                ui.label(
-                    RichText::new(code)
-                        .font(crate::fonts::mono_semibold(20.0))
-                        .color(palette.text),
-                );
-            }
-            ui.add_space(16.0);
-            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                crate::browser_auth::cancel(app);
-            }
-        } else {
-            if let Some(error) = &app.login.error {
-                ui.label(RichText::new(error).color(palette.danger));
-                ui.add_space(12.0);
-            }
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            if primary_button(
-                ui,
-                t!(app.locale, "Retry integrated sign-in"),
-                palette,
-                !app.login.busy,
-            ) {
-                crate::browser_auth::start_embedded(app);
-            }
-            ui.add_space(8.0);
-            if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
-                && !app.login.busy
-            {
-                crate::browser_auth::start(app);
-            }
-        }
+    // This is status and recovery chrome only; the login form remains the
+    // server's unmodified page inside its isolated browser context.
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space((ui.available_height() * 0.12).clamp(16.0, 72.0));
+            let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
+            card(palette).show(ui, |ui| {
+                ui.set_width((width - 34.0).max(0.0));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(8.0);
+                    crate::branding::mark(ui, palette, 36.0);
+                    ui.add_space(12.0);
+                    ui.label(
+                        RichText::new("Atlas Commerce")
+                            .font(crate::fonts::bold(21.0))
+                            .color(palette.text),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(t!(app.locale, "Secure sign-in"))
+                            .color(palette.secondary)
+                            .size(13.0),
+                    );
+                    ui.add_space(20.0);
+                    if app.qr.active {
+                        poll_qr_status(app, ui);
+                        ui.label(
+                            RichText::new(t!(app.locale, "QR sign-in request received."))
+                                .color(palette.text)
+                                .strong(),
+                        );
+                        ui.add_space(8.0);
+                        let message = match app.qr.status.as_str() {
+                            "approved" => t!(app.locale, "Phone approved — finalizing…"),
+                            "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
+                            "denied" => t!(app.locale, "Login refused on the phone."),
+                            "expired" | "consumed" => t!(app.locale, "Code expired."),
+                            _ => t!(app.locale, "Waiting for the phone…"),
+                        };
+                        ui.label(RichText::new(message).color(palette.secondary));
+                        ui.add_space(16.0);
+                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                            app.qr = Default::default();
+                            app.login.browser_auto_started = false;
+                        }
+                    } else if app.browser_login.active {
+                        ui.spinner();
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
+                                .color(palette.text)
+                                .strong(),
+                        );
+                        if let Some(code) = &app.browser_login.pairing_code {
+                            ui.add_space(12.0);
+                            ui.label(
+                                RichText::new(t!(
+                                    app.locale,
+                                    "Compare this code with your browser:"
+                                ))
+                                .color(palette.secondary),
+                            );
+                            ui.label(
+                                RichText::new(code)
+                                    .font(crate::fonts::mono_semibold(20.0))
+                                    .color(palette.text),
+                            );
+                        }
+                        ui.add_space(16.0);
+                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                            crate::browser_auth::cancel(app);
+                        }
+                    } else {
+                        if let Some(error) = &app.login.error {
+                            error_banner(ui, error, palette);
+                            ui.add_space(12.0);
+                        }
+                        if let Some(notice) = &app.login.notice {
+                            ui.label(RichText::new(notice).color(palette.secondary));
+                            ui.add_space(8.0);
+                        }
+                        if app.login.busy {
+                            ui.spinner();
+                            ui.add_space(8.0);
+                        }
+                        #[cfg(any(
+                            target_os = "windows",
+                            target_os = "linux",
+                            target_os = "macos"
+                        ))]
+                        if primary_button(
+                            ui,
+                            t!(app.locale, "Retry integrated sign-in"),
+                            palette,
+                            !app.login.busy,
+                        ) {
+                            crate::browser_auth::start_embedded(app);
+                        }
+                        ui.add_space(8.0);
+                        ui.add_enabled_ui(!app.login.busy, |ui| {
+                            if secondary_button(
+                                ui,
+                                t!(app.locale, "Sign in with your browser"),
+                                palette,
+                            ) {
+                                crate::browser_auth::start(app);
+                            }
+                        });
+                    }
+                    ui.add_space(8.0);
+                });
+            });
+        });
     });
 }
 

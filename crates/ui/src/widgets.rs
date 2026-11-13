@@ -157,8 +157,8 @@ pub fn pop_card(palette: &Palette) -> egui::Frame {
 /// A banner showing a verbatim worker error (or a local message).
 pub fn error_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palette) {
     egui::Frame::NONE
-        .fill(palette.danger.gamma_multiply(0.14))
-        .stroke(Stroke::new(1.0, palette.danger.gamma_multiply(0.6)))
+        .fill(palette.finance_danger_soft)
+        .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(crate::theme::RADIUS_CONTROL as f32)
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
@@ -176,8 +176,8 @@ pub fn error_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palet
 /// A neutral information banner.
 pub fn info_banner(ui: &mut egui::Ui, message: impl AsRef<str>, palette: &Palette) {
     egui::Frame::NONE
-        .fill(palette.accent.gamma_multiply(0.12))
-        .stroke(Stroke::new(1.0, palette.accent.gamma_multiply(0.55)))
+        .fill(palette.finance_info_soft)
+        .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(crate::theme::RADIUS_CONTROL as f32)
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
