@@ -21,5 +21,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
-    pathlib.Path(sys.argv[1]).write_text(str(server.server_address[1]), encoding='ascii')
+    port_file = pathlib.Path(sys.argv[1])
+    temporary = port_file.with_suffix('.tmp')
+    temporary.write_text(str(server.server_address[1]), encoding='ascii')
+    temporary.replace(port_file)
     server.serve_forever()

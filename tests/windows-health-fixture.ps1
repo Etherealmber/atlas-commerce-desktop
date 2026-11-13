@@ -8,6 +8,12 @@ function Start-AtlasHealthFixture([string]$Work) {
         Start-Sleep -Milliseconds 100
     }
     if (-not (Test-Path $portFile)) { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue; throw 'Health fixture did not start.' }
-    $port = (Get-Content -Raw $portFile).Trim()
+    try {
+        $port = (Get-Content -Raw $portFile).Trim()
+        if ($port -notmatch '^\d+$' -or [int]$port -lt 1 -or [int]$port -gt 65535) { throw 'Invalid health fixture port.' }
+    } catch {
+        Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
+        throw
+    }
     return @{ Process = $process; Url = "http://127.0.0.1:$port" }
 }
