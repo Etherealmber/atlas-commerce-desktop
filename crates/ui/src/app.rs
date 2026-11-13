@@ -892,6 +892,15 @@ impl AtlasApp {
         self.payables_report.data = Some(crate::client_report::fictional_payables());
     }
 
+    /// Display the pre-authorization waiting state without making a request.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_browser_wait(&mut self) {
+        self.browser_login.active = true;
+        self.login.busy = true;
+        self.login.browser_auto_started = true;
+    }
+
     /// Show an offline, fictional stock report in the visual fixture only.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
@@ -2170,7 +2179,16 @@ impl eframe::App for EframeShell {
         // Keep repainting while any job runs, so spinners and poll results
         // appear without user input.
         if self.held.busy() {
-            ctx.request_repaint_after(Duration::from_millis(250));
+            // React promptly to the verified authorization URL, without
+            // continuously redrawing at high frequency during browser polling.
+            let delay = if self.held.browser_login.active
+                && self.held.browser_login.pairing_code.is_none()
+            {
+                30
+            } else {
+                250
+            };
+            ctx.request_repaint_after(Duration::from_millis(delay));
         }
     }
 

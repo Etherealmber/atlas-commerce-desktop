@@ -28,6 +28,13 @@ ombres, les masques d'icônes et les voiles modaux utilisent encore l'alpha.
 La demande d'un voile semi-transparent contredit une interdiction absolue de
 toute transparence. Aucun effet de verre dépoli n'est ajouté.
 
+La connexion intégrée démarre automatiquement dès la fin de restauration du
+coffre pour un serveur vérifié ; pendant la création de la demande v1, un statut
+minimal et annulable remplace l'écran d'attente décoratif. Sur Windows et macOS,
+la barre de sécurité réserve moins d'espace au-dessus de la page. La vérification
+des capacités et la création de la demande restent indispensables avant
+l'ouverture de l'URL validée ; la rapidité dépend aussi du serveur.
+
 Le contenu du formulaire de connexion intégré est servi par le serveur choisi :
 il n'est ni copié ni modifié par injection CSS/JS. Le cadre natif et la
 récupération peuvent être améliorés ici ; changer le design de ce formulaire
