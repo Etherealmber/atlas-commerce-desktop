@@ -68,7 +68,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             language: "fr".to_owned(),
-            theme: ThemeMode::Dark,
+            theme: ThemeMode::Light,
             custom_theme: None,
             close_to_tray: true,
             autostart: false,
@@ -111,10 +111,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_are_french_and_dark() {
+    fn defaults_are_french_and_light() {
         let settings = Settings::default();
         assert!(settings.is_french());
-        assert_eq!(settings.theme, ThemeMode::Dark);
+        assert_eq!(settings.theme, ThemeMode::Light);
         assert!(settings.close_to_tray);
     }
 

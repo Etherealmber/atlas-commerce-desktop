@@ -19,7 +19,7 @@ pub mod i18n;
 pub mod icons;
 pub mod motion;
 pub mod screens;
-mod server_probe;
+pub mod server_probe;
 pub mod shortcuts;
 pub mod state;
 pub mod theme;
