@@ -22,7 +22,11 @@ try {
     $old = Join-Path $build 'atlas-commerce-desktop-v0.0.1-setup.exe'
     # An unreachable origin must fail before installing any executable.
     $badArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SERVERURL=http://127.0.0.1:1', "/DIR=`"$install`"")
-    $bad = Start-Process -FilePath $old -ArgumentList $badArgs -Wait -PassThru
+    $bad = Start-Process -FilePath $old -ArgumentList $badArgs -PassThru
+    if (-not $bad.WaitForExit(60000)) {
+        Stop-Process -Id $bad.Id -Force -ErrorAction SilentlyContinue
+        throw 'Unreachable-server installer did not exit within 60 seconds.'
+    }
     if ($bad.ExitCode -eq 0 -or (Test-Path (Join-Path $install 'atlas-commerce-desktop.exe'))) {
         throw 'Unreachable server must block fresh installation.'
     }
@@ -31,7 +35,11 @@ try {
     foreach ($setup in @($old, $CurrentSetup)) {
         $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$install`"")
         if ($first) { $setupArgs += "/SERVERURL=$url" }
-        $process = Start-Process -FilePath $setup -ArgumentList $setupArgs -Wait -PassThru
+        $process = Start-Process -FilePath $setup -ArgumentList $setupArgs -PassThru
+        if (-not $process.WaitForExit(120000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Installer did not exit within 120 seconds.'
+        }
         if ($process.ExitCode -ne 0) { throw "Setup failed: $($process.ExitCode)" }
         if (-not (Test-Path (Join-Path $install 'atlas-commerce-desktop.exe'))) { throw 'Installed executable missing' }
         $choiceFile = Join-Path $install 'server.json'

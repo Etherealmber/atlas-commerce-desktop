@@ -315,7 +315,7 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if CurPageID = ServerPage.ID then
+  if (CurPageID = ServerPage.ID) and not WizardSilent then
   begin
     if not CheckChosenServer then
     begin
