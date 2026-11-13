@@ -101,6 +101,7 @@ fn build(route: &str) -> AtlasApp {
         app.login.browser_auto_started = true;
         app.login.error = Some("Connexion fictive indisponible.".into());
     }
+    #[cfg(feature = "visual-fixtures")]
     if route == "login-wait" {
         app.login.error = None;
         app.show_fictional_browser_wait();
