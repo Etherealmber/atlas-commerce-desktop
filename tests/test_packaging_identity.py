@@ -20,7 +20,9 @@ class PackagingIdentityTests(unittest.TestCase):
         script = (ROOT / "packaging/windows/atlas-commerce-desktop.iss").read_text()
         self.assertNotIn('#define DefaultServer', script)
         self.assertIn("ServerPage.Values[0] := '';", script)
-        self.assertIn('not ValidServerUrl(ChosenServer)', script)
+        self.assertIn('if not ValidServerUrl(Value)', script)
+        self.assertIn('--installer-probe', script)
+        self.assertIn('if not CheckChosenServer then', script)
         self.assertIn("PreviousInstall and (not HadStoredServer)", script)
 
     def test_msi_keeps_upgrade_identity_and_directory(self):

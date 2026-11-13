@@ -82,6 +82,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Créer un raccourci sur le bureau"; GroupDescription: "Raccourcis supplémentaires :"; Flags: unchecked
 
 [Files]
+; Extracted only for the pre-install health check, never installed separately.
+Source: "{#BinaryX64}"; DestDir: "{tmp}"; DestName: "atlas-probe-x64.exe"; Flags: dontcopy noencryption
+Source: "{#BinaryArm64}"; DestDir: "{tmp}"; DestName: "atlas-probe-arm64.exe"; Flags: dontcopy noencryption solidbreak
 ; Same destination name for both architectures; the Check functions decide
 ; which single source is installed on this machine. solidbreak separates
 ; the two same-named files inside the solid LZMA archive.
@@ -210,6 +213,7 @@ var
   HadStoredServer: Boolean;
   ChosenForThisSetup: String;
   PreviousInstall: Boolean;
+  VerifiedServer: String;
 
 function ServerUrlFromParam: String;
 begin
@@ -264,33 +268,69 @@ begin
     ServerPage.Values[0] := '';
 end;
 
+function ChosenServer: String;
+begin
+  Result := Trim(ServerPage.Values[0]);
+end;
+
+function ServerNeedsProbe(const Value: String): Boolean;
+begin
+  { Keep existing installations upgradeable offline, without replacing their
+    previously selected server. New or changed choices must be checked. }
+  Result := not (PreviousInstall and
+    (((Value = '') and (not HadStoredServer)) or
+     (HadStoredServer and (CompareText(Value, Trim(Existing)) = 0))));
+end;
+
+function CheckChosenServer: Boolean;
+var
+  Name, Value: String;
+  ExitCode: Integer;
+begin
+  Value := ChosenServer;
+  Result := False;
+  if not ValidServerUrl(Value) then
+  begin
+    Result := (Value = '') and PreviousInstall and (not HadStoredServer);
+    Exit;
+  end;
+  if not ServerNeedsProbe(Value) or (Value = VerifiedServer) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  if IsARM64 then Name := 'atlas-probe-arm64.exe'
+  else Name := 'atlas-probe-x64.exe';
+  try
+    ExtractTemporaryFile(Name);
+    Result := Exec(ExpandConstant('{tmp}\' + Name),
+      '--installer-probe "' + Value + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode)
+      and (ExitCode = 0);
+  except
+    Result := False;
+  end;
+  if Result then VerifiedServer := Value;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
   if CurPageID = ServerPage.ID then
   begin
-    if not ValidServerUrl(ServerPage.Values[0])
-      and not ((Trim(ServerPage.Values[0]) = '') and PreviousInstall and (not HadStoredServer)) then
+    if not CheckChosenServer then
     begin
-      MsgBox('Adresse invalide. Utilisez une adresse HTTPS telle que https://votre-serveur.example, ou http://localhost uniquement pour un serveur local.', mbError, MB_OK);
+      MsgBox('Serveur non vérifié. Vérifiez l’adresse HTTPS, le certificat et la connexion, puis réessayez.', mbError, MB_OK);
       Result := False;
     end;
   end;
 end;
 
-function ChosenServer: String;
-begin
-  Result := ServerUrlFromParam;
-  if Result = '' then
-    Result := Trim(ServerPage.Values[0]);
-end;
-
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not ValidServerUrl(ChosenServer)
-    and not ((ChosenServer = '') and PreviousInstall and (not HadStoredServer)) then
-    Result := 'Adresse du serveur invalide. Indiquez une origine HTTPS valide sans chemin ni identifiants.';
+  { Also enforce the check for silent installations, which skip wizard pages. }
+  if not CheckChosenServer then
+    Result := 'Serveur non vérifié. Vérifiez l’adresse HTTPS, le certificat et la connexion.';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
