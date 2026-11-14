@@ -70,10 +70,10 @@ Ces notes sont partielles : les validateurs, toutes les erreurs et chaque autori
 ## Risques techniques à instruire
 
 - Les jobs HTTP sont lancés sur un runtime Tokio et consultés par canal ; `Job::poll` utilise néanmoins un mutex et ne distingue pas un calcul encore actif d’un canal déconnecté. Un contrôle complet des chemins d’erreur et d’annulation reste nécessaire.
-- Le lanceur `open::that` est appelé depuis des chemins UI de repli navigateur et peut bloquer selon le système. Ce constat n’établit pas à lui seul la cause d’un incident utilisateur particulier.
+- Le repli navigateur v1 utilise maintenant un lanceur détaché sur un thread séparé et une attente bornée. D’autres appels `open::that` subsistent dans les chemins de connexion QR et ailleurs ; le diagnostic complet du gel reste à faire.
 - Le client HTTP général applique actuellement un timeout de 20 s ; l’authentification navigateur v1 et le health ont leurs propres limites. Leurs comportements en cas d’expiration et de restauration de session nécessitent des tests ciblés supplémentaires.
 - Décisions utilisateur : conserver la connexion WebView directe sans formulaire natif, maintenir le verrouillage du serveur installé et autoriser les matériaux Mica/Acrylic avec repli compatible. Les protections v1 restent inchangées.
-- Écart confirmé à traiter après la connexion : `crates/api/src/commerce.rs::create_product` transmet `force_duplicate=true` dans la query, alors que le Worker lit `body.force_duplicate` (`worker/index.ts:6886-6887`). Une nouvelle tentative peut donc encore recevoir 409 ; ne pas prétendre que le forçage fonctionne.
+- Écart corrigé dans `crates/api/src/commerce.rs::create_product` : le Worker lit `body.force_duplicate` (`worker/index.ts:6886-6887`), non la query. Les deux valeurs sont désormais envoyées dans le JSON et vérifiées sur une fixture HTTP locale ; aucun test contre un serveur réel.
 
 ## Index mécanique des déclarations de routes
 
