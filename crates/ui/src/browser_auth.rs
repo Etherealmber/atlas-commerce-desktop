@@ -264,7 +264,13 @@ async fn response<T: serde::de::DeserializeOwned>(
             status.as_u16(),
             content_kind
         );
-        return Err("Le serveur a refusé la demande de connexion. Recommencez.");
+        return Err(match status.as_u16() {
+            429 => "Trop de tentatives. Patientez avant de réessayer.",
+            500..=599 => {
+                "Le service de connexion est temporairement indisponible. Réessayez plus tard."
+            }
+            _ => "Le serveur a refusé la demande de connexion. Recommencez.",
+        });
     }
     const MAX_BODY: usize = 8192;
     if resp
@@ -328,7 +334,7 @@ async fn run(
         .map_err(|_| "Impossible de joindre le serveur en HTTPS.")?;
     if matches!(cap.status().as_u16(), 401 | 404) {
         return Err(
-            "Ce serveur ne prend pas en charge la connexion navigateur v1. Utilisez le mot de passe ou le QR.",
+            "Ce serveur ne prend pas en charge la connexion navigateur v1. Contactez votre administrateur.",
         );
     }
     let caps: Capabilities = response(cap, Stage::Capabilities).await?;
@@ -792,6 +798,24 @@ mod tests {
         });
         server.join().unwrap();
         result
+    }
+
+    #[test]
+    fn http_response_reports_throttling_and_service_outage_without_body() {
+        let limited =
+            b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_vec();
+        assert_eq!(
+            fixture_response(limited).err(),
+            Some("Trop de tentatives. Patientez avant de réessayer.")
+        );
+        let unavailable =
+            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_vec();
+        assert_eq!(
+            fixture_response(unavailable).err(),
+            Some("Le service de connexion est temporairement indisponible. Réessayez plus tard.")
+        );
     }
 
     #[test]
