@@ -66,10 +66,11 @@ pub struct Job<T> {
 
 impl<T> Job<T> {
     /// Returns the result the first time it is ready, then keeps returning
-    /// `None` (poll is idempotent after completion).
+    /// `None` (poll is idempotent after completion). Never waits for the
+    /// receiver mutex: a worker may be holding it inside [`Self::wait`].
     #[must_use]
     pub fn poll(&self) -> Option<T> {
-        match self.receiver.lock().ok()?.try_recv() {
+        match self.receiver.try_lock().ok()?.try_recv() {
             Ok(value) => Some(value),
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => None,
@@ -99,6 +100,22 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
             42
         });
+        assert_eq!(job.wait().unwrap(), 42);
+    }
+
+    #[test]
+    fn poll_does_not_wait_for_a_busy_receiver() {
+        let runner = JobRunner::new();
+        let job = std::sync::Arc::new(runner.spawn(async { 42 }));
+        let guard = job.receiver.lock().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let other = job.clone();
+        let thread = std::thread::spawn(move || tx.send(other.poll()));
+        let result = rx.recv_timeout(Duration::from_secs(1));
+        // Release even on failure so a regression cannot hang the test suite.
+        drop(guard);
+        thread.join().unwrap().unwrap();
+        assert_eq!(result.unwrap(), None);
         assert_eq!(job.wait().unwrap(), 42);
     }
 
