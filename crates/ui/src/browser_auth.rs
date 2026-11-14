@@ -29,6 +29,15 @@ pub(crate) struct BrowserLogin {
     pub(crate) pending_url: Option<Url>,
 }
 
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_wait(server: Option<String>) -> BrowserLogin {
+    BrowserLogin {
+        active: true,
+        server,
+        ..Default::default()
+    }
+}
+
 struct Event {
     url: Url,
     pairing_code: String,
@@ -244,6 +253,7 @@ async fn run(
     let server = base.origin().ascii_serialization();
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|_| "Impossible de créer le client sécurisé.")?;
@@ -265,6 +275,9 @@ async fn run(
         || caps.callbacks
     {
         return Err("Ce serveur ne prend pas en charge le protocole attendu.");
+    }
+    if cancelled.load(Ordering::Relaxed) {
+        return Err("Connexion annulée.");
     }
     let state = secret()?;
     let verifier = secret()?;
@@ -353,8 +366,17 @@ async fn run(
             .timeout(remaining.min(Duration::from_secs(15)))
             .json(&proof)
             .send()
-            .await
-            .map_err(|_| "Connexion interrompue ; recommencez.")?;
+            .await;
+        if cancelled.load(Ordering::Relaxed) {
+            let _ = client
+                .post(endpoint("cancel"))
+                .header("X-Device-Fingerprint", &fingerprint)
+                .json(&proof)
+                .send()
+                .await;
+            return Err("Connexion annulée.");
+        }
+        let reply = reply.map_err(|_| "Connexion interrompue ; recommencez.")?;
         if reply.status().as_u16() == 429 {
             let seconds = reply
                 .headers()
@@ -384,6 +406,12 @@ async fn run(
             "pending" => {}
             "approved" => {
                 if cancelled.load(Ordering::Relaxed) {
+                    let _ = client
+                        .post(endpoint("cancel"))
+                        .header("X-Device-Fingerprint", &fingerprint)
+                        .json(&proof)
+                        .send()
+                        .await;
                     return Err("Connexion annulée.");
                 }
                 let remaining = deadline.saturating_duration_since(Instant::now());
@@ -492,13 +520,24 @@ pub(crate) fn fallback_to_browser(app: &mut AtlasApp, url: Url, message: &str) -
     }
 }
 
-pub(crate) fn cancel(app: &mut AtlasApp) {
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    {
-        app.browser_login.pending_url = None;
+/// Detach a cancelled flow immediately. Its worker retains the cancellation
+/// flag and makes the existing best-effort server cancellation once possible;
+/// its event/result receivers are dropped, so late results cannot enter a
+/// later session or reopen the embedded browser.
+fn detach_cancelled(state: &mut BrowserLogin) -> bool {
+    if !state.active {
+        return false;
     }
-    if let Some(flag) = &app.browser_login.cancel {
+    if let Some(flag) = &state.cancel {
         flag.store(true, Ordering::Relaxed);
+    }
+    *state = BrowserLogin::default();
+    true
+}
+
+pub(crate) fn cancel(app: &mut AtlasApp) {
+    if detach_cancelled(&mut app.browser_login) {
+        app.login.busy = false;
     }
 }
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -522,6 +561,7 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         || app.browser_login.server.as_deref() != app.server_store.selected_url()
     {
         cancel(app);
+        return;
     }
     if let Some(event) = app
         .browser_login
@@ -575,6 +615,34 @@ mod tests {
         Capabilities, Created, Envelope, Poll, Session, decode_envelope, origin, same_context,
         secret, valid_authorization_url,
     };
+    #[test]
+    fn cancelled_flow_detaches_receivers_and_cannot_deliver_late_events() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        };
+        let flag = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let mut flow = super::BrowserLogin {
+            active: true,
+            cancel: Some(flag.clone()),
+            events: Some(rx),
+            pairing_code: Some("ABCD-EFGH".into()),
+            ..Default::default()
+        };
+        assert!(super::detach_cancelled(&mut flow));
+        assert!(flag.load(Ordering::Relaxed));
+        assert!(!flow.active);
+        assert!(flow.pairing_code.is_none());
+        let event = super::Event {
+            url: url::Url::parse("https://example.invalid/login/desktop").unwrap(),
+            pairing_code: "ABCD-EFGH".into(),
+        };
+        assert!(tx.send(event).is_err());
+        assert!(!super::detach_cancelled(&mut flow));
+    }
+
     // A local fixture exercises the actual HTTP response handling without
     // contacting a real server or weakening the HTTPS requirement in run().
     fn fixture_response(raw: Vec<u8>) -> Result<Poll, &'static str> {

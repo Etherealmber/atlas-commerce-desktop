@@ -896,7 +896,9 @@ impl AtlasApp {
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
     pub fn show_fictional_browser_wait(&mut self) {
-        self.browser_login.active = true;
+        self.browser_login = crate::browser_auth::fictional_wait(
+            self.server_store.selected_url().map(str::to_owned),
+        );
         self.login.busy = true;
         self.login.browser_auto_started = true;
     }
