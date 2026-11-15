@@ -1639,3 +1639,15 @@ msgstr "Réessayer les entrepôts"
 
 msgid "Values are provided by the server. Print / PDF opens the official report in your browser."
 msgstr "Les valeurs sont fournies par le serveur. Imprimer / PDF ouvre le rapport officiel dans le navigateur."
+
+msgid "Operations"
+msgstr "Opérations"
+
+msgid "Catalog and stock"
+msgstr "Catalogue et stock"
+
+msgid "Management"
+msgstr "Gestion"
+
+msgid "Secure sign-in"
+msgstr "Connexion sécurisée"

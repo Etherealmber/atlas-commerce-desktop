@@ -1,9 +1,5 @@
-//! The visual identity: the Atlas Commerce design system shared with the
-//! web ERP (`src/styles/theme.css`) and the Android app (`ui/theme/Theme.kt`).
-//! The directive is monochrome: a black/white primary, zinc neutrals, no
-//! teal and no saffron/orange brand accent — only the semantic warning and
-//! danger tokens keep colour. A dark-first palette, its light counterpart,
-//! and editable JSON palette files through fastframe.
+//! Central desktop palette and widget tokens. The default light palette uses
+//! opaque Fluent-inspired surfaces; dark and custom palettes remain available.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -94,43 +90,40 @@ impl Palette {
         }
     }
 
-    /// The light counterpart, using the web `theme.css` tokens exactly:
-    /// `#f4f5f7` background, white paper, `#0f172a` ink, `#64748b` muted,
-    /// `#e8eaef` lines and the near-black `#0a0a0a` primary with
-    /// `#fafafa` text.
+    /// Solid Fluent-inspired light workspace and semantic status colours.
     #[must_use]
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xf4, 0xf5, 0xf7),
-            panel: hex(0xff, 0xff, 0xff),
+            window: hex(0xfa, 0xf9, 0xf8),
+            panel: hex(0xf3, 0xf2, 0xf1),
             surface: hex(0xff, 0xff, 0xff),
-            surface_hover: hex(0xf1, 0xf5, 0xf9),
-            surface_active: hex(0xf1, 0xf5, 0xf9),
-            outline: hex(0xe8, 0xea, 0xef),
-            text: hex(0x0f, 0x17, 0x2a),
-            secondary: hex(0x64, 0x74, 0x8b),
-            dim: hex(0x71, 0x71, 0x7a),
-            accent: hex(0x0a, 0x0a, 0x0a),
-            accent_hover: hex(0x17, 0x17, 0x17),
-            on_accent: hex(0xfa, 0xfa, 0xfa),
-            danger: hex(0xdc, 0x26, 0x26),
-            warning: hex(0xd9, 0x77, 0x06),
+            surface_hover: hex(0xed, 0xeb, 0xe9),
+            surface_active: hex(0xeb, 0xf3, 0xfc),
+            outline: hex(0xe1, 0xdf, 0xdd),
+            text: hex(0x24, 0x24, 0x24),
+            secondary: hex(0x61, 0x61, 0x61),
+            dim: hex(0x61, 0x61, 0x61),
+            accent: hex(0x0f, 0x6c, 0xbd),
+            accent_hover: hex(0x11, 0x5e, 0xa3),
+            on_accent: hex(0xff, 0xff, 0xff),
+            danger: hex(0xa4, 0x26, 0x2c),
+            warning: hex(0x8a, 0x53, 0x00),
             overlay: hex(0xff, 0xff, 0xff),
             // SOURCED-FROM: Theme.kt badge saffron, counters only.
             badge: hex(0xf5, 0x9e, 0x0b),
             on_badge: hex(0x0a, 0x0a, 0x0a),
             // Web light elevation: 0 1px 2px rgba(15, 23, 42, 0.04).
             shadow: Color32::from_rgba_unmultiplied(15, 23, 42, 10),
-            // SOURCED-FROM: atlas-commerce-android Theme.kt LightPalette.
-            finance_positive: hex(0x0f, 0x7b, 0x4f),
-            finance_positive_soft: hex(0xe6, 0xf6, 0xec),
-            finance_warning: hex(0xb4, 0x53, 0x09),
-            finance_warning_soft: hex(0xfe, 0xf3, 0xc7),
-            finance_danger: hex(0xb9, 0x1c, 0x1c),
-            finance_danger_soft: hex(0xfe, 0xe2, 0xe2),
-            finance_info: hex(0x1d, 0x4e, 0xd8),
-            finance_info_soft: hex(0xe0, 0xea, 0xff),
+            // Restrained semantic colours for the light workspace.
+            finance_positive: hex(0x0e, 0x70, 0x0e),
+            finance_positive_soft: hex(0xdf, 0xf6, 0xdd),
+            finance_warning: hex(0x8a, 0x53, 0x00),
+            finance_warning_soft: hex(0xff, 0xf4, 0xce),
+            finance_danger: hex(0xa4, 0x26, 0x2c),
+            finance_danger_soft: hex(0xfd, 0xe7, 0xe9),
+            finance_info: hex(0x0f, 0x6c, 0xbd),
+            finance_info_soft: hex(0xeb, 0xf3, 0xfc),
         }
     }
 }
@@ -139,13 +132,11 @@ const fn hex(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
-/// Desktop radius scale (master parity spec §4): chips 999 live inline.
-/// Controls (buttons, inputs): 12 px · cards and stat tiles: 14 px ·
-/// large panels, windows and modals: 18 px · hero surfaces: 20 px.
-pub const RADIUS_CONTROL: u8 = 12;
-pub const RADIUS_CARD: u8 = 14;
-pub const RADIUS_LARGE: u8 = 18;
-pub const RADIUS_HERO: u8 = 20;
+/// Desktop radius scale for controls, cards and larger panels.
+pub const RADIUS_CONTROL: u8 = 4;
+pub const RADIUS_CARD: u8 = 6;
+pub const RADIUS_LARGE: u8 = 8;
+pub const RADIUS_HERO: u8 = 8;
 
 /// Minimum interactive target (master parity spec §4): every control is at
 /// least 44 px tall; the primary action sits at 48 px (Android primary is
@@ -297,7 +288,7 @@ fn apply_to_style(style: &mut Style, palette: &Palette, reduced_motion: bool) {
     visuals.slider_trailing_fill = true;
     visuals.handle_shape = egui::style::HandleShape::Circle;
 
-    // Buttons and inputs share the 12 px control radius.
+    // Buttons and inputs share the desktop control radius.
     let corner = CornerRadius::same(RADIUS_CONTROL);
     visuals.widgets.noninteractive.corner_radius = corner;
     visuals.widgets.noninteractive.bg_fill = palette.surface;
@@ -473,9 +464,8 @@ mod tests {
     }
 
     #[test]
-    fn parity_tokens_match_the_web_and_android_sources() {
-        // Master parity spec §2/§7: exact hexes from web theme.css and
-        // Android Theme.kt; guards against silent token drift.
+    fn light_tokens_match_fluent_and_dark_remains_available() {
+        // Keep the selected light surfaces opaque and high contrast.
         let dark = Palette::dark();
         let light = Palette::light();
         assert_eq!(dark.window, hex(0x11, 0x11, 0x13));
@@ -485,19 +475,30 @@ mod tests {
         assert_eq!(dark.secondary, hex(0xa1, 0xa1, 0xaa));
         // Dark mode has no shadow at all (--ac-shadow: none).
         assert_eq!(dark.shadow, Color32::TRANSPARENT);
-        assert_eq!(light.window, hex(0xf4, 0xf5, 0xf7));
+        assert_eq!(light.window, hex(0xfa, 0xf9, 0xf8));
         assert_eq!(light.surface, hex(0xff, 0xff, 0xff));
-        assert_eq!(light.text, hex(0x0f, 0x17, 0x2a));
-        assert_eq!(light.secondary, hex(0x64, 0x74, 0x8b));
-        assert_eq!(light.outline, hex(0xe8, 0xea, 0xef));
+        assert_eq!(light.panel, hex(0xf3, 0xf2, 0xf1));
+        assert_eq!(light.accent, hex(0x0f, 0x6c, 0xbd));
+        for color in [
+            light.window,
+            light.panel,
+            light.surface,
+            light.overlay,
+            light.surface_active,
+        ] {
+            assert_eq!(color.a(), 255);
+        }
+        assert_eq!(light.text, hex(0x24, 0x24, 0x24));
+        assert_eq!(light.secondary, hex(0x61, 0x61, 0x61));
+        assert_eq!(light.outline, hex(0xe1, 0xdf, 0xdd));
         assert_eq!(
             light.shadow,
             Color32::from_rgba_unmultiplied(15, 23, 42, 10)
         );
-        // Financial semantics (Theme.kt), light then dark.
-        assert_eq!(light.finance_positive, hex(0x0f, 0x7b, 0x4f));
-        assert_eq!(light.finance_positive_soft, hex(0xe6, 0xf6, 0xec));
-        assert_eq!(light.finance_danger, hex(0xb9, 0x1c, 0x1c));
+        // Light Fluent semantics and existing dark semantics.
+        assert_eq!(light.finance_positive, hex(0x0e, 0x70, 0x0e));
+        assert_eq!(light.finance_positive_soft, hex(0xdf, 0xf6, 0xdd));
+        assert_eq!(light.finance_danger, hex(0xa4, 0x26, 0x2c));
         assert_eq!(dark.finance_positive, hex(0x34, 0xd3, 0x99));
         assert_eq!(dark.finance_positive_soft, hex(0x10, 0x36, 0x2a));
         assert_eq!(dark.finance_info, hex(0x93, 0xc5, 0xfd));

@@ -94,12 +94,17 @@ fn build(route: &str) -> AtlasApp {
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
-    if route == "login" || route == "login-qr" {
+    if route == "login" || route == "login-qr" || route == "login-wait" {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
         app.login.browser_auto_started = true;
         app.login.error = Some("Connexion fictive indisponible.".into());
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "login-wait" {
+        app.login.error = None;
+        app.show_fictional_browser_wait();
     }
     if route == "login-qr" {
         // Inert deep-link state: no token and no server request.

@@ -6,6 +6,7 @@ param(
     [Parameter(Mandatory = $true)][string]$InnoSetup
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-health-fixture.ps1')
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'This destructive packaging test requires a disposable GitHub-hosted runner.'
 }
@@ -23,13 +24,15 @@ $innoDir = Join-Path $work 'inno'
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E74305A7-4960-45B6-93C9-CEA8D83B1517}_is1'
 $msiInstalled = $false
 New-Item -ItemType Directory -Force $work | Out-Null
+$fixture = $null
 try {
+    $fixture = Start-AtlasHealthFixture $work
     $args = @('/i', "`"$Msi`"", '/qn', '/norestart', "INSTALLFOLDER=`"$msiDir`"")
     $p = Start-Process msiexec.exe -ArgumentList $args -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "MSI install failed: $($p.ExitCode)" }
     $msiInstalled = $true
     if (-not (Test-Path (Join-Path $msiDir 'atlas-commerce-desktop.exe'))) { throw 'MSI binary missing' }
-    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/SERVERURL=https://shop.example.invalid', "/DIR=`"$innoDir`"")
+    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/SERVERURL=$($fixture.Url)", "/DIR=`"$innoDir`"")
     $p = Start-Process -FilePath $InnoSetup -ArgumentList $args -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "Inno install failed: $($p.ExitCode)" }
     if (-not (Test-Path $key) -or -not (Test-Path (Join-Path $innoDir 'atlas-commerce-desktop.exe'))) { throw 'Inno install missing' }
@@ -47,6 +50,7 @@ try {
     Write-Output 'Mixed MSI/Inno test: separate installs, remove MSI, repair Inno, protocol restored.'
 }
 finally {
+    if ($fixture) { Stop-Process -Id $fixture.Process.Id -ErrorAction SilentlyContinue }
     if ($msiInstalled) {
         $p = Start-Process msiexec.exe -ArgumentList @('/x', "`"$Msi`"", '/qn', '/norestart') -Wait -PassThru
         if ($p.ExitCode -ne 0) { Write-Warning "Cleanup MSI failed: $($p.ExitCode)" }

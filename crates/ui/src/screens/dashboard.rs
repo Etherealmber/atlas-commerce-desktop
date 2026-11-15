@@ -86,9 +86,14 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(14.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.vertical(|ui| {
-            recent_invoices(app, ui, palette, &data);
-        });
+        egui::CollapsingHeader::new(
+            RichText::new(t!(app.locale, "Recent invoices"))
+                .color(palette.text)
+                .strong(),
+        )
+        .id_salt("dashboard-recent-invoices")
+        .default_open(false)
+        .show(ui, |ui| recent_invoices(app, ui, palette, &data));
     });
 }
 
@@ -357,14 +362,6 @@ fn short_month(label: &str) -> String {
 }
 
 fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(t!(app.locale, "Recent invoices"))
-                .color(palette.text)
-                .strong()
-                .size(15.0),
-        );
-    });
     ui.add_space(8.0);
     if data.recent_invoices.is_empty() {
         widgets::empty_state(

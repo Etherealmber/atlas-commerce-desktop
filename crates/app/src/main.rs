@@ -52,6 +52,18 @@ struct Cli {
 }
 
 fn main() -> eframe::Result<()> {
+    // The installer uses the packaged binary before installation. This path
+    // exits before logging, user data, vault or the single-instance slot.
+    let mut args = std::env::args_os();
+    let _executable = args.next();
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("--installer-probe")) {
+        let origin = args.next();
+        let ok = args.next().is_none()
+            && origin
+                .and_then(|value| value.into_string().ok())
+                .is_some_and(|origin| atlas_ui::server_probe::installer_check(&origin));
+        std::process::exit(if ok { 0 } else { 1 });
+    }
     // 1. Update helper first: it may install a downloaded release and exit.
     let launch: Launch = fastframe_update::intercept(&atlas_ui::update::CONFIG);
     let cli = Cli::parse_from(&launch.arguments);

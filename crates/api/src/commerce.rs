@@ -5,6 +5,14 @@ use crate::ApiClient;
 use crate::error::ApiError;
 use crate::models::*;
 
+// The Worker reads this flag from JSON, not the query string.
+#[derive(serde::Serialize)]
+struct CreateProductRequest<'a> {
+    #[serde(flatten)]
+    product: &'a CreateProduct,
+    force_duplicate: bool,
+}
+
 impl ApiClient {
     /// `GET /api/products` — the mobile/light field set, capped like Android.
     pub async fn products(&self, query: &str, limit: u32) -> Result<Vec<Product>, ApiError> {
@@ -27,12 +35,11 @@ impl ApiClient {
         product: &CreateProduct,
         force_duplicate: bool,
     ) -> Result<Product, ApiError> {
-        let path = if force_duplicate {
-            "/api/products?force_duplicate=true"
-        } else {
-            "/api/products"
+        let request = CreateProductRequest {
+            product,
+            force_duplicate,
         };
-        self.post_data(path, product).await
+        self.post_data("/api/products", &request).await
     }
 
     /// `POST /api/products/:id/adjust-stock`.
@@ -97,6 +104,93 @@ pub(crate) fn urlencoding(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_override_is_an_explicit_boolean_in_the_product_body() {
+        let product = CreateProduct {
+            name: "Produit exemple".to_owned(),
+            sku: "SKU-EXEMPLE".to_owned(),
+            ..Default::default()
+        };
+        for force in [false, true] {
+            let value = serde_json::to_value(CreateProductRequest {
+                product: &product,
+                force_duplicate: force,
+            })
+            .unwrap();
+            assert_eq!(value["name"], "Produit exemple");
+            assert_eq!(value["sku"], "SKU-EXEMPLE");
+            assert_eq!(value["force_duplicate"], force);
+            assert!(value.get("product").is_none());
+        }
+    }
+
+    #[test]
+    fn product_override_is_sent_in_json_not_in_url() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        for force in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut raw = Vec::new();
+                let header_end = loop {
+                    let mut chunk = [0; 1024];
+                    let count = stream.read(&mut chunk).unwrap();
+                    assert!(count > 0);
+                    raw.extend_from_slice(&chunk[..count]);
+                    if let Some(i) = raw.windows(4).position(|window| window == b"\r\n\r\n") {
+                        break i + 4;
+                    }
+                };
+                let headers = String::from_utf8_lossy(&raw[..header_end]);
+                assert!(headers.starts_with("POST /api/products HTTP/1.1\r\n"));
+                let length: usize = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse().ok())
+                            .flatten()
+                    })
+                    .unwrap();
+                while raw.len() - header_end < length {
+                    let mut chunk = [0; 1024];
+                    let count = stream.read(&mut chunk).unwrap();
+                    assert!(count > 0);
+                    raw.extend_from_slice(&chunk[..count]);
+                }
+                let body: serde_json::Value =
+                    serde_json::from_slice(&raw[header_end..header_end + length]).unwrap();
+                assert_eq!(body["force_duplicate"], force);
+                assert_eq!(body["name"], "Produit exemple");
+                let response = br#"{"success":true,"data":{"id":42}}"#;
+                write!(stream, "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", response.len()).unwrap();
+                stream.write_all(response).unwrap();
+            });
+            let runner = atlas_core::jobs::JobRunner::new();
+            let client =
+                ApiClient::new(&format!("http://{address}"), "fixture-device", "fixture").unwrap();
+            let product = CreateProduct {
+                name: "Produit exemple".to_owned(),
+                ..Default::default()
+            };
+            assert!(
+                runner
+                    .spawn(async move { client.create_product(&product, force).await })
+                    .wait()
+                    .unwrap()
+                    .is_ok()
+            );
+            server.join().unwrap();
+        }
+    }
 
     #[test]
     fn encodes_search_terms() {

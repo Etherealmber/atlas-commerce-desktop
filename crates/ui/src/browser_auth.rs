@@ -19,6 +19,7 @@ use crate::state::{AtlasApp, Screen};
 pub(crate) struct BrowserLogin {
     job: Option<Job<Result<Session, &'static str>>>,
     events: Option<mpsc::Receiver<Event>>,
+    browser_open: Option<BrowserOpen>,
     cancel: Option<Arc<AtomicBool>>,
     server: Option<String>,
     pub(crate) pairing_code: Option<String>,
@@ -27,6 +28,77 @@ pub(crate) struct BrowserLogin {
     pub(crate) embedded: bool,
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) pending_url: Option<Url>,
+}
+
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_wait(server: Option<String>) -> BrowserLogin {
+    BrowserLogin {
+        active: true,
+        server,
+        ..Default::default()
+    }
+}
+
+/// The OS launcher can block indefinitely; it never runs on the render
+/// thread or a Tokio worker. Dropping this receiver discards any late result.
+struct BrowserOpen {
+    started: Instant,
+    result: mpsc::Receiver<std::io::Result<()>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum OpenStatus {
+    Pending,
+    Opened,
+    Failed,
+}
+
+impl BrowserOpen {
+    fn poll(&self) -> OpenStatus {
+        match self.result.try_recv() {
+            Ok(Ok(())) => OpenStatus::Opened,
+            Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => OpenStatus::Failed,
+            Err(mpsc::TryRecvError::Empty) if self.started.elapsed() < Duration::from_secs(15) => {
+                OpenStatus::Pending
+            }
+            Err(mpsc::TryRecvError::Empty) => OpenStatus::Failed,
+        }
+    }
+}
+
+fn launch_browser(url: Url, cancelled: Arc<AtomicBool>) -> std::io::Result<BrowserOpen> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("atlas-browser-launch".to_owned())
+        .spawn(move || {
+            // Never log the URL: its fragment contains the one-time request.
+            // Once the OS launcher is invoked it cannot be recalled, but an
+            // already-cancelled flow must not start it on a delayed thread.
+            if !cancelled.load(Ordering::Relaxed) {
+                let _ = tx.send(open::that_detached(url.as_str()));
+            }
+        })?;
+    Ok(BrowserOpen {
+        started: Instant::now(),
+        result: rx,
+    })
+}
+
+fn start_browser_open(app: &mut AtlasApp, url: Url) -> bool {
+    let Some(cancelled) = app.browser_login.cancel.clone() else {
+        return false;
+    };
+    match launch_browser(url, cancelled) {
+        Ok(open) => {
+            app.browser_login.browser_open = Some(open);
+            true
+        }
+        Err(_) => {
+            cancel(app);
+            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+            false
+        }
+    }
 }
 
 struct Event {
@@ -192,7 +264,13 @@ async fn response<T: serde::de::DeserializeOwned>(
             status.as_u16(),
             content_kind
         );
-        return Err("Le serveur a refusé la demande de connexion. Recommencez.");
+        return Err(match status.as_u16() {
+            429 => "Trop de tentatives. Patientez avant de réessayer.",
+            500..=599 => {
+                "Le service de connexion est temporairement indisponible. Réessayez plus tard."
+            }
+            _ => "Le serveur a refusé la demande de connexion. Recommencez.",
+        });
     }
     const MAX_BODY: usize = 8192;
     if resp
@@ -244,6 +322,7 @@ async fn run(
     let server = base.origin().ascii_serialization();
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|_| "Impossible de créer le client sécurisé.")?;
@@ -255,7 +334,7 @@ async fn run(
         .map_err(|_| "Impossible de joindre le serveur en HTTPS.")?;
     if matches!(cap.status().as_u16(), 401 | 404) {
         return Err(
-            "Ce serveur ne prend pas en charge la connexion navigateur v1. Utilisez le mot de passe ou le QR.",
+            "Ce serveur ne prend pas en charge la connexion navigateur v1. Contactez votre administrateur.",
         );
     }
     let caps: Capabilities = response(cap, Stage::Capabilities).await?;
@@ -265,6 +344,9 @@ async fn run(
         || caps.callbacks
     {
         return Err("Ce serveur ne prend pas en charge le protocole attendu.");
+    }
+    if cancelled.load(Ordering::Relaxed) {
+        return Err("Connexion annulée.");
     }
     let state = secret()?;
     let verifier = secret()?;
@@ -353,8 +435,17 @@ async fn run(
             .timeout(remaining.min(Duration::from_secs(15)))
             .json(&proof)
             .send()
-            .await
-            .map_err(|_| "Connexion interrompue ; recommencez.")?;
+            .await;
+        if cancelled.load(Ordering::Relaxed) {
+            let _ = client
+                .post(endpoint("cancel"))
+                .header("X-Device-Fingerprint", &fingerprint)
+                .json(&proof)
+                .send()
+                .await;
+            return Err("Connexion annulée.");
+        }
+        let reply = reply.map_err(|_| "Connexion interrompue ; recommencez.")?;
         if reply.status().as_u16() == 429 {
             let seconds = reply
                 .headers()
@@ -384,6 +475,12 @@ async fn run(
             "pending" => {}
             "approved" => {
                 if cancelled.load(Ordering::Relaxed) {
+                    let _ = client
+                        .post(endpoint("cancel"))
+                        .header("X-Device-Fingerprint", &fingerprint)
+                        .json(&proof)
+                        .send()
+                        .await;
                     return Err("Connexion annulée.");
                 }
                 let remaining = deadline.saturating_duration_since(Instant::now());
@@ -482,23 +579,32 @@ pub(crate) fn fallback_allowed(message: &str) -> bool {
 pub(crate) fn fallback_to_browser(app: &mut AtlasApp, url: Url, message: &str) -> bool {
     app.browser_login.embedded = false;
     app.browser_login.pending_url = None;
-    if open::that(url.as_str()).is_err() {
-        cancel(app);
-        app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
-        false
-    } else {
+    if start_browser_open(app, url) {
         app.login.error = Some(message.to_owned());
         true
+    } else {
+        false
     }
 }
 
-pub(crate) fn cancel(app: &mut AtlasApp) {
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    {
-        app.browser_login.pending_url = None;
+/// Detach a cancelled flow immediately. Its worker retains the cancellation
+/// flag and makes the existing best-effort server cancellation once possible;
+/// its event/result receivers are dropped, so late results cannot enter a
+/// later session or reopen the embedded browser.
+fn detach_cancelled(state: &mut BrowserLogin) -> bool {
+    if !state.active {
+        return false;
     }
-    if let Some(flag) = &app.browser_login.cancel {
+    if let Some(flag) = &state.cancel {
         flag.store(true, Ordering::Relaxed);
+    }
+    *state = BrowserLogin::default();
+    true
+}
+
+pub(crate) fn cancel(app: &mut AtlasApp) {
+    if detach_cancelled(&mut app.browser_login) {
+        app.login.busy = false;
     }
 }
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -522,6 +628,7 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         || app.browser_login.server.as_deref() != app.server_store.selected_url()
     {
         cancel(app);
+        return;
     }
     if let Some(event) = app
         .browser_login
@@ -539,14 +646,24 @@ pub(crate) fn poll(app: &mut AtlasApp) {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if app.browser_login.embedded {
             app.browser_login.pending_url = Some(event.url);
-        } else if open::that(event.url.as_str()).is_err() {
-            cancel(app);
-            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        } else {
+            start_browser_open(app, event.url);
         }
         #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-        if open::that(event.url.as_str()).is_err() {
-            cancel(app);
-            app.login.error = Some("Impossible d’ouvrir le navigateur.".to_owned());
+        start_browser_open(app, event.url);
+    }
+    if let Some(open) = &app.browser_login.browser_open {
+        match open.poll() {
+            OpenStatus::Pending => {}
+            OpenStatus::Opened => app.browser_login.browser_open = None,
+            OpenStatus::Failed => {
+                cancel(app);
+                app.login.error = Some(
+                    "Impossible d’ouvrir le navigateur. Vérifiez votre navigateur par défaut et réessayez."
+                        .to_owned(),
+                );
+                return;
+            }
         }
     }
     if let Some(result) = app.browser_login.job.as_ref().and_then(Job::poll) {
@@ -575,6 +692,79 @@ mod tests {
         Capabilities, Created, Envelope, Poll, Session, decode_envelope, origin, same_context,
         secret, valid_authorization_url,
     };
+    #[test]
+    fn browser_open_is_non_blocking_and_handles_failure_timeout_and_late_results() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+        let (tx, rx) = mpsc::channel();
+        let mut open = super::BrowserOpen {
+            started: Instant::now(),
+            result: rx,
+        };
+        assert_eq!(open.poll(), super::OpenStatus::Pending);
+        tx.send(Ok(())).unwrap();
+        assert_eq!(open.poll(), super::OpenStatus::Opened);
+
+        let (tx, rx) = mpsc::channel();
+        open = super::BrowserOpen {
+            started: Instant::now() - Duration::from_secs(16),
+            result: rx,
+        };
+        assert_eq!(open.poll(), super::OpenStatus::Failed);
+        drop(open);
+        assert!(tx.send(Ok(())).is_err());
+
+        let (tx, rx) = mpsc::channel();
+        open = super::BrowserOpen {
+            started: Instant::now(),
+            result: rx,
+        };
+        tx.send(Err(std::io::Error::other("launcher failed")))
+            .unwrap();
+        assert_eq!(open.poll(), super::OpenStatus::Failed);
+        let (tx, rx) = mpsc::channel();
+        open = super::BrowserOpen {
+            started: Instant::now(),
+            result: rx,
+        };
+        drop(tx);
+        assert_eq!(open.poll(), super::OpenStatus::Failed);
+    }
+
+    #[test]
+    fn cancelled_flow_detaches_receivers_and_cannot_deliver_late_events() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        };
+        let flag = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let (open_tx, open_rx) = mpsc::channel();
+        let mut flow = super::BrowserLogin {
+            active: true,
+            cancel: Some(flag.clone()),
+            events: Some(rx),
+            browser_open: Some(super::BrowserOpen {
+                started: std::time::Instant::now(),
+                result: open_rx,
+            }),
+            pairing_code: Some("ABCD-EFGH".into()),
+            ..Default::default()
+        };
+        assert!(super::detach_cancelled(&mut flow));
+        assert!(flag.load(Ordering::Relaxed));
+        assert!(!flow.active);
+        assert!(flow.pairing_code.is_none());
+        let event = super::Event {
+            url: url::Url::parse("https://example.invalid/login/desktop").unwrap(),
+            pairing_code: "ABCD-EFGH".into(),
+        };
+        assert!(tx.send(event).is_err());
+        assert!(open_tx.send(Ok(())).is_err());
+        assert!(!super::detach_cancelled(&mut flow));
+    }
+
     // A local fixture exercises the actual HTTP response handling without
     // contacting a real server or weakening the HTTPS requirement in run().
     fn fixture_response(raw: Vec<u8>) -> Result<Poll, &'static str> {
@@ -608,6 +798,24 @@ mod tests {
         });
         server.join().unwrap();
         result
+    }
+
+    #[test]
+    fn http_response_reports_throttling_and_service_outage_without_body() {
+        let limited =
+            b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_vec();
+        assert_eq!(
+            fixture_response(limited).err(),
+            Some("Trop de tentatives. Patientez avant de réessayer.")
+        );
+        let unavailable =
+            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_vec();
+        assert_eq!(
+            fixture_response(unavailable).err(),
+            Some("Le service de connexion est temporairement indisponible. Réessayez plus tard.")
+        );
     }
 
     #[test]

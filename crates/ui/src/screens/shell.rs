@@ -13,9 +13,8 @@ use crate::{t, widgets};
 
 /// Height of the custom caption row (web topbar: 56 px).
 const TITLEBAR_HEIGHT: f32 = 56.0;
-/// Web sidebar widths: 17.5 rem (280 px) expanded, 4.5 rem (72 px) when the
-/// rail collapses to icons below the 1180 px breakpoint.
-const RAIL_WIDTH_EXPANDED: f32 = 280.0;
+/// Compact labelled rail and icon-only rail at narrower window widths.
+const RAIL_WIDTH_EXPANDED: f32 = 224.0;
 const RAIL_WIDTH_COLLAPSED: f32 = 72.0;
 const RAIL_COLLAPSE_BELOW: f32 = 1180.0;
 
@@ -349,7 +348,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             // The pill takes the room left by the action cluster and the
             // navigation arrows, clamped to a readable range.
-            let search_width = ui.available_width().clamp(80.0, 420.0);
+            let search_width = ui.available_width().clamp(80.0, 260.0);
             draw_search_pill(app, ui, palette, search_width);
         });
     });
@@ -733,15 +732,23 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
     ui.add_space(8.0);
     // Only destinations implemented by the native client are listed; no
     // placeholder routes or unverified worker endpoints are introduced.
-    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 6] = [
-        (t!(app.locale, "Overview"), &[Route::Dashboard]),
-        (t!(app.locale, "Catalog"), &[Route::Products]),
-        (t!(app.locale, "Customer relations"), &[Route::Clients]),
-        (t!(app.locale, "Team"), &[Route::Sales, Route::Employees]),
-        (t!(app.locale, "Purchases"), &[Route::Vendors]),
+    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 3] = [
         (
-            t!(app.locale, "Finance"),
-            &[Route::Expenses, Route::DeliveryNotes],
+            t!(app.locale, "Operations"),
+            &[
+                Route::Dashboard,
+                Route::Sales,
+                Route::Clients,
+                Route::DeliveryNotes,
+            ],
+        ),
+        (
+            t!(app.locale, "Catalog and stock"),
+            &[Route::Products, Route::Vendors],
+        ),
+        (
+            t!(app.locale, "Management"),
+            &[Route::Expenses, Route::Employees],
         ),
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -794,7 +801,7 @@ fn rail_row(
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     let hovered = ui.rect_contains_pointer(rect);
     if is_active {
-        ui.painter().rect_filled(rect, 10.0, palette.surface_active);
+        ui.painter().rect_filled(rect, 4.0, palette.surface_active);
         // The accent stripe belongs to the labelled rail only; the 72 px
         // collapsed strip communicates selection through tint + surface.
         if !collapsed {
@@ -808,7 +815,7 @@ fn rail_row(
             );
         }
     } else if hovered {
-        ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 4.0, palette.surface_hover);
     }
     let tint = if is_active {
         palette.accent

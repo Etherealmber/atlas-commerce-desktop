@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
               ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -107,6 +107,33 @@ jobs:
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
+      - name: Review login fallback screenshot
+        run: |
+          convert visual-output/login.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-login-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review login waiting screenshot
+        run: |
+          convert visual-output/login-wait.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-login-wait-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
+      - name: Review dashboard screenshot
+        run: |
+          convert visual-output/dashboard.png -resize 640x400 -quality 30 /tmp/review.jpg
+          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
+          count=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            printf '::notice title=FixtureImage-dashboard-%03d::%s\n' "$count" "$line"
+            count=$((count + 1))
+          done < /tmp/review.parts
       - name: Review stock report screenshot
         run: |
           convert visual-output/stock-report.png -resize 640x400 -quality 30 /tmp/review.jpg
@@ -240,15 +267,6 @@ jobs:
           count=0
           while IFS= read -r line || [ -n "$line" ]; do
             printf '::notice title=FixtureImage-employees-%03d::%s\n' "$count" "$line"
-            count=$((count + 1))
-          done < /tmp/review.parts
-      - name: Review login fallback screenshot
-        run: |
-          convert visual-output/login.png -resize 640x400 -quality 30 /tmp/review.jpg
-          base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
-          count=0
-          while IFS= read -r line || [ -n "$line" ]; do
-            printf '::notice title=FixtureImage-login-%03d::%s\n' "$count" "$line"
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review QR status screenshot

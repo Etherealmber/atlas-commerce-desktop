@@ -60,7 +60,7 @@ url = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
 # Opening pages in the system browser
-open = "5"
+open = "5.3"
 
 # egui 0.36.2 (forked via [patch.crates-io], as every fastframe app does).
 eframe = { version = "0.36.2", default-features = false, features = [

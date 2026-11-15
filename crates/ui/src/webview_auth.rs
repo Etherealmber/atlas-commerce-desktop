@@ -7,8 +7,6 @@ use std::time::Duration;
 use atlas_core::webview_policy::{Frame, NavigationPolicy};
 use wry::{WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
 
-const HEADER_POINTS: f64 = 168.0;
-
 /// The native child and its isolated profile. Dropping it starts local cleanup.
 pub(crate) struct LoginView {
     view: Option<WebView>,
@@ -17,7 +15,7 @@ pub(crate) struct LoginView {
 }
 
 fn bounds(width: u32, height: u32, scale: f64) -> wry::Rect {
-    let header = ((HEADER_POINTS * scale).round() as u32).min(height);
+    let header = atlas_core::webview_policy::login_chrome_height(height, scale);
     wry::Rect {
         position: wry::dpi::PhysicalPosition::new(0, header as i32).into(),
         size: wry::dpi::PhysicalSize::new(width, height.saturating_sub(header)).into(),

@@ -93,12 +93,13 @@ pub struct PaletteEntry {
 pub fn rail_route_at(index: usize) -> Option<Route> {
     [
         Route::Dashboard,
-        Route::Products,
-        Route::Clients,
         Route::Sales,
+        Route::Clients,
+        Route::DeliveryNotes,
+        Route::Products,
         Route::Vendors,
         Route::Expenses,
-        Route::DeliveryNotes,
+        Route::Employees,
     ]
     .get(index)
     .copied()
@@ -111,7 +112,7 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
     let mut list = Vec::with_capacity(24);
     for route in Route::ALL {
         let (_, label) = route_meta(locale, route);
-        let hint = (0..7)
+        let hint = (0..8)
             .find(|index| rail_route_at(*index) == Some(route))
             .map(|index| match index {
                 0 => "Ctrl+1",
@@ -666,7 +667,7 @@ mod tests {
     #[test]
     fn rail_shortcuts_follow_visible_sections() {
         let routes: Vec<Route> = (0..9).flat_map(rail_route_at).collect();
-        assert_eq!(routes.len(), 7);
+        assert_eq!(routes.len(), 8);
         // The title-bar sections are not in the rail's digit range.
         assert!(!routes.contains(&Route::Notifications));
         assert!(!routes.contains(&Route::Settings));

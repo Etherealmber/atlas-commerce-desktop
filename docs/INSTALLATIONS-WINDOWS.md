@@ -76,7 +76,12 @@ l'installation. Une signature « Verified » sur un commit GitHub ne signe pas
 l'exécutable : les signatures Authenticode et notarisation nécessitent leurs
 propres certificats et une vérification dédiée.
 
-Un serveur nouvellement fourni par l’installeur est vérifié via `/api/health`
-au premier lancement avant la connexion. En cas d’échec, réessayez ou
-réinstallez pour choisir une autre adresse. Les serveurs déjà enregistrés sont
-conservés ; leur fonctionnement n’est pas revalidé automatiquement à chaque mise à jour.
+Sous Windows, l’installeur Inno vérifie un nouveau serveur via `/api/health`
+avant de poursuivre, y compris en installation silencieuse. Il utilise le
+client de l’application : HTTPS vérifié, aucune redirection, délai de cinq
+secondes et réponse JSON bornée. En cas d’échec, corrigez l’adresse ou la
+connexion et réessayez. Cette vérification ne prouve pas l’identité métier du
+serveur et ne connecte aucun compte. La vérification au premier lancement est
+conservée. Une mise à jour sans changement d’adresse ne dépend pas du réseau
+et conserve le serveur existant. MSI, Linux et macOS ne disposent pas de cette
+vérification dans leur installateur ; l’application les vérifie au démarrage.

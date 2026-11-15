@@ -24,6 +24,17 @@ fn failure(base: &str, elapsed: u128, message: &str) -> ProbeReport {
     }
 }
 
+/// Check an installer-provided origin without initializing UI, storage,
+/// credentials, or the single-instance handler. Only the success bit leaves
+/// this process; the normal first-run probe still runs after installation.
+#[must_use]
+pub fn installer_check(raw: &str) -> bool {
+    let Ok(runtime) = tokio::runtime::Runtime::new() else {
+        return false;
+    };
+    runtime.block_on(probe(raw, "Atlas-Commerce-Installer")).ok
+}
+
 /// Check only the selected origin, without credentials or redirect following.
 pub(crate) async fn probe(raw: &str, user_agent: &str) -> ProbeReport {
     let Some(base) = ServerUrl::normalize(raw) else {

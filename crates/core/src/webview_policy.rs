@@ -7,6 +7,17 @@
 
 use url::Url;
 
+/// Height reserved for the window controls and secure pairing chrome above
+/// the embedded login on Windows and macOS, in logical points.
+pub const LOGIN_CHROME_HEIGHT_POINTS: f64 = 120.0;
+
+/// Convert the reserved chrome height to physical pixels, bounded by the
+/// actual window so tiny or high-DPI windows never produce negative bounds.
+#[must_use]
+pub fn login_chrome_height(height: u32, scale: f64) -> u32 {
+    ((LOGIN_CHROME_HEIGHT_POINTS * scale).round() as u32).min(height)
+}
+
 /// The engine-reported frame being navigated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Frame {
@@ -72,6 +83,14 @@ impl NavigationPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn login_chrome_scales_and_stays_inside_small_windows() {
+        assert_eq!(login_chrome_height(800, 1.0), 120);
+        assert_eq!(login_chrome_height(800, 2.0), 240);
+        assert_eq!(login_chrome_height(100, 2.0), 100);
+        assert_eq!(login_chrome_height(0, 1.0), 0);
+    }
 
     #[test]
     fn main_frame_is_bound_to_exact_https_origin_and_port() {
