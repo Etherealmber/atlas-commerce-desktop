@@ -3,7 +3,7 @@
 
 use egui::{RichText, Sense, vec2};
 
-use atlas_api::models::Dashboard;
+use atlas_api::models::{Dashboard, MonthlyPoint};
 use atlas_core::format::{money, number, short_date};
 
 use crate::icons::Icon;
@@ -93,12 +93,77 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
 
-    // Server-provided monthly series; no new finance calculation or request.
-    card(palette).show(ui, |ui| {
-        ui.set_width((ui.available_width() - 34.0).max(0.0));
-        monthly_card(app, ui, palette, &data);
+    // The server sends monthly buckets, not daily data. Filter the cached
+    // response locally: changing the period does not issue another request.
+    let period_id = egui::Id::new("dashboard-period-months");
+    let mut months = ui
+        .ctx()
+        .data(|data| data.get_temp::<usize>(period_id))
+        .unwrap_or(6);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(t!(app.locale, "Period")).color(palette.secondary));
+        egui::ComboBox::from_id_salt("dashboard-period-picker")
+            .selected_text(format!("{} {}", months, t!(app.locale, "months")))
+            .show_ui(ui, |ui| {
+                for count in [3, 6, 12, 24, 36] {
+                    ui.selectable_value(
+                        &mut months,
+                        count,
+                        format!("{} {}", count, t!(app.locale, "months")),
+                    );
+                }
+            });
     });
-    ui.add_space(14.0);
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(period_id, months));
+    let points = recent_months(&data.monthly_series, months);
+    let charts = [
+        Chart {
+            title: t!(app.locale, "Cash flow"),
+            first_label: t!(app.locale, "Income"),
+            second_label: t!(app.locale, "Expenses"),
+            first: |p| Some(p.sales),
+            second: |p| Some(p.expenses),
+        },
+        Chart {
+            title: t!(app.locale, "Profit trend"),
+            first_label: t!(app.locale, "Profit"),
+            second_label: "".into(),
+            first: |p| Some(p.profit),
+            second: |_| None,
+        },
+        Chart {
+            title: t!(app.locale, "Invoices and quick sales"),
+            first_label: t!(app.locale, "Invoices"),
+            second_label: t!(app.locale, "Quick sales"),
+            first: |p| p.invoices_fa,
+            second: |p| p.sales_vr,
+        },
+        Chart {
+            title: t!(app.locale, "Supplier purchases and salaries"),
+            first_label: t!(app.locale, "Supplier bills"),
+            second_label: t!(app.locale, "Salaries"),
+            first: |p| p.bills,
+            second: |p| p.salaries,
+        },
+        Chart {
+            title: t!(app.locale, "Payments received"),
+            first_label: t!(app.locale, "Payments received"),
+            second_label: "".into(),
+            first: |p| p.receipts,
+            second: |_| None,
+        },
+        Chart {
+            title: t!(app.locale, "New clients"),
+            first_label: t!(app.locale, "Clients"),
+            second_label: "".into(),
+            first: |p| p.clients_new,
+            second: |_| None,
+        },
+    ];
+    for chart in &charts {
+        chart_card(ui, palette, points, chart);
+    }
     card(palette).show(ui, |ui| {
         ui.set_width((ui.available_width() - 34.0).max(0.0));
         unpaid_card(app, ui, palette, &data);
@@ -132,7 +197,7 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
                 Icon::TriangleAlert,
                 t!(app.locale, "Low stock").into_owned(),
                 if data.low_stock.len() >= 50 {
-                    "50+".to_owned()
+                    "≥ 50".to_owned()
                 } else {
                     number(data.low_stock.len() as f64)
                 },
@@ -320,89 +385,146 @@ fn stat_row(
     ui.add_space(6.0);
 }
 
-fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
-    ui.label(
-        RichText::new(t!(app.locale, "Cash flow"))
-            .color(palette.text)
-            .strong()
-            .size(15.0),
-    );
-    ui.add_space(10.0);
-    if data.monthly_series.is_empty() {
-        widgets::empty_state(
-            ui,
-            Icon::TrendingUp,
-            t!(app.locale, "No history yet"),
-            t!(app.locale, "Sales appear here month after month."),
-            palette,
-        );
-        return;
-    }
-    let max = data
-        .monthly_series
-        .iter()
-        .map(|point| point.sales.max(point.expenses))
-        .fold(1.0, f64::max);
-    let label_height = 18.0;
-    let chart_height = 220.0;
-    let width = ui.available_width();
-    let count = data.monthly_series.len().max(1) as f32;
-    let slot = width / count;
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(width, chart_height + label_height), Sense::hover());
-    let chart_bottom = rect.bottom() - label_height;
-    let bar_width = (slot * 0.30).max(2.0);
-    let bar_gap = (slot * 0.08).min(2.0);
-    let font = egui::FontId::proportional(10.5);
-    // Measure the *widest* label and thin the labels so two of them can
-    // never paint over the same pixels (the old "Nov 2Déc 2Jan…" garble).
-    let label_width = data
-        .monthly_series
-        .iter()
-        .map(|point| {
-            ui.painter()
-                .layout_no_wrap(short_month(&point.label), font.clone(), palette.dim)
-                .size()
-                .x
-        })
-        .fold(0.0_f32, f32::max);
-    let label_step = ((label_width + 8.0) / slot).ceil().max(1.0) as usize;
-    for (index, point) in data.monthly_series.iter().enumerate() {
-        let center = rect.left() + slot * index as f32 + slot / 2.0;
-        let sales_h = (point.sales / max * chart_height as f64) as f32;
-        let expenses_h = (point.expenses / max * chart_height as f64) as f32;
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(center - bar_width - bar_gap / 2.0, chart_bottom - sales_h),
-                vec2(bar_width, sales_h),
-            ),
-            3.0,
-            palette.accent,
-        );
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(center + bar_gap / 2.0, chart_bottom - expenses_h),
-                vec2(bar_width, expenses_h),
-            ),
-            3.0,
-            palette.surface_active,
-        );
-        if index % label_step == 0 {
-            ui.painter().text(
-                egui::pos2(center, chart_bottom + 4.0),
-                egui::Align2::CENTER_TOP,
-                short_month(&point.label),
-                font.clone(),
-                palette.dim,
-            );
-        }
-    }
+/// Return the newest monthly buckets without another API call.
+fn recent_months(points: &[MonthlyPoint], count: usize) -> &[MonthlyPoint] {
+    &points[points.len().saturating_sub(count)..]
 }
 
-/// "Nov 2025" → "Nov" so month labels fit narrow chart slots. Labels without
-/// a space (already abbreviated) are kept as-is.
-fn short_month(label: &str) -> String {
-    label.split_whitespace().next().unwrap_or(label).to_owned()
+struct Chart<'a> {
+    title: std::borrow::Cow<'a, str>,
+    first_label: std::borrow::Cow<'a, str>,
+    second_label: std::borrow::Cow<'a, str>,
+    first: fn(&MonthlyPoint) -> Option<f64>,
+    second: fn(&MonthlyPoint) -> Option<f64>,
+}
+
+fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], chart: &Chart<'_>) {
+    let first = chart.first;
+    let second = chart.second;
+    card(palette).show(ui, |ui| {
+        ui.set_width((ui.available_width() - 34.0).max(0.0));
+        ui.label(
+            RichText::new(chart.title.as_ref())
+                .color(palette.text)
+                .strong()
+                .size(15.0),
+        );
+        ui.add_space(8.0);
+        if points.is_empty()
+            || !points
+                .iter()
+                .any(|p| first(p).is_some() || second(p).is_some())
+        {
+            ui.label(RichText::new("—").color(palette.secondary));
+            return;
+        }
+        let max = points
+            .iter()
+            .flat_map(|p| [first(p), second(p)])
+            .flatten()
+            .filter(|v| v.is_finite())
+            .map(f64::abs)
+            .fold(1.0, f64::max);
+        let negative = points
+            .iter()
+            .flat_map(|p| [first(p), second(p)])
+            .flatten()
+            .any(|v| v.is_finite() && v < 0.0);
+        let width = ui.available_width().max(1.0);
+        let height = 200.0;
+        let (rect, response) = ui.allocate_exact_size(vec2(width, height + 22.0), Sense::hover());
+        let bottom = rect.top() + height;
+        let baseline = if negative {
+            rect.top() + height / 2.0
+        } else {
+            bottom
+        };
+        let scale = if negative { height / 2.0 } else { height };
+        for index in 0..=4 {
+            let y = rect.top() + height * index as f32 / 4.0;
+            ui.painter().line_segment(
+                [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
+                egui::Stroke::new(1.0, palette.outline),
+            );
+        }
+        let slot = width / points.len() as f32;
+        let bar_width = (slot * 0.28).clamp(1.0, 18.0);
+        let label_step = ((52.0 / slot).ceil() as usize).max(1);
+        for (index, point) in points.iter().enumerate() {
+            let center = rect.left() + slot * (index as f32 + 0.5);
+            for (value, offset, color) in [
+                (first(point), -bar_width, palette.finance_info),
+                (second(point), 0.0, palette.finance_warning),
+            ] {
+                if let Some(value) = value.filter(|v| v.is_finite()) {
+                    let h = (value.abs() / max * f64::from(scale)) as f32;
+                    let top = if value < 0.0 { baseline } else { baseline - h };
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(center + offset, top),
+                            vec2(bar_width - 1.0, h),
+                        ),
+                        2.0,
+                        color,
+                    );
+                }
+            }
+            if index % label_step == 0 {
+                ui.painter().text(
+                    egui::pos2(center, bottom + 4.0),
+                    egui::Align2::CENTER_TOP,
+                    month_label(point),
+                    egui::FontId::proportional(10.5),
+                    palette.secondary,
+                );
+            }
+        }
+        if let Some(position) = response.hover_pos() {
+            let index =
+                (((position.x - rect.left()) / slot).floor() as usize).min(points.len() - 1);
+            let point = &points[index];
+            let mut detail = month_label(point);
+            if let Some(value) = first(point).filter(|v| v.is_finite()) {
+                detail.push_str(&format!("\n{}: {}", chart.first_label, number(value)));
+            }
+            if let Some(value) = second(point).filter(|v| v.is_finite()) {
+                detail.push_str(&format!("\n{}: {}", chart.second_label, number(value)));
+            }
+            response.on_hover_text(detail);
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("●").color(palette.finance_info));
+            ui.label(
+                RichText::new(chart.first_label.as_ref())
+                    .color(palette.secondary)
+                    .size(12.0),
+            );
+            if !chart.second_label.as_ref().is_empty() {
+                ui.label(RichText::new("●").color(palette.finance_warning));
+                ui.label(
+                    RichText::new(chart.second_label.as_ref())
+                        .color(palette.secondary)
+                        .size(12.0),
+                );
+            }
+        });
+    });
+    ui.add_space(14.0);
+}
+
+fn month_label(point: &MonthlyPoint) -> String {
+    let bytes = point.key.as_bytes();
+    if bytes.len() == 7
+        && bytes[4] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, c)| i == 4 || c.is_ascii_digit())
+    {
+        format!("{}/{}", &point.key[5..7], &point.key[2..4])
+    } else {
+        point.label.clone()
+    }
 }
 
 fn recent_invoices(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
@@ -517,5 +639,34 @@ mod tests {
             measured_width <= 561.0,
             "dashboard expanded to {measured_width}"
         );
+    }
+}
+
+#[cfg(test)]
+mod period_tests {
+    use super::{month_label, recent_months};
+    use atlas_api::models::MonthlyPoint;
+
+    #[test]
+    fn recent_period_is_bounded_by_available_buckets() {
+        let points: Vec<_> = (0..12).map(|_| MonthlyPoint::default()).collect();
+        assert_eq!(recent_months(&points, 6).len(), 6);
+        assert_eq!(recent_months(&points, 36).len(), 12);
+        assert!(recent_months(&points, 0).is_empty());
+    }
+
+    #[test]
+    fn uses_full_year_month_key_and_safe_fallback() {
+        let point = MonthlyPoint {
+            key: "2026-01".into(),
+            ..Default::default()
+        };
+        assert_eq!(month_label(&point), "01/26");
+        let point = MonthlyPoint {
+            key: "☀".into(),
+            label: "Exemple".into(),
+            ..Default::default()
+        };
+        assert_eq!(month_label(&point), "Exemple");
     }
 }

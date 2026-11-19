@@ -1720,3 +1720,33 @@ msgstr "Vue opérationnelle"
 
 msgid "Cash flow"
 msgstr "Flux de trésorerie"
+
+msgid "Period"
+msgstr "Période"
+
+msgid "months"
+msgstr "mois"
+
+msgid "Profit trend"
+msgstr "Évolution du profit"
+
+msgid "Profit"
+msgstr "Profit"
+
+msgid "Invoices and quick sales"
+msgstr "Factures et vente rapide"
+
+msgid "Quick sales"
+msgstr "Ventes rapides"
+
+msgid "Supplier purchases and salaries"
+msgstr "Achats fournisseurs et salaires"
+
+msgid "Salaries"
+msgstr "Salaires"
+
+msgid "New clients"
+msgstr "Nouveaux clients"
+
+msgid "Payments received"
+msgstr "Encaissements"

@@ -247,6 +247,18 @@ pub struct MonthlyPoint {
     pub expenses: f64,
     #[serde(default)]
     pub profit: f64,
+    #[serde(default)]
+    pub invoices_fa: Option<f64>,
+    #[serde(default)]
+    pub sales_vr: Option<f64>,
+    #[serde(default)]
+    pub bills: Option<f64>,
+    #[serde(default)]
+    pub salaries: Option<f64>,
+    #[serde(default)]
+    pub receipts: Option<f64>,
+    #[serde(default)]
+    pub clients_new: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1114,5 +1126,22 @@ mod operational_dashboard_tests {
         assert!(response.operational_only);
         assert_eq!(response.products, 14);
         assert_eq!(response.low_stock.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod dashboard_series_contract_tests {
+    use super::MonthlyPoint;
+    #[test]
+    fn preserves_optional_worker_breakdowns_without_inventing_zeroes() {
+        let p: MonthlyPoint = serde_json::from_str(r#"{"key":"2026-01","sales":8,"invoices_fa":3,"sales_vr":5,"bills":7,"salaries":2,"receipts":4,"clients_new":1}"#).unwrap();
+        assert_eq!(p.invoices_fa, Some(3.0));
+        assert_eq!(p.sales_vr, Some(5.0));
+        assert_eq!(p.bills, Some(7.0));
+        assert_eq!(p.salaries, Some(2.0));
+        assert_eq!(p.receipts, Some(4.0));
+        assert_eq!(p.clients_new, Some(1.0));
+        let p: MonthlyPoint = serde_json::from_str("{}").unwrap();
+        assert!(p.salaries.is_none());
     }
 }

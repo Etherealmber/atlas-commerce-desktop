@@ -1,6 +1,8 @@
 //! Isolated, offline visual fixture. Run only by the screenshot workflow.
 //! It never creates an API client or loads a real account/server from disk.
-use atlas_api::models::{Client, Dashboard, DeliveryNote, Expense, Invoice, Product, Vendor};
+use atlas_api::models::{
+    Client, Dashboard, DeliveryNote, Expense, Invoice, MonthlyPoint, Product, Vendor,
+};
 use atlas_core::{
     AccountStore, AppPaths, DeviceIdentity, JobRunner, ServerStore, SessionRecord, Settings,
 };
@@ -131,6 +133,21 @@ fn build(route: &str) -> AtlasApp {
         current_balance: 42000.0,
         stock_value: 17500.0,
         product_count: 2,
+        monthly_series: (1..=12)
+            .map(|month| MonthlyPoint {
+                key: format!("2026-{month:02}"),
+                label: format!("{month:02}/26"),
+                sales: f64::from(month) * 900.0,
+                expenses: f64::from(month) * 350.0,
+                profit: f64::from(month) * 550.0,
+                invoices_fa: Some(f64::from(month) * 600.0),
+                sales_vr: Some(f64::from(month) * 300.0),
+                bills: Some(f64::from(month) * 200.0),
+                salaries: Some(f64::from(month) * 150.0),
+                receipts: Some(f64::from(month) * 700.0),
+                clients_new: Some(f64::from(month % 4)),
+            })
+            .collect(),
         ..Dashboard::default()
     });
     app.products.data = Some(vec![
