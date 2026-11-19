@@ -90,6 +90,7 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(14.0);
 
     if data.operational_only {
+        low_stock_card(app, ui, palette, &data);
         return;
     }
 
@@ -180,6 +181,64 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .id_salt("dashboard-recent-invoices")
         .default_open(false)
         .show(ui, |ui| recent_invoices(app, ui, palette, &data));
+    });
+}
+
+/// The restricted dashboard response already contains up to 50 inventory
+/// records; use them directly without an additional products request.
+fn low_stock_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
+    card(palette).show(ui, |ui| {
+        ui.set_width((ui.available_width() - 34.0).max(0.0));
+        ui.label(
+            RichText::new(t!(app.locale, "Low stock"))
+                .color(palette.text)
+                .strong()
+                .size(15.0),
+        );
+        ui.add_space(8.0);
+        if data.low_stock.is_empty() {
+            ui.label(
+                RichText::new(t!(app.locale, "No low-stock products.")).color(palette.secondary),
+            );
+            return;
+        }
+        if data.low_stock.len() >= 50 {
+            ui.label(
+                RichText::new(t!(app.locale, "Showing up to 50 products."))
+                    .color(palette.secondary),
+            );
+        }
+        for product in &data.low_stock {
+            ui.vertical(|ui| {
+                ui.label(RichText::new(&product.name).color(palette.text).strong());
+                ui.horizontal_wrapped(|ui| {
+                    if let Some(sku) = product.sku.as_deref().filter(|sku| !sku.is_empty()) {
+                        ui.label(RichText::new(format!("SKU: {sku}")).color(palette.secondary));
+                    }
+                    let unit = product.unit.as_deref().unwrap_or("");
+                    ui.label(
+                        RichText::new(format!(
+                            "{}: {} {}",
+                            t!(app.locale, "Stock"),
+                            number(product.stock),
+                            unit
+                        ))
+                        .color(palette.finance_warning),
+                    );
+                    if let Some(threshold) = product.low_stock_threshold {
+                        ui.label(
+                            RichText::new(format!(
+                                "{}: {}",
+                                t!(app.locale, "Low stock threshold"),
+                                number(threshold)
+                            ))
+                            .color(palette.secondary),
+                        );
+                    }
+                });
+            });
+            ui.separator();
+        }
     });
 }
 

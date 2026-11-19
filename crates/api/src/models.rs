@@ -269,7 +269,7 @@ pub struct Dashboard {
     #[serde(default)]
     pub products: i64,
     #[serde(default)]
-    pub low_stock: Vec<serde_json::Value>,
+    pub low_stock: Vec<Product>,
     #[serde(default)]
     pub currency: Option<String>,
     #[serde(rename = "currentBalance", default)]
@@ -1120,12 +1120,15 @@ mod operational_dashboard_tests {
     #[test]
     fn operational_response_keeps_counts_and_hides_financial_section() {
         let response: Dashboard = serde_json::from_str(
-            r#"{"operational_only":true,"products":14,"low_stock":[{"id":1},{"id":2}]}"#,
+            r#"{"operational_only":true,"products":14,"low_stock":[{"id":1,"name":"Vis","sku":"V1","stock_quantity":2,"low_stock_threshold":5,"unit":"pièce","track_inventory":1},{"id":2}]}"#,
         )
         .unwrap();
         assert!(response.operational_only);
         assert_eq!(response.products, 14);
         assert_eq!(response.low_stock.len(), 2);
+        assert_eq!(response.low_stock[0].id, 1);
+        assert_eq!(response.low_stock[0].stock, 2.0);
+        assert_eq!(response.low_stock[0].low_stock_threshold, Some(5.0));
     }
 }
 
