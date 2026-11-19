@@ -745,18 +745,18 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
             &[
                 (Route::Employees, "Employees", true),
                 (Route::Employees, "Attendance", false),
-                (Route::Sales, "Quotes", false),
-                (Route::Sales, "Quick sale", false),
+                (Route::Sales, "Quotes", true),
+                (Route::Sales, "Quick sale", true),
                 (Route::Sales, "Sales invoices", true),
-                (Route::Sales, "Reimbursements", false),
-                (Route::Sales, "Receipts", false),
+                (Route::Sales, "Reimbursements", true),
+                (Route::Sales, "Receipts", true),
             ],
         ),
         (
             t!(app.locale, "Purchases"),
             &[
                 (Route::Vendors, "Vendors", true),
-                (Route::Expenses, "Purchase invoices", false),
+                (Route::Expenses, "Purchase invoices", true),
             ],
         ),
         (
@@ -797,6 +797,33 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                         rail_row(ui, palette, which, &label, active == Some(route), collapsed);
                     if response.clicked() {
                         app.go(route);
+                        match (route, label.as_ref()) {
+                            (Route::Sales, _) => {
+                                // The sales page exposes these as expandable sections.
+                                app.quotes_open =
+                                    label == crate::i18n::gettext(app.locale, "Quotes");
+                                app.receipts_open =
+                                    label == crate::i18n::gettext(app.locale, "Receipts");
+                                app.refunds_open =
+                                    label == crate::i18n::gettext(app.locale, "Reimbursements");
+                                if app.receipts_open
+                                    && app.receipts.data.is_none()
+                                    && !app.receipts.loading
+                                {
+                                    app.load_receipts();
+                                }
+                            }
+                            (Route::Expenses, _)
+                                if label
+                                    == crate::i18n::gettext(app.locale, "Purchase invoices") =>
+                            {
+                                app.bills_open = true;
+                                if app.bills.data.is_none() && !app.bills.loading {
+                                    app.load_bills();
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 } else {
                     ui.add_enabled_ui(false, |ui| {
