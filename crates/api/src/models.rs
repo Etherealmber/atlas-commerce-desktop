@@ -318,6 +318,26 @@ impl Dashboard {
 
 // ── Products ─────────────────────────────────────────────────────────────
 
+/// Values from the Worker's product stock-movement history.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct StockMovement {
+    pub id: i64,
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub quantity: Option<f64>,
+    #[serde(default)]
+    pub previous_quantity: Option<f64>,
+    #[serde(default)]
+    pub new_quantity: Option<f64>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub reference: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Product {
     #[serde(default)]
@@ -1182,5 +1202,21 @@ mod dashboard_series_contract_tests {
         assert_eq!(p.clients_new, Some(1.0));
         let p: MonthlyPoint = serde_json::from_str("{}").unwrap();
         assert!(p.salaries.is_none());
+    }
+}
+
+#[cfg(test)]
+mod stock_history_contract_tests {
+    use super::StockMovement;
+
+    #[test]
+    fn movement_keeps_missing_values_and_server_fields() {
+        let row: StockMovement = serde_json::from_str(r#"{"id":3,"type":"sale","quantity":1,"previous_quantity":51,"new_quantity":50,"reason":"Vente rapide","reference":"VR-5","created_at":"2026-10-22 14:15:00"}"#).unwrap();
+        assert_eq!(row.kind, "sale");
+        assert_eq!(row.previous_quantity, Some(51.0));
+        assert_eq!(row.new_quantity, Some(50.0));
+        assert_eq!(row.reference.as_deref(), Some("VR-5"));
+        let missing: StockMovement = serde_json::from_str(r#"{"id":4}"#).unwrap();
+        assert_eq!(missing.quantity, None);
     }
 }

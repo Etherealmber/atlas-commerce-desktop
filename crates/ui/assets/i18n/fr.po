@@ -1777,3 +1777,36 @@ msgstr "Toutes périodes · 8 catégories maximum ; non filtrées par la périod
 
 msgid "No expense categories."
 msgstr "Aucune catégorie de charges."
+
+msgid "History"
+msgstr "Historique"
+
+msgid "Current stock"
+msgstr "Stock actuel"
+
+msgid "All history"
+msgstr "Tout l’historique"
+
+msgid "Last 90 days"
+msgstr "90 derniers jours"
+
+msgid "No stock movements."
+msgstr "Aucun mouvement de stock."
+
+msgid "Before"
+msgstr "Avant"
+
+msgid "After"
+msgstr "Après"
+
+msgid "Stock history"
+msgstr "Historique stock"
+
+msgid "Back to products"
+msgstr "Retour aux produits"
+
+msgid "Movement history"
+msgstr "Historique des mouvements"
+
+msgid "View full history"
+msgstr "Voir l’historique complet"
