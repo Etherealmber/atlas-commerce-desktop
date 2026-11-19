@@ -1822,3 +1822,6 @@ msgstr "Options"
 
 msgid "Step"
 msgstr "Étape"
+
+msgid "Showing up to 50 recent movements."
+msgstr "Affichage de 50 mouvements récents maximum."

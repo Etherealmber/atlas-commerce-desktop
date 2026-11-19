@@ -415,6 +415,13 @@ fn history_contents(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ))
         .color(palette.secondary),
     );
+    if !history.full {
+        ui.label(
+            RichText::new(t!(app.locale, "Showing up to 50 recent movements."))
+                .color(palette.secondary)
+                .size(12.0),
+        );
+    }
     ui.add_space(8.0);
     if history.job.is_some() {
         super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
