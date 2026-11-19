@@ -1990,37 +1990,34 @@ mod browser_approval_tests {
     }
 }
 
-/// Native chrome remains outside the remote login page and shows the v1
-/// comparison code and a cancellation control without exposing proofs.
+/// Keep the hosted page prominent while retaining the v1 comparison code
+/// on demand. The server's consent and the authorization protocol are unchanged.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            let server = app
-                .server_store
-                .selected_url()
-                .map(atlas_core::ServerUrl::host)
-                .unwrap_or_default();
-            ui.label(
-                RichText::new(format!("{} : {}", t!(app.locale, "Server"), server))
-                    .color(palette.text)
-                    .strong(),
-            );
-            if let Some(code) = &app.browser_login.pairing_code {
-                ui.label(
-                    RichText::new(format!(
-                        "{} {}",
-                        t!(app.locale, "Compare this code with your browser:"),
-                        code
-                    ))
-                    .color(palette.secondary),
-                );
-            }
-        });
+    ui.horizontal_centered(|ui| {
+        let server = app
+            .server_store
+            .selected_url()
+            .map(atlas_core::ServerUrl::host)
+            .unwrap_or_default();
+        ui.label(RichText::new(server).color(palette.text).strong());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                 crate::browser_auth::cancel(app);
+            }
+            if app.browser_login.pairing_code.is_some()
+                && secondary_button(ui, "Code de sécurité", palette)
+            {
+                app.browser_login.show_pairing_code = !app.browser_login.show_pairing_code;
+            }
+            if app.browser_login.show_pairing_code
+                && let Some(code) = &app.browser_login.pairing_code
+            {
+                ui.label(
+                    RichText::new(format!("À comparer : {code}"))
+                        .color(palette.text)
+                        .strong(),
+                );
             }
         });
     });

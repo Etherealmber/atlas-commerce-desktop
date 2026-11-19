@@ -23,6 +23,8 @@ pub(crate) struct BrowserLogin {
     cancel: Option<Arc<AtomicBool>>,
     server: Option<String>,
     pub(crate) pairing_code: Option<String>,
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub(crate) show_pairing_code: bool,
     pub(crate) active: bool,
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) embedded: bool,
