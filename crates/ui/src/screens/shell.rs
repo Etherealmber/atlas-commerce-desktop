@@ -786,26 +786,34 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                         .size(10.5),
                 );
             }
-            for &(route, label, implemented) in entries {
+            for &(route, source, implemented) in entries {
                 if !app.role_policy().allows_route(route) {
                     continue;
                 }
                 let (which, _) = route_meta(app.locale, route);
-                let label = crate::i18n::gettext(app.locale, label);
+                let label = crate::i18n::gettext(app.locale, source);
+                let selected = active == Some(route)
+                    && match (route, source) {
+                        (Route::Sales, "Quotes") => app.quotes_open,
+                        (Route::Sales, "Receipts") => app.receipts_open,
+                        (Route::Sales, "Reimbursements") => app.refunds_open,
+                        (Route::Sales, "Sales invoices") => {
+                            !app.quotes_open && !app.receipts_open && !app.refunds_open
+                        }
+                        (Route::Sales, _) => false,
+                        (Route::Expenses, "Purchase invoices") => app.bills_open,
+                        (Route::Expenses, "Expenses") => !app.bills_open,
+                        _ => true,
+                    };
                 if implemented {
-                    let response =
-                        rail_row(ui, palette, which, &label, active == Some(route), collapsed);
+                    let response = rail_row(ui, palette, which, &label, selected, collapsed);
                     if response.clicked() {
                         app.go(route);
-                        match (route, label.as_ref()) {
+                        match (route, source) {
                             (Route::Sales, _) => {
-                                // The sales page exposes these as expandable sections.
-                                app.quotes_open =
-                                    label == crate::i18n::gettext(app.locale, "Quotes");
-                                app.receipts_open =
-                                    label == crate::i18n::gettext(app.locale, "Receipts");
-                                app.refunds_open =
-                                    label == crate::i18n::gettext(app.locale, "Reimbursements");
+                                app.quotes_open = source == "Quotes";
+                                app.receipts_open = source == "Receipts";
+                                app.refunds_open = source == "Reimbursements";
                                 if app.receipts_open
                                     && app.receipts.data.is_none()
                                     && !app.receipts.loading
@@ -813,12 +821,10 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                                     app.load_receipts();
                                 }
                             }
-                            (Route::Expenses, _)
-                                if label
-                                    == crate::i18n::gettext(app.locale, "Purchase invoices") =>
-                            {
-                                app.bills_open = true;
-                                if app.bills.data.is_none() && !app.bills.loading {
+                            (Route::Expenses, _) => {
+                                app.bills_open = source == "Purchase invoices";
+                                if app.bills_open && app.bills.data.is_none() && !app.bills.loading
+                                {
                                     app.load_bills();
                                 }
                             }
@@ -826,8 +832,10 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                         }
                     }
                 } else {
+                    let unavailable =
+                        format!("{} · {}", label, t!(app.locale, "Not available yet"));
                     ui.add_enabled_ui(false, |ui| {
-                        rail_row(ui, palette, which, &label, false, collapsed)
+                        rail_row(ui, palette, which, &unavailable, false, collapsed)
                     })
                     .inner
                     .on_hover_text(t!(app.locale, "Not available yet"));
