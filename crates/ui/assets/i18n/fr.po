@@ -1810,3 +1810,15 @@ msgstr "Historique des mouvements"
 
 msgid "View full history"
 msgstr "Voir l’historique complet"
+
+msgid "Identity"
+msgstr "Identité"
+
+msgid "Contact"
+msgstr "Contact"
+
+msgid "Options"
+msgstr "Options"
+
+msgid "Step"
+msgstr "Étape"
