@@ -727,7 +727,8 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
     ui.add_space(8.0);
     // Only implemented destinations are actionable. The remaining entries
     // are visible but explicitly unavailable; they never issue API requests.
-    let groups: [(std::borrow::Cow<'_, str>, &[(Route, &str, bool)]); 6] = [
+    type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str, bool)]);
+    let groups: [RailGroup<'_>; 6] = [
         (
             t!(app.locale, "Overview"),
             &[(Route::Dashboard, "Dashboard", true)],

@@ -1633,6 +1633,13 @@ impl AtlasApp {
                 }
                 _ => {}
             }
+            if matches!(self.screen, Screen::Shell(Route::Notifications))
+                && !self.nav_badges.loading
+                && self.nav_badges.last_updated.is_some()
+                && self.nav_badges.stale_for(interval)
+            {
+                self.load_nav_badges();
+            }
         }
     }
 
@@ -2231,6 +2238,9 @@ impl eframe::App for EframeShell {
                         .inner_margin(egui::Margin::symmetric(16, 0)),
                 )
                 .show(ui, |ui| {
+                    // The WebView begins 48 points below the title bar.
+                    // Keep native controls in that reserved strip.
+                    ui.set_max_height(48.0);
                     screens::auth::draw_embedded_header(
                         &mut self.held,
                         ui,
