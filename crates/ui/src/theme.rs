@@ -252,11 +252,26 @@ pub fn with_system_accent(mut palette: Palette, source: Color32) -> Palette {
 #[cfg(target_os = "windows")]
 #[must_use]
 pub fn windows_accent() -> Option<Color32> {
+    let value = windows_appearance().0;
+    (value & 0x0100_0000 != 0)
+        .then(|| Color32::from_rgb((value >> 16) as u8, (value >> 8) as u8, value as u8))
+}
+
+/// Whether the system permits visual effects; unknown policy fails closed.
+#[cfg(target_os = "windows")]
+#[must_use]
+pub fn windows_material_allowed() -> bool {
+    windows_appearance().1
+}
+
+#[cfg(target_os = "windows")]
+fn windows_appearance() -> (u32, bool) {
     use std::sync::{
         OnceLock,
         atomic::{AtomicU32, Ordering},
     };
     static ACCENT: AtomicU32 = AtomicU32::new(0);
+    static MATERIAL: AtomicU32 = AtomicU32::new(0);
     static START: OnceLock<()> = OnceLock::new();
     START.get_or_init(|| {
         let _ = std::thread::Builder::new()
@@ -281,13 +296,22 @@ pub fn windows_accent() -> Option<Color32> {
                     })()
                     .unwrap_or(0);
                     ACCENT.store(value, Ordering::Relaxed);
+                    let effects = (|| {
+                        if AccessibilitySettings::new().ok()?.HighContrast().ok()? {
+                            return None;
+                        }
+                        UISettings::new().ok()?.AdvancedEffectsEnabled().ok()
+                    })()
+                    .unwrap_or(false);
+                    MATERIAL.store(u32::from(effects), Ordering::Relaxed);
                     std::thread::sleep(std::time::Duration::from_secs(5));
                 }
             });
     });
-    let value = ACCENT.load(Ordering::Relaxed);
-    (value & 0x0100_0000 != 0)
-        .then(|| Color32::from_rgb((value >> 16) as u8, (value >> 8) as u8, value as u8))
+    (
+        ACCENT.load(Ordering::Relaxed),
+        MATERIAL.load(Ordering::Relaxed) != 0,
+    )
 }
 
 /// Reads a custom JSON palette file, or explains why it is invalid.

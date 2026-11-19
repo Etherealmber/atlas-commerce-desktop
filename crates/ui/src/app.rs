@@ -1891,9 +1891,20 @@ impl Resident for AtlasApp {
 
 // ── eframe wrapper ──────────────────────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
+#[derive(Clone, Copy)]
+enum WindowsMaterial {
+    Mica,
+    Acrylic,
+}
+
 /// The eframe app owning the shell-held [`AtlasApp`].
 pub struct EframeShell {
     pub held: Held<AtlasApp>,
+    #[cfg(target_os = "windows")]
+    material: Option<WindowsMaterial>,
+    #[cfg(target_os = "windows")]
+    material_request: Option<(bool, bool)>,
     first_frame: bool,
     #[cfg(target_os = "windows")]
     login_view: Option<crate::webview_auth::LoginView>,
@@ -1928,6 +1939,10 @@ impl EframeShell {
         Self {
             held,
             first_frame: true,
+            #[cfg(target_os = "windows")]
+            material: None,
+            #[cfg(target_os = "windows")]
+            material_request: None,
             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             login_view: None,
         }
@@ -1943,6 +1958,10 @@ impl eframe::App for EframeShell {
         // Match the active theme from the first frame on, so a light theme
         // never flashes the dark background before the first UI frame.
         // The dark token (#111113) is only the pre-first-frame fallback.
+        #[cfg(target_os = "windows")]
+        if self.material.is_some() && matches!(self.held.screen, Screen::Shell(_)) {
+            return [0.0, 0.0, 0.0, 0.0];
+        }
         self.held
             .last_clear_color
             .unwrap_or_else(|| egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32())
@@ -1982,6 +2001,46 @@ impl eframe::App for EframeShell {
         ctx.request_repaint_after(Duration::from_secs(5));
         self.held.scrolling.apply(ctx);
         let palette = self.held.palette(ctx);
+        #[cfg(target_os = "windows")]
+        if let Some(window) = frame.winit_window() {
+            // Never expose the auth page or a custom palette through the
+            // backdrop. Unknown/disabled system effects and high contrast use
+            // the normal opaque framebuffer. Reapply after theme changes and
+            // after every window recreation, not on every frame.
+            let allowed = self.held.settings.windows_material
+                && self.held.settings.custom_theme.is_none()
+                && matches!(self.held.screen, Screen::Shell(_))
+                && crate::theme::windows_material_allowed();
+            let request = (allowed, palette.dark);
+            if self.material_request != Some(request) {
+                if let Some(previous) = self.material.take() {
+                    let _ = match previous {
+                        WindowsMaterial::Mica => window_vibrancy::clear_mica(window.as_ref()),
+                        WindowsMaterial::Acrylic => window_vibrancy::clear_acrylic(window.as_ref()),
+                    };
+                }
+                if allowed {
+                    self.material =
+                        if window_vibrancy::apply_mica(window.as_ref(), Some(palette.dark)).is_ok()
+                        {
+                            Some(WindowsMaterial::Mica)
+                        } else {
+                            let color = palette.window;
+                            if window_vibrancy::apply_acrylic(
+                                window.as_ref(),
+                                Some((color.r(), color.g(), color.b(), 225)),
+                            )
+                            .is_ok()
+                            {
+                                Some(WindowsMaterial::Acrylic)
+                            } else {
+                                None
+                            }
+                        };
+                }
+                self.material_request = Some(request);
+            }
+        }
         // Keep the framebuffer clear colour in sync, and rebuild the global
         // styles only when the palette actually changes instead of every
         // frame. Comparing the whole palette also catches token edits, not

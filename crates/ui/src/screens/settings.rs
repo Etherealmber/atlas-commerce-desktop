@@ -400,6 +400,21 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
             app.save_settings();
         }
 
+        #[cfg(target_os = "windows")]
+        {
+            ui.add_space(10.0);
+            if switch_row(
+                ui,
+                palette,
+                t!(app.locale, "Windows material"),
+                Some(&t!(app.locale, "Use Mica or Acrylic when Windows permits transparency; otherwise use a solid background.")),
+                &mut app.settings.windows_material,
+                app.settings.reduced_motion,
+            ) {
+                app.save_settings();
+            }
+        }
+
         ui.add_space(10.0);
         let reduced_motion = app.settings.reduced_motion;
         if switch_row(

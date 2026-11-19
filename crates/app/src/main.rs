@@ -313,6 +313,10 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
         // viewport itself hidden can leave Windows waiting for a repaint of
         // a window that the compositor considers occluded.
         .with_visible(true);
+    // Alpha-capable surface is required for DWM material to be visible. The
+    // shell still paints an opaque fallback unless the effect is applied.
+    #[cfg(target_os = "windows")]
+    let viewport = viewport.with_transparent(true);
     // Runtime window/taskbar icon (Linux window managers and any Windows
     // shell path that ignores the embedded resource). macOS takes its Dock
     // icon from the bundle, so setting one there would only flatten it.

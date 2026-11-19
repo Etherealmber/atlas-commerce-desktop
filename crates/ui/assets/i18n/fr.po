@@ -1762,3 +1762,9 @@ msgstr "Achats impayés"
 
 msgid "bills"
 msgstr "factures"
+
+msgid "Windows material"
+msgstr "Effet de matière Windows"
+
+msgid "Use Mica or Acrylic when Windows permits transparency; otherwise use a solid background."
+msgstr "Utiliser Mica ou Acrylic lorsque Windows autorise la transparence ; sinon, utiliser un fond opaque."

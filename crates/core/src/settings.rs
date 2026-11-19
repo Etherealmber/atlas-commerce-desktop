@@ -58,6 +58,8 @@ pub struct Settings {
     pub notifications_enabled: bool,
     /// Custom title bar drawn by the app.
     pub custom_titlebar: bool,
+    /// Allow system window material when the Windows accessibility policy permits it.
+    pub windows_material: bool,
     /// Honour the web's `prefers-reduced-motion` rule: every animation then
     /// resolves instantly (the forked egui exposes no OS signal, so the
     /// choice is an in-app, persisted toggle).
@@ -80,6 +82,7 @@ impl Default for Settings {
             poll_interval_secs: 120,
             notifications_enabled: true,
             custom_titlebar: true,
+            windows_material: true,
             reduced_motion: false,
         }
     }
@@ -116,6 +119,7 @@ mod tests {
         assert!(settings.is_french());
         assert_eq!(settings.theme, ThemeMode::Light);
         assert!(settings.close_to_tray);
+        assert!(settings.windows_material);
     }
 
     #[test]
