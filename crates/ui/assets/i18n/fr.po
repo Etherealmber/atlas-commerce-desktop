@@ -1651,3 +1651,9 @@ msgstr "Gestion"
 
 msgid "Secure sign-in"
 msgstr "Connexion sécurisée"
+
+msgid "Security code"
+msgstr "Code de sécurité"
+
+msgid "Compare:"
+msgstr "À comparer :"

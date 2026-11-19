@@ -2000,13 +2000,18 @@ pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palett
             .selected_url()
             .map(atlas_core::ServerUrl::host)
             .unwrap_or_default();
-        ui.label(RichText::new(server).color(palette.text).strong());
+        let host_width = (ui.available_width() - 500.0).clamp(0.0, 300.0);
+        ui.add_sized(
+            [host_width, TARGET],
+            egui::Label::new(RichText::new(&server).color(palette.text).strong()).truncate(),
+        )
+        .on_hover_text(server);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                 crate::browser_auth::cancel(app);
             }
             if app.browser_login.pairing_code.is_some()
-                && secondary_button(ui, "Code de sécurité", palette)
+                && secondary_button(ui, t!(app.locale, "Security code"), palette)
             {
                 app.browser_login.show_pairing_code = !app.browser_login.show_pairing_code;
             }
@@ -2014,7 +2019,7 @@ pub(crate) fn draw_embedded_header(app: &mut AtlasApp, ui: &mut egui::Ui, palett
                 && let Some(code) = &app.browser_login.pairing_code
             {
                 ui.label(
-                    RichText::new(format!("À comparer : {code}"))
+                    RichText::new(format!("{} {code}", t!(app.locale, "Compare:")))
                         .color(palette.text)
                         .strong(),
                 );
