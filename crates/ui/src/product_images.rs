@@ -7,11 +7,13 @@ use atlas_api::ApiClient;
 use atlas_core::jobs::{Job, JobRunner};
 use sha2::{Digest, Sha256};
 
+type ImageJob = Job<(String, Option<(String, Vec<u8>)>)>;
+
 #[derive(Default)]
 pub(crate) struct ProductImages {
     // None records a failed fetch, so repainting does not retry indefinitely.
     entries: HashMap<String, Option<String>>,
-    job: Option<Job<(String, Option<(String, Vec<u8>)>)>>,
+    job: Option<ImageJob>,
     evict: Vec<String>,
     cancel: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -58,9 +60,7 @@ impl ProductImages {
             self.entries.insert(source.to_owned(), None);
             return None;
         };
-        let Some(token) = client.token() else {
-            return None;
-        };
+        let token = client.token()?;
         let key = source.to_owned();
         let base = client.base_url().to_owned();
         let fingerprint = client.fingerprint().to_owned();
