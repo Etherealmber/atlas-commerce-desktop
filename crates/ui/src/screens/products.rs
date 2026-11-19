@@ -321,7 +321,8 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     for product in products {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
+            let wide = ui.available_width() >= 850.0;
+            ui.horizontal_centered(|ui| {
                 let source = product.image_url.as_deref().unwrap_or("");
                 let visible = ui.is_rect_visible(egui::Rect::from_min_size(
                     ui.next_widget_position(),
@@ -339,62 +340,86 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 } else {
                     icon(ui, Icon::Package, palette.accent, 20.0);
                 }
-                ui.vertical(|ui| {
-                    ui.label(
-                        RichText::new(product.name.clone())
-                            .color(palette.text)
-                            .strong()
-                            .size(14.0),
-                    );
-                    let subtitle = product.subtitle();
-                    if !subtitle.is_empty() {
-                        ui.label(RichText::new(subtitle).color(palette.dim).size(12.0));
-                    }
-                });
-            });
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                if app.role_policy().show_prices() {
-                    let currency = app
-                        .dashboard
-                        .data
-                        .as_ref()
-                        .map(|d| d.currency())
-                        .unwrap_or("MAD");
-                    ui.label(
-                        RichText::new(atlas_core::format::money(product.price, currency))
-                            .color(palette.text)
-                            .strong()
-                            .size(13.5),
-                    );
-                }
-                stock_pill(ui, app.locale, palette, &product);
-                if app.role_policy().can_manage_stock()
-                    && secondary_button(ui, t!(app.locale, "Adjust stock"), palette)
-                {
-                    app.stock_dialog = Some(StockDialog::new(&product));
-                }
-                if secondary_button(ui, t!(app.locale, "History"), palette) {
-                    app.stock_history = Some(StockHistory {
-                        product_id: product.id,
-                        product_name: product.name.clone(),
-                        full: false,
-                        offset: 0,
-                        rows: Vec::new(),
-                        loaded: false,
-                        error: None,
-                        job: None,
-                    });
-                    load_history(app);
-                }
-                if app.role_policy().can_edit_prices()
-                    && secondary_button(ui, t!(app.locale, "Edit"), palette)
-                {
-                    app.product_editor = Some(ProductEditor::for_product(&product));
+                let identity_width = if wide {
+                    (ui.available_width() - 610.0).max(120.0)
+                } else {
+                    ui.available_width().max(40.0)
+                };
+                ui.allocate_ui_with_layout(
+                    vec2(identity_width, 40.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&product.name)
+                                    .color(palette.text)
+                                    .strong()
+                                    .size(14.0),
+                            )
+                            .truncate(),
+                        );
+                        let subtitle = product.subtitle();
+                        if !subtitle.is_empty() {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(subtitle).color(palette.dim).size(12.0),
+                                )
+                                .truncate(),
+                            );
+                        }
+                    },
+                );
+                if wide {
+                    product_actions(app, ui, palette, &product);
                 }
             });
+            if !wide {
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| product_actions(app, ui, palette, &product));
+            }
         });
         ui.add_space(8.0);
+    }
+}
+
+fn product_actions(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, product: &Product) {
+    if app.role_policy().show_prices() {
+        let currency = app
+            .dashboard
+            .data
+            .as_ref()
+            .map(|d| d.currency())
+            .unwrap_or("MAD");
+        ui.label(
+            RichText::new(atlas_core::format::money(product.price, currency))
+                .color(palette.text)
+                .strong()
+                .size(13.5),
+        );
+    }
+    stock_pill(ui, app.locale, palette, product);
+    if product.tracks_inventory()
+        && app.role_policy().can_manage_stock()
+        && secondary_button(ui, t!(app.locale, "Adjust stock"), palette)
+    {
+        app.stock_dialog = Some(StockDialog::new(product));
+    }
+    if secondary_button(ui, t!(app.locale, "History"), palette) {
+        app.stock_history = Some(StockHistory {
+            product_id: product.id,
+            product_name: product.name.clone(),
+            full: false,
+            offset: 0,
+            rows: Vec::new(),
+            loaded: false,
+            error: None,
+            job: None,
+        });
+        load_history(app);
+    }
+    if app.role_policy().can_edit_prices() && secondary_button(ui, t!(app.locale, "Edit"), palette)
+    {
+        app.product_editor = Some(ProductEditor::for_product(product));
     }
 }
 

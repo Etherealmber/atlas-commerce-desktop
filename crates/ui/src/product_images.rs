@@ -13,10 +13,14 @@ pub(crate) struct ProductImages {
     entries: HashMap<String, Option<String>>,
     job: Option<Job<(String, Option<(String, Vec<u8>)>)>>,
     evict: Vec<String>,
+    cancel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl ProductImages {
     pub fn clear(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(());
+        }
         self.job = None;
         self.evict
             .extend(self.entries.drain().filter_map(|(_, uri)| uri));
@@ -28,6 +32,7 @@ impl ProductImages {
         }
         if let Some((key, image)) = self.job.as_ref().and_then(Job::poll) {
             self.job = None;
+            self.cancel = None;
             let uri = image.map(|(uri, bytes)| {
                 ctx.include_bytes(uri.clone(), bytes);
                 uri
@@ -64,8 +69,13 @@ impl ProductImages {
             Err(_) => return None,
         };
         proxy.query_pairs_mut().append_pair("url", parsed.as_str());
+        let (cancel, cancelled) = tokio::sync::oneshot::channel();
+        self.cancel = Some(cancel);
         self.job = Some(runner.spawn(async move {
-            let image = fetch(proxy, token, fingerprint, &key).await;
+            let image = tokio::select! {
+                result = fetch(proxy, token, fingerprint, &key) => result,
+                _ = cancelled => None,
+            };
             (key, image)
         }));
         None
@@ -101,11 +111,8 @@ async fn fetch(
         .split(';')
         .next()?
         .trim();
-    let ext = match mime {
-        "image/png" => "png",
-        "image/jpeg" => "jpg",
-        "image/webp" => "webp",
-        "image/gif" => "gif",
+    match mime {
+        "image/png" | "image/jpeg" | "image/webp" | "image/gif" => {}
         _ => return None,
     };
     const LIMIT: usize = 4 * 1024 * 1024;
@@ -131,8 +138,15 @@ async fn fetch(
     if width == 0 || height == 0 || width > 2048 || height > 2048 {
         return None;
     }
+    // Cache only small thumbnails, not full-size decoded textures for every row.
+    let image = image::load_from_memory(&bytes).ok()?.thumbnail(64, 64);
+    let mut output = std::io::Cursor::new(Vec::new());
+    image.write_to(&mut output, image::ImageFormat::Png).ok()?;
     let digest = Sha256::digest(key.as_bytes());
-    Some((format!("bytes://product-{digest:x}.{ext}"), bytes))
+    Some((
+        format!("bytes://product-{digest:x}.png"),
+        output.into_inner(),
+    ))
 }
 
 fn valid_source(source: &str) -> Option<url::Url> {
