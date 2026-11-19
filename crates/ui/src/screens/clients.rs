@@ -236,7 +236,8 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .data
         .as_ref()
         .map(|data| data.currency())
-        .unwrap_or("MAD");
+        .unwrap_or("MAD")
+        .to_owned();
     let selected = app.selected_client;
     for client in clients.iter().filter(|client| {
         let q = query.as_str();
@@ -256,15 +257,7 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             ui.painter().rect_filled(rect, 10.0, palette.surface_hover);
         }
         if response.clicked() {
-            if app.selected_client != Some(client.id) {
-                app.client_invoice_id = None;
-                app.client_invoices = Default::default();
-                app.invoice_detail_id = None;
-                app.invoice_detail = Default::default();
-                app.client_report_id = None;
-                app.client_report = Default::default();
-            }
-            app.selected_client = Some(client.id);
+            select_client(app, client.id);
         }
         widgets::overlay_at(ui, rect.shrink2(vec2(8.0, 0.0)), |ui| {
             // Explicit bounded columns keep long names from consuming the
@@ -272,7 +265,8 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             let width = ui.available_width();
             ui.horizontal_centered(|ui| {
                 icon(ui, Icon::User, palette.secondary, 18.0);
-                let text_width = (width - 160.0).max(40.0);
+                let wide = width >= 700.0;
+                let text_width = (width - if wide { 440.0 } else { 160.0 }).max(40.0);
                 ui.allocate_ui_with_layout(
                     vec2(text_width, height),
                     egui::Layout::top_down(egui::Align::Min),
@@ -302,15 +296,40 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     },
                 );
                 ui.label(
-                    RichText::new(money(client.balance_due, currency))
+                    RichText::new(money(client.balance_due, &currency))
                         .color(palette.text)
                         .strong()
                         .size(12.5),
                 );
+                if wide {
+                    if secondary_button(ui, t!(app.locale, "Invoices"), palette) {
+                        select_client(app, client.id);
+                        app.open_client_invoices(client);
+                    }
+                    if secondary_button(ui, t!(app.locale, "Situation"), palette) {
+                        select_client(app, client.id);
+                        app.load_client_report(client, false);
+                    }
+                    if secondary_button(ui, t!(app.locale, "Edit"), palette) {
+                        app.client_editor = Some(ClientEditor::for_client(client));
+                    }
+                }
             });
         });
         ui.separator();
     }
+}
+
+fn select_client(app: &mut AtlasApp, id: i64) {
+    if app.selected_client != Some(id) {
+        app.client_invoice_id = None;
+        app.client_invoices = Default::default();
+        app.invoice_detail_id = None;
+        app.invoice_detail = Default::default();
+        app.client_report_id = None;
+        app.client_report = Default::default();
+    }
+    app.selected_client = Some(id);
 }
 
 fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
