@@ -3,7 +3,7 @@
 
 use egui::{RichText, Sense, vec2};
 
-use atlas_api::models::{Dashboard, MonthlyPoint};
+use atlas_api::models::{Dashboard, MonthlyPoint, UnpaidSummary};
 use atlas_core::format::{money, number, short_date};
 
 use crate::icons::Icon;
@@ -167,9 +167,40 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
     card(palette).show(ui, |ui| {
         ui.set_width((ui.available_width() - 34.0).max(0.0));
-        unpaid_card(app, ui, palette, &data);
+        unpaid_card(
+            app,
+            ui,
+            palette,
+            &data.unpaid_sales,
+            data.currency(),
+            &t!(app.locale, "Unpaid sales"),
+            &t!(app.locale, "invoices"),
+        );
     });
 
+    ui.add_space(14.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width((ui.available_width() - 34.0).max(0.0));
+        if let Some(unpaid) = &data.unpaid_purchases {
+            unpaid_card(
+                app,
+                ui,
+                palette,
+                unpaid,
+                data.currency(),
+                &t!(app.locale, "Unpaid purchases"),
+                &t!(app.locale, "bills"),
+            );
+        } else {
+            ui.label(
+                RichText::new(t!(app.locale, "Unpaid purchases"))
+                    .color(palette.text)
+                    .strong()
+                    .size(15.0),
+            );
+            ui.label(RichText::new("—").color(palette.secondary));
+        }
+    });
     ui.add_space(14.0);
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -371,15 +402,16 @@ fn metric_card(
     });
 }
 
-fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
-    let currency = data.currency();
-    let unpaid = &data.unpaid_sales;
-    ui.label(
-        RichText::new(t!(app.locale, "Unpaid sales"))
-            .color(palette.text)
-            .strong()
-            .size(15.0),
-    );
+fn unpaid_card(
+    app: &AtlasApp,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    unpaid: &UnpaidSummary,
+    currency: &str,
+    title: &str,
+    count_label: &str,
+) {
+    ui.label(RichText::new(title).color(palette.text).strong().size(15.0));
     ui.add_space(10.0);
     stat_row(
         ui,
@@ -407,11 +439,7 @@ fn unpaid_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dash
     ui.horizontal(|ui| {
         pill(
             ui,
-            format!(
-                "{} {}",
-                number(unpaid.count as f64),
-                t!(app.locale, "invoices")
-            ),
+            format!("{} {}", number(unpaid.count as f64), count_label),
             palette.surface_active,
             palette.secondary,
         );
@@ -543,14 +571,22 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
                 (((position.x - rect.left()) / slot).floor() as usize).min(points.len() - 1);
             let point = &points[index];
             let mut detail = month_label(point);
-            if let Some(value) = first(point).filter(|v| v.is_finite()) {
-                detail.push_str(&format!("\n{}: {}", chart.first_label, number(value)));
-            }
-            if let Some(value) = second(point).filter(|v| v.is_finite()) {
-                detail.push_str(&format!("\n{}: {}", chart.second_label, number(value)));
+            let first_value = first(point)
+                .filter(|v| v.is_finite())
+                .map(number)
+                .unwrap_or_else(|| "—".into());
+            detail.push_str(&format!("\n{}: {}", chart.first_label, first_value));
+            if !chart.second_label.as_ref().is_empty() {
+                let second_value = second(point)
+                    .filter(|v| v.is_finite())
+                    .map(number)
+                    .unwrap_or_else(|| "—".into());
+                detail.push_str(&format!("\n{}: {}", chart.second_label, second_value));
             }
             response.on_hover_text(detail);
         }
+        let first_available = points.iter().any(|p| first(p).is_some_and(f64::is_finite));
+        let second_available = points.iter().any(|p| second(p).is_some_and(f64::is_finite));
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("●").color(palette.finance_info));
             ui.label(
@@ -558,6 +594,9 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
                     .color(palette.secondary)
                     .size(12.0),
             );
+            if !first_available {
+                ui.label(RichText::new("—").color(palette.secondary));
+            }
             if !chart.second_label.as_ref().is_empty() {
                 ui.label(RichText::new("●").color(palette.finance_warning));
                 ui.label(
@@ -565,6 +604,9 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
                         .color(palette.secondary)
                         .size(12.0),
                 );
+                if !second_available {
+                    ui.label(RichText::new("—").color(palette.secondary));
+                }
             }
         });
     });

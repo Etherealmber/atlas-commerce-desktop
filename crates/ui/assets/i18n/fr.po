@@ -1756,3 +1756,9 @@ msgstr "Aucun produit en stock bas."
 
 msgid "Showing up to 50 products."
 msgstr "Affichage de 50 produits maximum."
+
+msgid "Unpaid purchases"
+msgstr "Achats impayés"
+
+msgid "bills"
+msgstr "factures"

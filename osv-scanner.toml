@@ -1,14 +1,13 @@
 # OSV-Scanner configuration for the Atlas Commerce desktop workspace.
 #
-# Every entry below is an `informational = "unmaintained"` RUSTSEC notice on
-# a transitive, Linux-only dependency: it does not describe an exploitable
+# Every entry below is an `informational = "unmaintained"` RUSTSEC notice: it does not describe an exploitable
 # vulnerability and no patched release exists. Exceptions are scoped per
 # advisory ID so any new (security) advisory still fails the scan, and each
-# one expires a year after addition so the decision is re-evaluated.
+# exception expires so the decision is re-evaluated.
 #
 # The file sits next to Cargo.lock at the repository root, which is where
 # osv-scanner's automatic configuration discovery looks for it. A config-less
-# run of the same lockfile reports exactly these three IDs and nothing else.
+# run reports the notices documented below; new advisories are not ignored.
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0370" # zvariant 5.15.1
@@ -38,4 +37,17 @@ Linux-only transitive dependency via zbus/atspi (eframe accessibility and the
 ksni system-tray integration). Upstream unmaintained notice published
 2026-10-16 with no patched release; Windows and macOS builds do not include
 this crate.
+"""
+
+# Informational maintenance notice, not an exploit advisory. Chrono is used
+# directly for local dates and auth expiry, and also occurs transitively. A
+# migration must preserve timezone and RFC3339 expiry semantics; review this
+# short-lived exception before expiry rather than masking security advisories.
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0543"
+ignoreUntil = 2027-01-22
+reason = """
+Chrono is marked unmaintained; the advisory identifies no patched release or
+specific vulnerability. Evaluate migration to a maintained date/time library,
+including transitive dependencies and authentication expiry behavior.
 """

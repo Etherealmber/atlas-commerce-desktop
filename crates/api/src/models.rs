@@ -293,7 +293,7 @@ pub struct Dashboard {
     #[serde(rename = "unpaidSales", default)]
     pub unpaid_sales: UnpaidSummary,
     #[serde(rename = "unpaidPurchases", default)]
-    pub unpaid_purchases: UnpaidSummary,
+    pub unpaid_purchases: Option<UnpaidSummary>,
     #[serde(rename = "recentInvoices", default)]
     pub recent_invoices: Vec<Invoice>,
     #[serde(rename = "monthlySeries", default)]
@@ -1118,6 +1118,20 @@ mod operational_dashboard_tests {
     use super::Dashboard;
 
     #[test]
+    fn unpaid_purchases_distinguish_absent_from_zero() {
+        let absent: Dashboard = serde_json::from_str("{}").unwrap();
+        let present: Dashboard = serde_json::from_str(
+            r#"{"unpaidPurchases":{"count":2,"total":15,"open":10,"overdue":5}}"#,
+        )
+        .unwrap();
+        assert!(absent.unpaid_purchases.is_none());
+        let summary = present.unpaid_purchases.unwrap();
+        assert_eq!(summary.count, 2);
+        assert_eq!(summary.total, 15.0);
+        assert_eq!(summary.overdue, 5.0);
+    }
+
+    #[test]
     fn operational_response_keeps_counts_and_hides_financial_section() {
         let response: Dashboard = serde_json::from_str(
             r#"{"operational_only":true,"products":14,"low_stock":[{"id":1,"name":"Vis","sku":"V1","stock_quantity":2,"low_stock_threshold":5,"unit":"pièce","track_inventory":1},{"id":2}]}"#,
@@ -1129,6 +1143,7 @@ mod operational_dashboard_tests {
         assert_eq!(response.low_stock[0].id, 1);
         assert_eq!(response.low_stock[0].stock, 2.0);
         assert_eq!(response.low_stock[0].low_stock_threshold, Some(5.0));
+        assert!(response.unpaid_purchases.is_none());
     }
 }
 

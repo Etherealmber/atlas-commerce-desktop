@@ -343,8 +343,15 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                         next
                     });
                     app.profile_menu_open = false;
-                    if open && app.alerts.data.is_none() && !app.alerts.loading {
-                        app.load_alerts();
+                    if open {
+                        let interval =
+                            std::time::Duration::from_secs(app.settings.poll_interval_secs.max(15));
+                        if !app.alerts.loading && app.alerts.stale_for(interval) {
+                            app.load_alerts();
+                        }
+                        if !app.nav_badges.loading && app.nav_badges.stale_for(interval) {
+                            app.load_nav_badges();
+                        }
                     }
                 }
             }
