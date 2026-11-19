@@ -165,6 +165,67 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     for chart in &charts {
         chart_card(ui, palette, points, chart);
     }
+    if let Some(categories) = &data.expense_categories {
+        card(palette).show(ui, |ui| {
+            ui.set_width((ui.available_width() - 34.0).max(0.0));
+            ui.label(
+                RichText::new(t!(app.locale, "Expense breakdown"))
+                    .color(palette.text)
+                    .strong()
+                    .size(15.0),
+            );
+            ui.label(
+                RichText::new(t!(
+                    app.locale,
+                    "All time · up to 8 categories; not filtered by the chart period."
+                ))
+                .color(palette.secondary)
+                .size(12.0),
+            );
+            ui.add_space(8.0);
+            if categories.is_empty() {
+                ui.label(
+                    RichText::new(t!(app.locale, "No expense categories."))
+                        .color(palette.secondary),
+                );
+            }
+            let max = categories
+                .iter()
+                .filter_map(|c| (c.total.is_finite() && c.total > 0.0).then_some(c.total))
+                .fold(0.0, f64::max);
+            for category in categories {
+                stat_row(
+                    ui,
+                    palette,
+                    &category.category,
+                    if category.total.is_finite() {
+                        money(category.total, data.currency())
+                    } else {
+                        "—".to_owned()
+                    },
+                    palette.text,
+                );
+                let fraction = if max > 0.0 && category.total.is_finite() {
+                    (category.total / max).clamp(0.0, 1.0) as f32
+                } else {
+                    0.0
+                };
+                let (rect, _) = ui
+                    .allocate_exact_size(vec2(ui.available_width().max(0.0), 6.0), Sense::hover());
+                ui.painter().rect_filled(rect, 3.0, palette.surface_active);
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(
+                        rect.min,
+                        vec2(rect.width() * fraction, rect.height()),
+                    ),
+                    3.0,
+                    palette.finance_warning,
+                );
+                ui.add_space(8.0);
+            }
+        });
+        ui.add_space(14.0);
+    }
     card(palette).show(ui, |ui| {
         ui.set_width((ui.available_width() - 34.0).max(0.0));
         unpaid_card(

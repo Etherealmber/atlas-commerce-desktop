@@ -261,6 +261,13 @@ pub struct MonthlyPoint {
     pub clients_new: Option<f64>,
 }
 
+/// Category totals returned by the dashboard's all-time expense breakdown.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct DashboardExpenseCategory {
+    pub category: String,
+    pub total: f64,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Dashboard {
     /// Restricted inventory roles receive operational counts instead of money.
@@ -298,6 +305,8 @@ pub struct Dashboard {
     pub recent_invoices: Vec<Invoice>,
     #[serde(rename = "monthlySeries", default)]
     pub monthly_series: Vec<MonthlyPoint>,
+    #[serde(rename = "expenseCategories", default)]
+    pub expense_categories: Option<Vec<DashboardExpenseCategory>>,
 }
 
 impl Dashboard {
@@ -1116,6 +1125,18 @@ mod trusted_device_contract_tests {
 #[cfg(test)]
 mod operational_dashboard_tests {
     use super::Dashboard;
+
+    #[test]
+    fn expense_categories_are_optional_and_keep_server_values() {
+        let absent: Dashboard = serde_json::from_str("{}").unwrap();
+        let present: Dashboard = serde_json::from_str(
+            r#"{"expenseCategories":[{"category":"Transport","total":12.5}],"expenseByCategory":[{"category":"Transport","total":12.5}]}"#,
+        ).unwrap();
+        assert!(absent.expense_categories.is_none());
+        let categories = present.expense_categories.unwrap();
+        assert_eq!(categories[0].category, "Transport");
+        assert_eq!(categories[0].total, 12.5);
+    }
 
     #[test]
     fn unpaid_purchases_distinguish_absent_from_zero() {

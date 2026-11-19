@@ -133,6 +133,16 @@ fn build(route: &str) -> AtlasApp {
         current_balance: 42000.0,
         stock_value: 17500.0,
         product_count: 2,
+        expense_categories: Some(vec![
+            atlas_api::models::DashboardExpenseCategory {
+                category: "Transport".into(),
+                total: 2450.0,
+            },
+            atlas_api::models::DashboardExpenseCategory {
+                category: "Services".into(),
+                total: 1200.0,
+            },
+        ]),
         monthly_series: (1..=12)
             .map(|month| MonthlyPoint {
                 key: format!("2026-{month:02}"),
