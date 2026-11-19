@@ -1651,3 +1651,177 @@ msgstr "Gestion"
 
 msgid "Secure sign-in"
 msgstr "Connexion sécurisée"
+
+msgid "Security code"
+msgstr "Code de sécurité"
+
+msgid "Compare:"
+msgstr "À comparer :"
+
+msgid "Device"
+msgstr "Appareil"
+
+msgid "City and country unavailable"
+msgstr "Ville et pays indisponibles"
+
+msgid "Products and stock"
+msgstr "Produits & stock"
+
+msgid "Attendance"
+msgstr "Présence"
+
+msgid "Sales invoices"
+msgstr "Factures de vente"
+
+msgid "Reimbursements"
+msgstr "Remboursements"
+
+msgid "Purchase invoices"
+msgstr "Factures d’achat"
+
+msgid "Balance and income"
+msgstr "Solde & recettes"
+
+msgid "Reports and closing"
+msgstr "Rapports & clôture"
+
+msgid "Stock operations"
+msgstr "Ops stock"
+
+msgid "Not available yet"
+msgstr "Pas encore disponible"
+
+msgid "Loading…"
+msgstr "Chargement…"
+
+msgid "Toggle sidebar"
+msgstr "Réduire ou agrandir le menu"
+
+msgid "Toggle theme"
+msgstr "Changer le thème"
+
+msgid "All caught up"
+msgstr "Tout est à jour"
+
+msgid "View all"
+msgstr "Tout voir"
+
+msgid "Stock & invoicing"
+msgstr "Stock & facturation"
+
+msgid "Hello"
+msgstr "Bonjour"
+
+msgid "Your workspace at a glance."
+msgstr "Votre activité en un coup d’œil."
+
+msgid "Operational overview"
+msgstr "Vue opérationnelle"
+
+msgid "Cash flow"
+msgstr "Flux de trésorerie"
+
+msgid "Period"
+msgstr "Période"
+
+msgid "months"
+msgstr "mois"
+
+msgid "Profit trend"
+msgstr "Évolution du profit"
+
+msgid "Profit"
+msgstr "Profit"
+
+msgid "Invoices and quick sales"
+msgstr "Factures et vente rapide"
+
+msgid "Quick sales"
+msgstr "Ventes rapides"
+
+msgid "Supplier purchases and salaries"
+msgstr "Achats fournisseurs et salaires"
+
+msgid "Salaries"
+msgstr "Salaires"
+
+msgid "New clients"
+msgstr "Nouveaux clients"
+
+msgid "Payments received"
+msgstr "Encaissements"
+
+msgid "No low-stock products."
+msgstr "Aucun produit en stock bas."
+
+msgid "Showing up to 50 products."
+msgstr "Affichage de 50 produits maximum."
+
+msgid "Unpaid purchases"
+msgstr "Achats impayés"
+
+msgid "bills"
+msgstr "factures"
+
+msgid "Windows material"
+msgstr "Effet de matière Windows"
+
+msgid "Use Mica or Acrylic when Windows permits transparency; otherwise use a solid background."
+msgstr "Utiliser Mica ou Acrylic lorsque Windows autorise la transparence ; sinon, utiliser un fond opaque."
+
+msgid "Expense breakdown"
+msgstr "Répartition des charges"
+
+msgid "All time · up to 8 categories; not filtered by the chart period."
+msgstr "Toutes périodes · 8 catégories maximum ; non filtrées par la période des graphiques."
+
+msgid "No expense categories."
+msgstr "Aucune catégorie de charges."
+
+msgid "History"
+msgstr "Historique"
+
+msgid "Current stock"
+msgstr "Stock actuel"
+
+msgid "All history"
+msgstr "Tout l’historique"
+
+msgid "Last 90 days"
+msgstr "90 derniers jours"
+
+msgid "No stock movements."
+msgstr "Aucun mouvement de stock."
+
+msgid "Before"
+msgstr "Avant"
+
+msgid "After"
+msgstr "Après"
+
+msgid "Stock history"
+msgstr "Historique stock"
+
+msgid "Back to products"
+msgstr "Retour aux produits"
+
+msgid "Movement history"
+msgstr "Historique des mouvements"
+
+msgid "View full history"
+msgstr "Voir l’historique complet"
+
+msgid "Identity"
+msgstr "Identité"
+
+msgid "Contact"
+msgstr "Contact"
+
+msgid "Options"
+msgstr "Options"
+
+msgid "Step"
+msgstr "Étape"
+
+msgid "Showing up to 50 recent movements."
+msgstr "Affichage de 50 mouvements récents maximum."

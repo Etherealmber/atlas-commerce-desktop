@@ -366,17 +366,19 @@ pub fn icon_circle_button(
             Sense::hover()
         },
     );
-    let fill = if palette.dark {
-        egui::Color32::from_black_alpha(90)
+    let fill = if enabled && response.hovered() {
+        palette.surface_hover
     } else {
-        egui::Color32::from_black_alpha(18)
+        palette.surface
     };
-    if enabled && response.hovered() {
-        ui.painter()
-            .circle_filled(rect.center(), 20.0, palette.surface_hover);
-    } else {
-        ui.painter().circle_filled(rect.center(), 20.0, fill);
-    }
+    let face = rect.shrink(3.0);
+    ui.painter().rect_filled(face, 8.0, fill);
+    ui.painter().rect_stroke(
+        face,
+        8.0,
+        Stroke::new(1.0, palette.outline),
+        egui::StrokeKind::Inside,
+    );
     let tint = if !enabled {
         palette.dim
     } else if response.hovered() {

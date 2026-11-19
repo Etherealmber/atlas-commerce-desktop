@@ -3,7 +3,7 @@
 //! and `POST /api/products/:id/adjust-stock`.
 
 use atlas_api::ApiError;
-use atlas_api::models::{Product, StockAdjust};
+use atlas_api::models::{Product, StockAdjust, StockMovement};
 use atlas_core::format::number;
 use atlas_core::jobs::Job;
 use egui::{RichText, vec2};
@@ -52,6 +52,7 @@ impl ProductEditor {
 pub struct StockDialog {
     pub product_id: i64,
     pub product_name: String,
+    pub current_stock: f64,
     pub quantity: String,
     pub kind: StockKind,
     pub reason: String,
@@ -91,7 +92,8 @@ impl StockDialog {
         Self {
             product_id: product.id,
             product_name: product.name.clone(),
-            quantity: String::new(),
+            current_stock: product.stock,
+            quantity: "1".to_owned(),
             kind: StockKind::In,
             reason: String::new(),
             saving: bool::default(),
@@ -101,7 +103,48 @@ impl StockDialog {
     }
 }
 
+/// Only the requested product history is fetched; each page is bounded.
+#[allow(clippy::type_complexity)]
+pub(crate) struct StockHistory {
+    pub product_id: i64,
+    pub product_name: String,
+    pub full: bool,
+    pub offset: u32,
+    pub rows: Vec<StockMovement>,
+    pub loaded: bool,
+    pub error: Option<String>,
+    pub job: Option<Job<Result<Vec<StockMovement>, ApiError>>>,
+}
+
+fn load_history(app: &mut AtlasApp) {
+    let Some(client) = app.client.clone() else {
+        return;
+    };
+    let Some(history) = app.stock_history.as_mut() else {
+        return;
+    };
+    if history.job.is_some() {
+        return;
+    }
+    let (id, full, offset) = (history.product_id, history.full, history.offset);
+    history.error = None;
+    history.loaded = false;
+    history.rows.clear();
+    history.job = Some(
+        app.runner
+            .spawn(async move { client.product_movements(id, full, offset).await }),
+    );
+}
+
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    if app
+        .stock_history
+        .as_ref()
+        .is_some_and(|history| history.full)
+    {
+        draw_history_page(app, ui, palette);
+        return;
+    }
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Products"), palette);
@@ -148,7 +191,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.products.loading && app.products.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
     } else if app
         .products
         .data
@@ -171,6 +214,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
     if app.stock_dialog.is_some() {
         draw_stock_dialog(app, ui, palette);
+    }
+    if app.stock_history.is_some() {
+        draw_history_dialog(app, ui, palette);
     }
 }
 
@@ -317,10 +363,198 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 {
                     app.stock_dialog = Some(StockDialog::new(&product));
                 }
+                if secondary_button(ui, t!(app.locale, "History"), palette) {
+                    app.stock_history = Some(StockHistory {
+                        product_id: product.id,
+                        product_name: product.name.clone(),
+                        full: false,
+                        offset: 0,
+                        rows: Vec::new(),
+                        loaded: false,
+                        error: None,
+                        job: None,
+                    });
+                    load_history(app);
+                }
             });
         });
         ui.add_space(8.0);
     }
+}
+
+fn poll_history(app: &mut AtlasApp, ctx: &egui::Context) {
+    if let Some(history) = app.stock_history.as_mut() {
+        if let Some(result) = history.job.as_ref().and_then(Job::poll) {
+            history.job = None;
+            history.loaded = true;
+            match result {
+                Ok(rows) => history.rows = rows,
+                Err(error) => history.error = Some(error.message),
+            }
+        }
+        if history.job.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+}
+
+fn history_contents(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_history(app, ui.ctx());
+    let Some(history) = app.stock_history.as_ref() else {
+        return;
+    };
+    ui.label(
+        RichText::new(format!(
+            "{} · {}",
+            history.product_name,
+            if history.full {
+                t!(app.locale, "All history")
+            } else {
+                t!(app.locale, "Last 90 days")
+            }
+        ))
+        .color(palette.secondary),
+    );
+    if !history.full {
+        ui.label(
+            RichText::new(t!(app.locale, "Showing up to 50 recent movements."))
+                .color(palette.secondary)
+                .size(12.0),
+        );
+    }
+    ui.add_space(8.0);
+    if history.job.is_some() {
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+        return;
+    }
+    if let Some(error) = &history.error {
+        error_banner(ui, error, palette);
+        if secondary_button(ui, t!(app.locale, "Retry"), palette) {
+            load_history(app);
+        }
+        return;
+    }
+    if history.loaded && history.rows.is_empty() {
+        ui.label(RichText::new(t!(app.locale, "No stock movements.")).color(palette.secondary));
+    }
+    for movement in &history.rows {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(movement.created_at.as_deref().unwrap_or("—"))
+                        .color(palette.text)
+                        .strong(),
+                );
+                ui.label(RichText::new(&movement.kind).color(palette.secondary));
+                for (label, value) in [
+                    (t!(app.locale, "Quantity"), movement.quantity),
+                    (t!(app.locale, "Before"), movement.previous_quantity),
+                    (t!(app.locale, "After"), movement.new_quantity),
+                ] {
+                    ui.label(
+                        RichText::new(format!(
+                            "{}: {}",
+                            label,
+                            value
+                                .filter(|n| n.is_finite())
+                                .map(number)
+                                .unwrap_or_else(|| "—".into())
+                        ))
+                        .color(palette.text),
+                    );
+                }
+            });
+            if let Some(reason) = movement.reason.as_deref().filter(|v| !v.is_empty()) {
+                ui.label(RichText::new(reason).color(palette.secondary));
+            }
+            if let Some(reference) = movement.reference.as_deref().filter(|v| !v.is_empty()) {
+                ui.label(RichText::new(reference).color(palette.secondary));
+            }
+        });
+    }
+    let full = history.full;
+    let offset = history.offset;
+    let next = history.rows.len() == 50;
+    if full {
+        ui.horizontal(|ui| {
+            if offset > 0 && secondary_button(ui, t!(app.locale, "Previous"), palette) {
+                if let Some(history) = app.stock_history.as_mut() {
+                    history.offset = offset.saturating_sub(50);
+                }
+                load_history(app);
+            }
+            if next && secondary_button(ui, t!(app.locale, "Next"), palette) {
+                if let Some(history) = app.stock_history.as_mut() {
+                    history.offset = offset.saturating_add(50);
+                }
+                load_history(app);
+            }
+        });
+    }
+}
+
+fn draw_history_page(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    ui.horizontal(|ui| {
+        page_title(ui, t!(app.locale, "Stock history"), palette);
+        if secondary_button(ui, t!(app.locale, "Back to products"), palette) {
+            app.stock_history = None;
+        }
+        if app.stock_history.is_some() && secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            load_history(app);
+        }
+    });
+    if app.stock_history.is_some() {
+        history_contents(app, ui, palette);
+    }
+}
+
+fn draw_history_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let screen = ui.ctx().input(|i| i.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            800.0_f32.min((screen.width() - 32.0).max(1.0)),
+            580.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
+    );
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("stock-history-scrim")) {
+        app.stock_history = None;
+        return;
+    }
+    widgets::overlay_at(ui, rect, |ui| {
+        widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(t!(app.locale, "Movement history"))
+                    .color(palette.text)
+                    .strong()
+                    .size(18.0),
+            );
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 120.0).max(1.0))
+                .show(ui, |ui| history_contents(app, ui, palette));
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                if app
+                    .stock_history
+                    .as_ref()
+                    .is_some_and(|history| history.job.is_none())
+                    && secondary_button(ui, t!(app.locale, "View full history"), palette)
+                {
+                    if let Some(history) = app.stock_history.as_mut() {
+                        history.full = true;
+                        history.offset = 0;
+                        history.job = None;
+                    }
+                    load_history(app);
+                }
+                if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                    app.stock_history = None;
+                }
+            });
+        });
+    });
 }
 
 fn stock_pill(
@@ -653,6 +887,16 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .color(palette.secondary)
                             .size(13.0),
                     );
+                    if let Some(dialog) = app.stock_dialog.as_ref() {
+                        ui.label(
+                            RichText::new(format!(
+                                "{}: {}",
+                                t!(locale, "Current stock"),
+                                number(dialog.current_stock)
+                            ))
+                            .color(palette.secondary),
+                        );
+                    }
                     ui.add_space(10.0);
 
                     ui.horizontal_wrapped(|ui| {
@@ -753,8 +997,12 @@ fn submit_adjust(app: &mut AtlasApp) {
         dialog.error = Some("Quantité invalide.".to_owned());
         return;
     };
+    if !quantity.is_finite() || quantity <= 0.0 {
+        dialog.error = Some("La quantité doit être supérieure à zéro.".to_owned());
+        return;
+    }
     let body = StockAdjust {
-        quantity: quantity.abs(),
+        quantity,
         kind: dialog.kind.worker_value().to_owned(),
         reason: optional(&dialog.reason),
     };

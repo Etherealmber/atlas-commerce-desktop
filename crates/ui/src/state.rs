@@ -578,6 +578,7 @@ pub struct AtlasApp {
     pub client_editor: Option<ClientEditor>,
     pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
+    pub(crate) stock_history: Option<crate::screens::products::StockHistory>,
     pub quick_sale: Option<QuickSaleDraft>,
     pub confirm_dialog: Option<crate::dialogs::Confirm>,
 
@@ -776,6 +777,7 @@ impl AtlasApp {
             category_editor: None,
             unit_editor: None,
             stock_dialog: None,
+            stock_history: None,
             quick_sale: None,
             confirm_dialog: None,
             agent: AgentState::default(),
@@ -818,7 +820,12 @@ impl AtlasApp {
             atlas_core::settings::ThemeMode::Light => false,
             atlas_core::settings::ThemeMode::System => ctx.theme() == egui::Theme::Dark,
         };
-        crate::theme::resolve(dark)
+        let palette = crate::theme::resolve(dark);
+        #[cfg(target_os = "windows")]
+        if let Some(accent) = crate::theme::windows_accent() {
+            return crate::theme::with_system_accent(palette, accent);
+        }
+        palette
     }
 
     // ── client helpers ───────────────────────────────────────────────────
@@ -1026,7 +1033,14 @@ impl AtlasApp {
                     self.load_products();
                 }
             }
-            Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
+            Route::Notifications => {
+                if self.alerts.data.is_none() && !self.alerts.loading {
+                    self.load_alerts();
+                }
+                if self.nav_badges.data.is_none() && !self.nav_badges.loading {
+                    self.load_nav_badges();
+                }
+            }
             // Settings aggregates four independent caches; load each once,
             // leaving the in-screen Retry action in charge of failed loads.
             Route::Settings => {
@@ -1101,6 +1115,7 @@ impl AtlasApp {
             || self.category_editor.is_some()
             || self.unit_editor.is_some()
             || self.stock_dialog.is_some()
+            || self.stock_history.as_ref().is_some_and(|history| !history.full)
             || self.scan.quick.is_some()
             // The quick-sale draft is an inline screen form, not a modal:
             // counting it here would block global shortcuts and hide the
@@ -1136,6 +1151,14 @@ impl AtlasApp {
         // The stock dialog paints above the product editor, so Escape must
         // dismiss it first when both are open and leave the editor alone.
         if self.stock_dialog.take().is_some() {
+            return true;
+        }
+        if self
+            .stock_history
+            .as_ref()
+            .is_some_and(|history| !history.full)
+        {
+            self.stock_history = None;
             return true;
         }
         if let Some(editor) = self.product_editor.take() {
@@ -1283,6 +1306,7 @@ impl AtlasApp {
         self.business_search = Cache::default();
         self.product_editor = None;
         self.stock_dialog = None;
+        self.stock_history = None;
         self.quick_sale = None;
         self.confirm_dialog = None;
         self.palette_open = false;

@@ -56,6 +56,8 @@ fastframe-i18n = { workspace = true, features = ["build"] }
 
 # Windows uses the installed WebView2 runtime, never a bundled browser.
 [target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["UI_ViewManagement"] }
+window-vibrancy = "0.8.1"
 wry = { version = "=0.56.1", default-features = false }
 tempfile = "3"
 

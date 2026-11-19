@@ -33,7 +33,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.alerts.loading && app.alerts.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
         return;
     }
 

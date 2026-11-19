@@ -48,6 +48,20 @@ impl ApiClient {
             .await
     }
 
+    /// `GET /api/products/:id/movements`: 90-day window or paged full history.
+    pub async fn product_movements(
+        &self,
+        id: i64,
+        full: bool,
+        offset: u32,
+    ) -> Result<Vec<StockMovement>, ApiError> {
+        self.get_data(&format!(
+            "/api/products/{id}/movements?full={}&limit=50&offset={offset}",
+            u8::from(full)
+        ))
+        .await
+    }
+
     /// `GET /api/dashboard`.
     pub async fn dashboard(&self) -> Result<Dashboard, ApiError> {
         self.get_data("/api/dashboard").await
@@ -188,6 +202,44 @@ mod tests {
                     .unwrap()
                     .is_ok()
             );
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn product_history_uses_the_worker_window_and_pagination_contract() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        for (full, offset) in [(false, 0), (true, 50)] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut raw = [0; 4096];
+                let n = stream.read(&mut raw).unwrap();
+                let request = String::from_utf8_lossy(&raw[..n]);
+                assert!(request.starts_with(&format!(
+                    "GET /api/products/9/movements?full={}&limit=50&offset={offset} HTTP/1.1",
+                    u8::from(full)
+                )));
+                let response = br#"{"success":true,"data":[{"id":3,"type":"sale","quantity":1,"previous_quantity":51,"new_quantity":50}]}"#;
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", response.len()).unwrap();
+                stream.write_all(response).unwrap();
+            });
+            let runner = atlas_core::jobs::JobRunner::new();
+            let client =
+                ApiClient::new(&format!("http://{address}"), "fixture-device", "fixture").unwrap();
+            let rows = runner
+                .spawn(async move { client.product_movements(9, full, offset).await })
+                .wait()
+                .unwrap()
+                .unwrap();
+            assert_eq!(rows[0].new_quantity, Some(50.0));
             server.join().unwrap();
         }
     }

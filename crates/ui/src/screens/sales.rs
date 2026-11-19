@@ -167,7 +167,7 @@ fn quote_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .size(12.0),
         );
         if app.invoices.loading && app.invoices.data.is_none() {
-            super::centered_spinner(ui, palette);
+            super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
             return;
         }
         if let Some(error) = &app.invoices.error {
@@ -266,7 +266,7 @@ fn refund_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         });
         if app.invoices.loading && app.invoices.data.is_none() {
-            super::centered_spinner(ui, palette);
+            super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
             return;
         }
         if let Some(error) = &app.invoices.error {
@@ -471,7 +471,7 @@ fn invoice_history(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     );
     ui.add_space(8.0);
     if app.invoices.loading && app.invoices.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
         return;
     }
     if let Some(error) = &app.invoices.error {

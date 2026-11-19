@@ -9,7 +9,7 @@ use url::Url;
 
 /// Height reserved for the window controls and secure pairing chrome above
 /// the embedded login on Windows and macOS, in logical points.
-pub const LOGIN_CHROME_HEIGHT_POINTS: f64 = 120.0;
+pub const LOGIN_CHROME_HEIGHT_POINTS: f64 = 96.0;
 
 /// Convert the reserved chrome height to physical pixels, bounded by the
 /// actual window so tiny or high-DPI windows never produce negative bounds.
@@ -86,8 +86,8 @@ mod tests {
 
     #[test]
     fn login_chrome_scales_and_stays_inside_small_windows() {
-        assert_eq!(login_chrome_height(800, 1.0), 120);
-        assert_eq!(login_chrome_height(800, 2.0), 240);
+        assert_eq!(login_chrome_height(800, 1.0), 96);
+        assert_eq!(login_chrome_height(800, 2.0), 192);
         assert_eq!(login_chrome_height(100, 2.0), 100);
         assert_eq!(login_chrome_height(0, 1.0), 0);
     }

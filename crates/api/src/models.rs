@@ -146,6 +146,8 @@ pub struct TrustedDevice {
     #[serde(default)]
     pub fingerprint: String,
     #[serde(default)]
+    pub label: String,
+    #[serde(default)]
     pub full: String,
     #[serde(default, rename = "last_ip")]
     pub last_ip: Option<String>,
@@ -153,7 +155,7 @@ pub struct TrustedDevice {
     pub last_seen: Option<String>,
     #[serde(default, rename = "user_agent")]
     pub user_agent: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "is_current")]
     pub current: bool,
 }
 
@@ -245,10 +247,36 @@ pub struct MonthlyPoint {
     pub expenses: f64,
     #[serde(default)]
     pub profit: f64,
+    #[serde(default)]
+    pub invoices_fa: Option<f64>,
+    #[serde(default)]
+    pub sales_vr: Option<f64>,
+    #[serde(default)]
+    pub bills: Option<f64>,
+    #[serde(default)]
+    pub salaries: Option<f64>,
+    #[serde(default)]
+    pub receipts: Option<f64>,
+    #[serde(default)]
+    pub clients_new: Option<f64>,
+}
+
+/// Category totals returned by the dashboard's all-time expense breakdown.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct DashboardExpenseCategory {
+    pub category: String,
+    pub total: f64,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Dashboard {
+    /// Restricted inventory roles receive operational counts instead of money.
+    #[serde(default)]
+    pub operational_only: bool,
+    #[serde(default)]
+    pub products: i64,
+    #[serde(default)]
+    pub low_stock: Vec<Product>,
     #[serde(default)]
     pub currency: Option<String>,
     #[serde(rename = "currentBalance", default)]
@@ -272,11 +300,13 @@ pub struct Dashboard {
     #[serde(rename = "unpaidSales", default)]
     pub unpaid_sales: UnpaidSummary,
     #[serde(rename = "unpaidPurchases", default)]
-    pub unpaid_purchases: UnpaidSummary,
+    pub unpaid_purchases: Option<UnpaidSummary>,
     #[serde(rename = "recentInvoices", default)]
     pub recent_invoices: Vec<Invoice>,
     #[serde(rename = "monthlySeries", default)]
     pub monthly_series: Vec<MonthlyPoint>,
+    #[serde(rename = "expenseCategories", default)]
+    pub expense_categories: Option<Vec<DashboardExpenseCategory>>,
 }
 
 impl Dashboard {
@@ -287,6 +317,26 @@ impl Dashboard {
 }
 
 // ── Products ─────────────────────────────────────────────────────────────
+
+/// Values from the Worker's product stock-movement history.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct StockMovement {
+    pub id: i64,
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub quantity: Option<f64>,
+    #[serde(default)]
+    pub previous_quantity: Option<f64>,
+    #[serde(default)]
+    pub new_quantity: Option<f64>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub reference: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Product {
@@ -1072,5 +1122,101 @@ mod tests {
         let dashboard: Dashboard = serde_json::from_str(r#"{"productCount":12}"#).unwrap();
         assert_eq!(dashboard.product_count, 12);
         assert_eq!(dashboard.currency(), "MAD");
+    }
+}
+
+#[cfg(test)]
+mod trusted_device_contract_tests {
+    use super::TrustedDevice;
+
+    #[test]
+    fn worker_device_fields_keep_full_identifier_and_current_flag() {
+        let device: TrustedDevice = serde_json::from_str(
+            r#"{"fingerprint":"abc123","label":"Atlas Desktop","last_ip":"192.0.2.1","is_current":true}"#,
+        )
+        .unwrap();
+        assert_eq!(device.label, "Atlas Desktop");
+        assert_eq!(device.revoke_id(), "abc123");
+        assert_eq!(device.last_ip.as_deref(), Some("192.0.2.1"));
+        assert!(device.current);
+    }
+}
+
+#[cfg(test)]
+mod operational_dashboard_tests {
+    use super::Dashboard;
+
+    #[test]
+    fn expense_categories_are_optional_and_keep_server_values() {
+        let absent: Dashboard = serde_json::from_str("{}").unwrap();
+        let present: Dashboard = serde_json::from_str(
+            r#"{"expenseCategories":[{"category":"Transport","total":12.5}],"expenseByCategory":[{"category":"Transport","total":12.5}]}"#,
+        ).unwrap();
+        assert!(absent.expense_categories.is_none());
+        let categories = present.expense_categories.unwrap();
+        assert_eq!(categories[0].category, "Transport");
+        assert_eq!(categories[0].total, 12.5);
+    }
+
+    #[test]
+    fn unpaid_purchases_distinguish_absent_from_zero() {
+        let absent: Dashboard = serde_json::from_str("{}").unwrap();
+        let present: Dashboard = serde_json::from_str(
+            r#"{"unpaidPurchases":{"count":2,"total":15,"open":10,"overdue":5}}"#,
+        )
+        .unwrap();
+        assert!(absent.unpaid_purchases.is_none());
+        let summary = present.unpaid_purchases.unwrap();
+        assert_eq!(summary.count, 2);
+        assert_eq!(summary.total, 15.0);
+        assert_eq!(summary.overdue, 5.0);
+    }
+
+    #[test]
+    fn operational_response_keeps_counts_and_hides_financial_section() {
+        let response: Dashboard = serde_json::from_str(
+            r#"{"operational_only":true,"products":14,"low_stock":[{"id":1,"name":"Vis","sku":"V1","stock_quantity":2,"low_stock_threshold":5,"unit":"pièce","track_inventory":1},{"id":2}]}"#,
+        )
+        .unwrap();
+        assert!(response.operational_only);
+        assert_eq!(response.products, 14);
+        assert_eq!(response.low_stock.len(), 2);
+        assert_eq!(response.low_stock[0].id, 1);
+        assert_eq!(response.low_stock[0].stock, 2.0);
+        assert_eq!(response.low_stock[0].low_stock_threshold, Some(5.0));
+        assert!(response.unpaid_purchases.is_none());
+    }
+}
+
+#[cfg(test)]
+mod dashboard_series_contract_tests {
+    use super::MonthlyPoint;
+    #[test]
+    fn preserves_optional_worker_breakdowns_without_inventing_zeroes() {
+        let p: MonthlyPoint = serde_json::from_str(r#"{"key":"2026-01","sales":8,"invoices_fa":3,"sales_vr":5,"bills":7,"salaries":2,"receipts":4,"clients_new":1}"#).unwrap();
+        assert_eq!(p.invoices_fa, Some(3.0));
+        assert_eq!(p.sales_vr, Some(5.0));
+        assert_eq!(p.bills, Some(7.0));
+        assert_eq!(p.salaries, Some(2.0));
+        assert_eq!(p.receipts, Some(4.0));
+        assert_eq!(p.clients_new, Some(1.0));
+        let p: MonthlyPoint = serde_json::from_str("{}").unwrap();
+        assert!(p.salaries.is_none());
+    }
+}
+
+#[cfg(test)]
+mod stock_history_contract_tests {
+    use super::StockMovement;
+
+    #[test]
+    fn movement_keeps_missing_values_and_server_fields() {
+        let row: StockMovement = serde_json::from_str(r#"{"id":3,"type":"sale","quantity":1,"previous_quantity":51,"new_quantity":50,"reason":"Vente rapide","reference":"VR-5","created_at":"2026-10-22 14:15:00"}"#).unwrap();
+        assert_eq!(row.kind, "sale");
+        assert_eq!(row.previous_quantity, Some(51.0));
+        assert_eq!(row.new_quantity, Some(50.0));
+        assert_eq!(row.reference.as_deref(), Some("VR-5"));
+        let missing: StockMovement = serde_json::from_str(r#"{"id":4}"#).unwrap();
+        assert_eq!(missing.quantity, None);
     }
 }

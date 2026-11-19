@@ -43,11 +43,6 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Ctrl+F and Escape, all suppressed while a text field owns the keys.
     crate::shortcuts::handle_shortcuts(app, ctx);
 
-    // The title-bar bell is shell chrome and needs its counter before the
-    // user ever opens Notifications: one lazy request, then backoff-gated
-    // retries so a failing endpoint cannot fire once per frame.
-    app.ensure_nav_badges();
-
     // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
     // with an exact size reserves its width up front, so the rail can never
     // expand to the full window and starve the central column (the blank
@@ -77,7 +72,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Below the 1180 px breakpoint the rail drops its labels and becomes
     // the 72 px icon strip, mirroring the web sidebar's collapsed state.
     let viewport_width = ctx.input(|input| input.viewport_rect().width());
-    let rail_collapsed = viewport_width < RAIL_COLLAPSE_BELOW;
+    let rail_collapsed = ctx
+        .data(|data| data.get_temp::<bool>(egui::Id::new("rail-collapsed")))
+        .unwrap_or(viewport_width < RAIL_COLLAPSE_BELOW);
     let rail_width = if rail_collapsed {
         RAIL_WIDTH_COLLAPSED
     } else {
@@ -224,34 +221,39 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     let left_inset = footprint.left.max(12.0);
     let right_inset = footprint.right.max(120.0);
 
-    // Keep an identifiable workspace at the start of the otherwise empty
-    // caption row; reserve its space before laying out search and controls.
-    let brand_width = if rect.width() >= 950.0 { 190.0 } else { 40.0 };
-    if brand_width > 0.0 {
-        let brand = egui::Rect::from_min_size(
-            egui::pos2(rect.left() + left_inset, rect.top()),
-            egui::vec2(brand_width, rect.height()),
-        );
-        widgets::overlay_at(ui, brand, |ui| {
-            ui.horizontal_centered(|ui| {
-                crate::branding::mark(ui, palette, 26.0);
-                if brand_width > 40.0 {
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new("Atlas Commerce")
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(14.0)),
-                    );
-                }
-            });
+    // Compact pane toggle stays in the caption row; navigation state is
+    // window-local and can always be overridden by the user.
+    let brand_width = 220.0_f32.min((rect.width() * 0.30).max(80.0));
+    let brand = egui::Rect::from_min_size(
+        egui::pos2(rect.left() + left_inset, rect.top()),
+        egui::vec2(brand_width, rect.height()),
+    );
+    widgets::overlay_at(ui, brand, |ui| {
+        ui.horizontal_centered(|ui| {
+            let toggle = widgets::icon_circle_button(ui, palette, Icon::PanelLeft, true)
+                .on_hover_text(t!(app.locale, "Toggle sidebar"));
+            if toggle.clicked() {
+                let id = egui::Id::new("rail-collapsed");
+                let initial =
+                    ctx.input(|input| input.viewport_rect().width()) < RAIL_COLLAPSE_BELOW;
+                ctx.data_mut(|data| {
+                    let collapsed = data.get_temp::<bool>(id).unwrap_or(initial);
+                    data.insert_temp(id, !collapsed);
+                });
+            }
+            if let Screen::Shell(route) = app.screen {
+                let (_, title) = route_meta(app.locale, route);
+                ui.label(RichText::new(title).color(palette.text).strong().size(14.0));
+            }
         });
-    }
+    });
     let strip = egui::Rect::from_min_max(
         egui::pos2(rect.left() + left_inset + brand_width, rect.top()),
         egui::pos2(rect.right() - right_inset - 8.0, rect.bottom()),
     );
 
     let mut avatar_rect = egui::Rect::NOTHING;
+    let mut bell_rect = egui::Rect::NOTHING;
     widgets::overlay_at(ui, strip, |ui| {
         // Right-to-left layout: the action cluster is placed against the
         // caption buttons first, the search pill fills whatever remains.
@@ -326,6 +328,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             if app.role_policy().allows_route(Route::Notifications) {
                 let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                bell_rect = bell.rect;
                 let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
                     badges.products_low + badges.invoices_unpaid + badges.vr_open
                 });
@@ -333,8 +336,40 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                     paint_titlebar_badge(ui, &bell, palette, alert_count);
                 }
                 if bell.clicked() {
-                    app.go(Route::Notifications);
+                    let id = egui::Id::new("notification-popover-open");
+                    let open = ctx.data_mut(|data| {
+                        let next = !data.get_temp::<bool>(id).unwrap_or(false);
+                        data.insert_temp(id, next);
+                        next
+                    });
+                    app.profile_menu_open = false;
+                    if open {
+                        let interval =
+                            std::time::Duration::from_secs(app.settings.poll_interval_secs.max(15));
+                        if !app.alerts.loading && app.alerts.stale_for(interval) {
+                            app.load_alerts();
+                        }
+                        if !app.nav_badges.loading && app.nav_badges.stale_for(interval) {
+                            app.load_nav_badges();
+                        }
+                    }
                 }
+            }
+            let theme_button = widgets::icon_circle_button(
+                ui,
+                palette,
+                if palette.dark { Icon::Sun } else { Icon::Moon },
+                true,
+            )
+            .on_hover_text(t!(app.locale, "Toggle theme"));
+            if theme_button.clicked() {
+                app.settings.theme = if palette.dark {
+                    atlas_core::settings::ThemeMode::Light
+                } else {
+                    atlas_core::settings::ThemeMode::Dark
+                };
+                app.save_settings();
+                ctx.request_repaint();
             }
 
             // While a release is downloading, surface a live progress pill
@@ -355,6 +390,13 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
     if app.profile_menu_open {
         draw_profile_menu(app, ctx, palette, &avatar_rect);
+    }
+    if ctx.data(|data| {
+        data.get_temp::<bool>(egui::Id::new("notification-popover-open"))
+            .unwrap_or(false)
+    }) && bell_rect != egui::Rect::NOTHING
+    {
+        draw_notifications_popover(app, ctx, palette, bell_rect);
     }
 
     if fastframe_titlebar::enabled() {
@@ -533,6 +575,74 @@ fn draw_update_pill(
         response.on_hover_text(tooltip);
     } else {
         response.on_hover_text(format!("{tooltip}\n{stage}"));
+    }
+}
+
+/// Fetch alerts only when opened, never as a background fan-out.
+fn draw_notifications_popover(
+    app: &mut AtlasApp,
+    ctx: &egui::Context,
+    palette: &Palette,
+    anchor: egui::Rect,
+) {
+    let id = egui::Id::new("notification-popover-open");
+    let area = egui::Area::new(egui::Id::new("notification-popover"))
+        .fixed_pos(egui::pos2(anchor.right() - 320.0, anchor.bottom() + 8.0))
+        .order(egui::Order::Foreground)
+        .constrain(true)
+        .show(ctx, |ui| {
+            widgets::pop_card(palette)
+                .inner_margin(egui::Margin::same(14))
+                .show(ui, |ui| {
+                    ui.set_width(292.0);
+                    ui.label(
+                        RichText::new(t!(app.locale, "Notifications"))
+                            .color(palette.text)
+                            .strong()
+                            .size(15.0),
+                    );
+                    ui.separator();
+                    if app.alerts.loading && app.alerts.data.is_none() {
+                        super::centered_spinner(ui, palette);
+                    } else if let Some(error) = &app.alerts.error {
+                        widgets::error_banner(ui, error, palette);
+                        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                            app.load_alerts();
+                        }
+                    } else if let Some(alerts) = app.alerts.data.as_ref() {
+                        if alerts.is_empty() {
+                            ui.add_space(20.0);
+                            ui.vertical_centered(|ui| {
+                                ui.label(
+                                    RichText::new(t!(app.locale, "All caught up"))
+                                        .color(palette.secondary),
+                                );
+                            });
+                            ui.add_space(20.0);
+                        } else {
+                            for alert in alerts.iter().take(4) {
+                                ui.label(RichText::new(&alert.label).color(palette.text));
+                                ui.separator();
+                            }
+                        }
+                    }
+                    if secondary_button(ui, t!(app.locale, "View all"), palette) {
+                        ctx.data_mut(|data| data.insert_temp(id, false));
+                        app.go(Route::Notifications);
+                    }
+                });
+        });
+    if ctx.input(|input| input.pointer.any_pressed())
+        && !area.response.rect.contains(
+            ctx.input(|input| input.pointer.interact_pos())
+                .unwrap_or_default(),
+        )
+        && !anchor.contains(
+            ctx.input(|input| input.pointer.interact_pos())
+                .unwrap_or_default(),
+        )
+    {
+        ctx.data_mut(|data| data.insert_temp(id, false));
     }
 }
 
@@ -728,34 +838,72 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         Screen::Shell(route) => Some(route),
         _ => None,
     };
-    // The title bar already carries the brand; avoid a duplicate logo.
     ui.add_space(8.0);
-    // Only destinations implemented by the native client are listed; no
-    // placeholder routes or unverified worker endpoints are introduced.
-    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 3] = [
+    ui.vertical_centered(|ui| {
+        if collapsed {
+            crate::branding::mark(ui, palette, 24.0);
+        } else {
+            crate::branding::lockup(ui, palette, 26.0);
+            ui.label(
+                RichText::new(t!(app.locale, "Stock & invoicing"))
+                    .color(palette.secondary)
+                    .size(10.0),
+            );
+        }
+    });
+    ui.add_space(8.0);
+    ui.separator();
+    // Only implemented destinations are actionable. The remaining entries
+    // are visible but explicitly unavailable; they never issue API requests.
+    type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str, bool)]);
+    let groups: [RailGroup<'_>; 6] = [
         (
-            t!(app.locale, "Operations"),
+            t!(app.locale, "Overview"),
+            &[(Route::Dashboard, "Dashboard", true)],
+        ),
+        (
+            t!(app.locale, "Catalog"),
+            &[(Route::Products, "Products and stock", true)],
+        ),
+        (
+            t!(app.locale, "Customer relations"),
+            &[(Route::Clients, "Clients", true)],
+        ),
+        (
+            t!(app.locale, "Team"),
             &[
-                Route::Dashboard,
-                Route::Sales,
-                Route::Clients,
-                Route::DeliveryNotes,
+                (Route::Employees, "Employees", true),
+                (Route::Employees, "Attendance", false),
+                (Route::Sales, "Quotes", true),
+                (Route::Sales, "Quick sale", true),
+                (Route::Sales, "Sales invoices", true),
+                (Route::Sales, "Reimbursements", true),
+                (Route::Sales, "Receipts", true),
             ],
         ),
         (
-            t!(app.locale, "Catalog and stock"),
-            &[Route::Products, Route::Vendors],
+            t!(app.locale, "Purchases"),
+            &[
+                (Route::Vendors, "Vendors", true),
+                (Route::Expenses, "Purchase invoices", true),
+            ],
         ),
         (
-            t!(app.locale, "Management"),
-            &[Route::Expenses, Route::Employees],
+            t!(app.locale, "Finance"),
+            &[
+                (Route::Expenses, "Balance and income", false),
+                (Route::Expenses, "Reports and closing", false),
+                (Route::Products, "Stock operations", false),
+                (Route::Expenses, "Expenses", true),
+                (Route::DeliveryNotes, "Delivery notes", true),
+            ],
         ),
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
-        for (heading, routes) in groups {
-            if !routes
+        for (heading, entries) in groups {
+            if !entries
                 .iter()
-                .any(|route| app.role_policy().allows_route(*route))
+                .any(|(route, _, _)| app.role_policy().allows_route(*route))
             {
                 continue;
             }
@@ -767,15 +915,59 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                         .size(10.5),
                 );
             }
-            for &route in routes {
+            for &(route, source, implemented) in entries {
                 if !app.role_policy().allows_route(route) {
                     continue;
                 }
-                let (which, label) = route_meta(app.locale, route);
-                let response =
-                    rail_row(ui, palette, which, &label, active == Some(route), collapsed);
-                if response.clicked() {
-                    app.go(route);
+                let (which, _) = route_meta(app.locale, route);
+                let label = crate::i18n::gettext(app.locale, source);
+                let selected = active == Some(route)
+                    && match (route, source) {
+                        (Route::Sales, "Quotes") => app.quotes_open,
+                        (Route::Sales, "Receipts") => app.receipts_open,
+                        (Route::Sales, "Reimbursements") => app.refunds_open,
+                        (Route::Sales, "Sales invoices") => {
+                            !app.quotes_open && !app.receipts_open && !app.refunds_open
+                        }
+                        (Route::Sales, _) => false,
+                        (Route::Expenses, "Purchase invoices") => app.bills_open,
+                        (Route::Expenses, "Expenses") => !app.bills_open,
+                        _ => true,
+                    };
+                if implemented {
+                    let response = rail_row(ui, palette, which, &label, selected, collapsed);
+                    if response.clicked() {
+                        app.go(route);
+                        match (route, source) {
+                            (Route::Sales, _) => {
+                                app.quotes_open = source == "Quotes";
+                                app.receipts_open = source == "Receipts";
+                                app.refunds_open = source == "Reimbursements";
+                                if app.receipts_open
+                                    && app.receipts.data.is_none()
+                                    && !app.receipts.loading
+                                {
+                                    app.load_receipts();
+                                }
+                            }
+                            (Route::Expenses, _) => {
+                                app.bills_open = source == "Purchase invoices";
+                                if app.bills_open && app.bills.data.is_none() && !app.bills.loading
+                                {
+                                    app.load_bills();
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                } else {
+                    let unavailable =
+                        format!("{} · {}", label, t!(app.locale, "Not available yet"));
+                    ui.add_enabled_ui(false, |ui| {
+                        rail_row(ui, palette, which, &unavailable, false, collapsed)
+                    })
+                    .inner
+                    .on_hover_text(t!(app.locale, "Not available yet"));
                 }
             }
         }
