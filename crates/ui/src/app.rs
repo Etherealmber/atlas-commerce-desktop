@@ -253,7 +253,7 @@ impl AtlasApp {
         let query = self.product_search.clone();
         let job = self
             .runner
-            .spawn(async move { client.products(&query, 300).await });
+            .spawn(async move { client.catalog_products(&query, 300).await });
         self.products.start(job);
     }
 
@@ -1486,6 +1486,7 @@ impl AtlasApp {
         self.drain_tray(ctx);
         self.poll_vault();
         self.consume_deep_links();
+        self.product_images.poll(ctx);
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
             ctx.forget_image(&uri);

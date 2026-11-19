@@ -18,6 +18,7 @@ pub mod fonts;
 pub mod i18n;
 pub mod icons;
 pub mod motion;
+mod product_images;
 pub mod screens;
 pub mod server_probe;
 pub mod shortcuts;

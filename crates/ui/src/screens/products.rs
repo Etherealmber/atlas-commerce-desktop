@@ -21,6 +21,7 @@ use crate::{t, widgets};
 /// The create-product dialog state.
 #[derive(Default)]
 pub struct ProductEditor {
+    pub editing_id: Option<i64>,
     pub name: String,
     pub sku: String,
     pub barcode: String,
@@ -43,6 +44,23 @@ impl ProductEditor {
         Self {
             unit: "unité".to_owned(),
             ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn for_product(product: &Product) -> Self {
+        Self {
+            editing_id: Some(product.id),
+            name: product.name.clone(),
+            sku: product.sku.clone().unwrap_or_default(),
+            barcode: product.barcode.clone().unwrap_or_default(),
+            category: product.category.clone().unwrap_or_default(),
+            unit: product.unit.clone().unwrap_or_default(),
+            price: product.price.to_string(),
+            stock: product.stock.to_string(),
+            threshold: product.threshold().to_string(),
+            description: product.description.clone().unwrap_or_default(),
+            ..Self::new()
         }
     }
 }
@@ -161,26 +179,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    if app.role_policy().can_view_reports() {
-        ui.horizontal_wrapped(|ui| {
-            if secondary_button(ui, t!(app.locale, "Stock valuation report"), palette) {
-                app.load_stock_report();
-            }
-            ui.label(
-                RichText::new(t!(app.locale, "Official server report · administrators"))
-                    .color(palette.secondary)
-                    .size(12.0),
-            );
-        });
+    // The catalogue no longer embeds the stock-report and scanner blocks.
+    // Keep an already-open report renderable (including offline fixtures).
+    if app.stock_report_open {
+        draw_stock_report(app, ui, palette);
         ui.add_space(12.0);
-        if app.stock_report_open {
-            draw_stock_report(app, ui, palette);
-            ui.add_space(12.0);
-        }
     }
-
-    super::scan::draw_scan_bar(app, ui, palette);
-    ui.add_space(10.0);
 
     draw_search(app, ui, palette);
     ui.add_space(10.0);
@@ -293,7 +297,7 @@ fn draw_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             icon(ui, Icon::Search, palette.secondary, 18.0);
-            let field_width = (ui.available_width() - 130.0).clamp(40.0, 320.0);
+            let field_width = (ui.available_width() - 130.0).max(40.0);
             let response = ui.add_sized(
                 [field_width, crate::theme::TARGET_MIN_HEIGHT],
                 egui::TextEdit::singleline(&mut app.product_search)
@@ -318,16 +322,23 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                icon(
-                    ui,
-                    Icon::Package,
-                    if product.is_low_stock() {
-                        palette.warning
-                    } else {
-                        palette.accent
-                    },
-                    20.0,
-                );
+                let source = product.image_url.as_deref().unwrap_or("");
+                let visible = ui.is_rect_visible(egui::Rect::from_min_size(
+                    ui.next_widget_position(),
+                    vec2(36.0, 36.0),
+                ));
+                let image = if visible && !source.is_empty() {
+                    app.client
+                        .as_ref()
+                        .and_then(|client| app.product_images.get(source, client, &app.runner))
+                } else {
+                    None
+                };
+                if let Some(uri) = image {
+                    ui.add(egui::Image::new(uri).fit_to_exact_size(vec2(36.0, 36.0)));
+                } else {
+                    icon(ui, Icon::Package, palette.accent, 20.0);
+                }
                 ui.vertical(|ui| {
                     ui.label(
                         RichText::new(product.name.clone())
@@ -375,6 +386,11 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         job: None,
                     });
                     load_history(app);
+                }
+                if app.role_policy().can_edit_prices()
+                    && secondary_button(ui, t!(app.locale, "Edit"), palette)
+                {
+                    app.product_editor = Some(ProductEditor::for_product(&product));
                 }
             });
         });
@@ -601,8 +617,16 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         editor.saving = false;
         match result {
             Ok(_) => {
+                let editing = editor.editing_id.is_some();
                 app.product_editor = None;
-                app.notice(t!(app.locale, "Product created.").into_owned());
+                app.notice(
+                    if editing {
+                        t!(app.locale, "Product updated.")
+                    } else {
+                        t!(app.locale, "Product created.")
+                    }
+                    .into_owned(),
+                );
                 app.load_products();
                 return;
             }
@@ -610,10 +634,17 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 if error.code.as_deref() == Some("DUPLICATE_PRODUCT") {
                     editor.force_duplicate = true;
                     editor.error = Some(
-                        t!(
-                            app.locale,
-                            "A similar product already exists. Save again to create it anyway."
-                        )
+                        if editor.editing_id.is_some() {
+                            t!(
+                                app.locale,
+                                "A similar product already exists. Save again to update it anyway."
+                            )
+                        } else {
+                            t!(
+                                app.locale,
+                                "A similar product already exists. Save again to create it anyway."
+                            )
+                        }
                         .into_owned(),
                     );
                 } else {
@@ -660,9 +691,19 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 .show(ui, |ui| {
                     ui.set_min_size(vec2(476.0, 0.0));
                     ui.label(
-                        RichText::new(t!(locale, "New product"))
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
+                        RichText::new(
+                            if app
+                                .product_editor
+                                .as_ref()
+                                .is_some_and(|editor| editor.editing_id.is_some())
+                            {
+                                t!(locale, "Edit product")
+                            } else {
+                                t!(locale, "New product")
+                            },
+                        )
+                        .color(palette.text)
+                        .font(crate::fonts::semibold(17.0)),
                     );
                     ui.add_space(10.0);
 
@@ -708,10 +749,19 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             palette,
                             false,
                         );
+                        if editor.editing_id.is_none() {
+                            labelled_field(
+                                ui,
+                                t!(locale, "Initial stock"),
+                                &mut editor.stock,
+                                palette,
+                                false,
+                            );
+                        }
                         labelled_field(
                             ui,
-                            t!(locale, "Initial stock"),
-                            &mut editor.stock,
+                            t!(locale, "Description"),
+                            &mut editor.description,
                             palette,
                             false,
                         );
@@ -768,15 +818,20 @@ impl ProductEditor {
             || !self.price.is_empty()
             || !self.stock.is_empty()
             || !self.threshold.trim().is_empty()
+            || !self.description.trim().is_empty()
     }
 
     fn parse(&self) -> Result<atlas_api::models::CreateProduct, String> {
         let parse_amount = |value: &str, field: &str| -> Result<f64, String> {
-            value
+            let amount = value
                 .trim()
                 .replace(',', ".")
                 .parse::<f64>()
-                .map_err(|_| format!("{field} : valeur invalide."))
+                .map_err(|_| format!("{field} : valeur invalide."))?;
+            if !amount.is_finite() || amount < 0.0 {
+                return Err(format!("{field} : valeur invalide."));
+            }
+            Ok(amount)
         };
         Ok(atlas_api::models::CreateProduct {
             name: self.name.trim().to_owned(),
@@ -789,8 +844,16 @@ impl ProductEditor {
                 self.unit.trim().to_owned()
             },
             price: parse_amount(&self.price, "Prix")?,
-            stock_quantity: parse_amount(&self.stock, "Stock initial")?,
-            low_stock_threshold: parse_amount(&self.threshold, "Seuil de stock bas").unwrap_or(0.0),
+            stock_quantity: if self.editing_id.is_some() {
+                0.0
+            } else {
+                parse_amount(&self.stock, "Stock initial")?
+            },
+            low_stock_threshold: if self.threshold.trim().is_empty() {
+                0.0
+            } else {
+                parse_amount(&self.threshold, "Seuil de stock bas")?
+            },
             description: optional(&self.description),
         })
     }
@@ -820,9 +883,25 @@ fn submit_product(app: &mut AtlasApp) {
         }
     };
     let force = editor.force_duplicate;
-    let job = app
-        .runner
-        .spawn(async move { client.create_product(&product, force).await });
+    let editing_id = editor.editing_id;
+    let update = atlas_api::models::UpdateProduct {
+        name: product.name.clone(),
+        sku: product.sku.clone(),
+        barcode: product.barcode.clone().unwrap_or_default(),
+        category: product.category.clone().unwrap_or_default(),
+        unit: product.unit.clone(),
+        price: product.price,
+        low_stock_threshold: product.low_stock_threshold,
+        description: product.description.clone().unwrap_or_default(),
+        force_duplicate: force,
+    };
+    let job = app.runner.spawn(async move {
+        if let Some(id) = editing_id {
+            client.update_product(id, &update).await
+        } else {
+            client.create_product(&product, force).await
+        }
+    });
     editor.saving = true;
     editor.error = None;
     editor.job = Some(job);

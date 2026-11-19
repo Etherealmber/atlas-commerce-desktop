@@ -424,6 +424,21 @@ pub struct CreateProduct {
     pub description: Option<String>,
 }
 
+/// Editable catalogue fields accepted by `PUT /api/products/:id`.
+/// Stock is deliberately absent: it is changed through adjust-stock.
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateProduct {
+    pub name: String,
+    pub sku: String,
+    pub barcode: String,
+    pub category: String,
+    pub unit: String,
+    pub price: f64,
+    pub low_stock_threshold: f64,
+    pub description: String,
+    pub force_duplicate: bool,
+}
+
 /// `in` (entrée), `out` (sortie) or `adjustment` (signed quantity).
 #[derive(Debug, Clone, Serialize)]
 pub struct StockAdjust {

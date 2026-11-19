@@ -442,6 +442,7 @@ pub struct AtlasApp {
     pub avatar_evict: Option<String>,
     pub avatar_texture_uri: Option<String>,
     pub avatar_job: Option<AvatarJob>,
+    pub(crate) product_images: crate::product_images::ProductImages,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -671,6 +672,7 @@ impl AtlasApp {
             avatar_evict: None,
             avatar_texture_uri: None,
             avatar_job: None,
+            product_images: Default::default(),
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             requires_password: false,
@@ -1280,6 +1282,7 @@ impl AtlasApp {
         }
         self.transient_session = false;
         self.avatar_job = None;
+        self.product_images.clear();
         if let Some(uri) = self.avatar_texture_uri.take() {
             self.avatar_evict = Some(uri);
         }

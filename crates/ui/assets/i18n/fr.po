@@ -1825,3 +1825,12 @@ msgstr "Étape"
 
 msgid "Showing up to 50 recent movements."
 msgstr "Affichage de 50 mouvements récents maximum."
+
+msgid "Edit product"
+msgstr "Modifier le produit"
+
+msgid "Product updated."
+msgstr "Produit mis à jour."
+
+msgid "A similar product already exists. Save again to update it anyway."
+msgstr "Un produit similaire existe déjà. Enregistrez à nouveau pour modifier quand même."

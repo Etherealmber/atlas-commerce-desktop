@@ -23,6 +23,20 @@ impl ApiClient {
         self.get_data(&path).await
     }
 
+    /// Full desktop catalogue fields, including images and descriptions. The
+    /// mobile projection intentionally omits those fields in the Worker.
+    pub async fn catalog_products(
+        &self,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<Product>, ApiError> {
+        self.get_data(&format!(
+            "/api/products?q={}&limit={limit}",
+            urlencoding(query)
+        ))
+        .await
+    }
+
     /// `GET /api/products/:id`.
     pub async fn product(&self, id: i64) -> Result<Product, ApiError> {
         self.get_data(&format!("/api/products/{id}")).await
@@ -40,6 +54,15 @@ impl ApiClient {
             force_duplicate,
         };
         self.post_data("/api/products", &request).await
+    }
+
+    /// `PUT /api/products/:id`; stock changes use the separate adjustment route.
+    pub async fn update_product(
+        &self,
+        id: i64,
+        product: &UpdateProduct,
+    ) -> Result<Product, ApiError> {
+        self.put_data(&format!("/api/products/{id}"), product).await
     }
 
     /// `POST /api/products/:id/adjust-stock`.
@@ -137,6 +160,27 @@ mod tests {
             assert_eq!(value["force_duplicate"], force);
             assert!(value.get("product").is_none());
         }
+    }
+
+    #[test]
+    fn product_update_never_sends_stock_or_unedited_fields() {
+        let update = UpdateProduct {
+            name: "Produit".into(),
+            sku: String::new(),
+            barcode: String::new(),
+            category: String::new(),
+            unit: "unité".into(),
+            price: 10.0,
+            low_stock_threshold: 2.0,
+            description: String::new(),
+            force_duplicate: false,
+        };
+        let value = serde_json::to_value(update).unwrap();
+        assert_eq!(value["name"], "Produit");
+        assert_eq!(value["force_duplicate"], false);
+        assert!(value.get("stock_quantity").is_none());
+        assert!(value.get("cost").is_none());
+        assert!(value.get("image_url").is_none());
     }
 
     #[test]

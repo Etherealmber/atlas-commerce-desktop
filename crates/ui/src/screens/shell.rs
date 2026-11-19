@@ -82,10 +82,8 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     };
     let rail_frame = egui::Frame::NONE
         .fill(palette.panel)
-        .stroke(egui::Stroke::new(1.0, palette.outline))
         .inner_margin(if rail_collapsed {
-            // The 1 px frame stroke leaves 70 px inside the strip; 12 px
-            // gutters keep a full 46 px (>= 44 px target) centred row.
+            // Twelve-pixel gutters keep a full-width accessible row.
             egui::Margin::symmetric(12, 14)
         } else {
             egui::Margin::symmetric(10, 14)
