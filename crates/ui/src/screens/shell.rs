@@ -72,7 +72,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Below the 1180 px breakpoint the rail drops its labels and becomes
     // the 72 px icon strip, mirroring the web sidebar's collapsed state.
     let viewport_width = ctx.input(|input| input.viewport_rect().width());
-    let rail_collapsed = viewport_width < RAIL_COLLAPSE_BELOW;
+    let rail_collapsed = ctx
+        .data(|data| data.get_temp::<bool>(egui::Id::new("rail-collapsed")))
+        .unwrap_or(viewport_width < RAIL_COLLAPSE_BELOW);
     let rail_width = if rail_collapsed {
         RAIL_WIDTH_COLLAPSED
     } else {
@@ -219,34 +221,39 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
     let left_inset = footprint.left.max(12.0);
     let right_inset = footprint.right.max(120.0);
 
-    // Keep an identifiable workspace at the start of the otherwise empty
-    // caption row; reserve its space before laying out search and controls.
-    let brand_width = if rect.width() >= 950.0 { 190.0 } else { 40.0 };
-    if brand_width > 0.0 {
-        let brand = egui::Rect::from_min_size(
-            egui::pos2(rect.left() + left_inset, rect.top()),
-            egui::vec2(brand_width, rect.height()),
-        );
-        widgets::overlay_at(ui, brand, |ui| {
-            ui.horizontal_centered(|ui| {
-                crate::branding::mark(ui, palette, 26.0);
-                if brand_width > 40.0 {
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new("Atlas Commerce")
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(14.0)),
-                    );
-                }
-            });
+    // Compact pane toggle stays in the caption row; navigation state is
+    // window-local and can always be overridden by the user.
+    let brand_width = 220.0_f32.min((rect.width() * 0.30).max(80.0));
+    let brand = egui::Rect::from_min_size(
+        egui::pos2(rect.left() + left_inset, rect.top()),
+        egui::vec2(brand_width, rect.height()),
+    );
+    widgets::overlay_at(ui, brand, |ui| {
+        ui.horizontal_centered(|ui| {
+            let toggle = widgets::icon_circle_button(ui, palette, Icon::PanelLeft, true)
+                .on_hover_text(t!(app.locale, "Toggle sidebar"));
+            if toggle.clicked() {
+                let id = egui::Id::new("rail-collapsed");
+                let initial =
+                    ctx.input(|input| input.viewport_rect().width()) < RAIL_COLLAPSE_BELOW;
+                ctx.data_mut(|data| {
+                    let collapsed = data.get_temp::<bool>(id).unwrap_or(initial);
+                    data.insert_temp(id, !collapsed);
+                });
+            }
+            if let Screen::Shell(route) = app.screen {
+                let (_, title) = route_meta(app.locale, route);
+                ui.label(RichText::new(title).color(palette.text).strong().size(14.0));
+            }
         });
-    }
+    });
     let strip = egui::Rect::from_min_max(
         egui::pos2(rect.left() + left_inset + brand_width, rect.top()),
         egui::pos2(rect.right() - right_inset - 8.0, rect.bottom()),
     );
 
     let mut avatar_rect = egui::Rect::NOTHING;
+    let mut bell_rect = egui::Rect::NOTHING;
     widgets::overlay_at(ui, strip, |ui| {
         // Right-to-left layout: the action cluster is placed against the
         // caption buttons first, the search pill fills whatever remains.
@@ -321,6 +328,7 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
             if app.role_policy().allows_route(Route::Notifications) {
                 let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                bell_rect = bell.rect;
                 let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
                     badges.products_low + badges.invoices_unpaid + badges.vr_open
                 });
@@ -328,8 +336,33 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
                     paint_titlebar_badge(ui, &bell, palette, alert_count);
                 }
                 if bell.clicked() {
-                    app.go(Route::Notifications);
+                    let id = egui::Id::new("notification-popover-open");
+                    let open = ctx.data_mut(|data| {
+                        let next = !data.get_temp::<bool>(id).unwrap_or(false);
+                        data.insert_temp(id, next);
+                        next
+                    });
+                    app.profile_menu_open = false;
+                    if open && app.alerts.data.is_none() && !app.alerts.loading {
+                        app.load_alerts();
+                    }
                 }
+            }
+            let theme_button = widgets::icon_circle_button(
+                ui,
+                palette,
+                if palette.dark { Icon::Sun } else { Icon::Moon },
+                true,
+            )
+            .on_hover_text(t!(app.locale, "Toggle theme"));
+            if theme_button.clicked() {
+                app.settings.theme = if palette.dark {
+                    atlas_core::settings::ThemeMode::Light
+                } else {
+                    atlas_core::settings::ThemeMode::Dark
+                };
+                app.save_settings();
+                ctx.request_repaint();
             }
 
             // While a release is downloading, surface a live progress pill
@@ -350,6 +383,13 @@ fn draw_titlebar(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pal
 
     if app.profile_menu_open {
         draw_profile_menu(app, ctx, palette, &avatar_rect);
+    }
+    if ctx.data(|data| {
+        data.get_temp::<bool>(egui::Id::new("notification-popover-open"))
+            .unwrap_or(false)
+    }) && bell_rect != egui::Rect::NOTHING
+    {
+        draw_notifications_popover(app, ctx, palette, bell_rect);
     }
 
     if fastframe_titlebar::enabled() {
@@ -528,6 +568,74 @@ fn draw_update_pill(
         response.on_hover_text(tooltip);
     } else {
         response.on_hover_text(format!("{tooltip}\n{stage}"));
+    }
+}
+
+/// Fetch alerts only when opened, never as a background fan-out.
+fn draw_notifications_popover(
+    app: &mut AtlasApp,
+    ctx: &egui::Context,
+    palette: &Palette,
+    anchor: egui::Rect,
+) {
+    let id = egui::Id::new("notification-popover-open");
+    let area = egui::Area::new(egui::Id::new("notification-popover"))
+        .fixed_pos(egui::pos2(anchor.right() - 320.0, anchor.bottom() + 8.0))
+        .order(egui::Order::Foreground)
+        .constrain(true)
+        .show(ctx, |ui| {
+            widgets::pop_card(palette)
+                .inner_margin(egui::Margin::same(14))
+                .show(ui, |ui| {
+                    ui.set_width(292.0);
+                    ui.label(
+                        RichText::new(t!(app.locale, "Notifications"))
+                            .color(palette.text)
+                            .strong()
+                            .size(15.0),
+                    );
+                    ui.separator();
+                    if app.alerts.loading && app.alerts.data.is_none() {
+                        super::centered_spinner(ui, palette);
+                    } else if let Some(error) = &app.alerts.error {
+                        widgets::error_banner(ui, error, palette);
+                        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                            app.load_alerts();
+                        }
+                    } else if let Some(alerts) = app.alerts.data.as_ref() {
+                        if alerts.is_empty() {
+                            ui.add_space(20.0);
+                            ui.vertical_centered(|ui| {
+                                ui.label(
+                                    RichText::new(t!(app.locale, "All caught up"))
+                                        .color(palette.secondary),
+                                );
+                            });
+                            ui.add_space(20.0);
+                        } else {
+                            for alert in alerts.iter().take(4) {
+                                ui.label(RichText::new(&alert.label).color(palette.text));
+                                ui.separator();
+                            }
+                        }
+                    }
+                    if secondary_button(ui, t!(app.locale, "View all"), palette) {
+                        ctx.data_mut(|data| data.insert_temp(id, false));
+                        app.go(Route::Notifications);
+                    }
+                });
+        });
+    if ctx.input(|input| input.pointer.any_pressed())
+        && !area.response.rect.contains(
+            ctx.input(|input| input.pointer.interact_pos())
+                .unwrap_or_default(),
+        )
+        && !anchor.contains(
+            ctx.input(|input| input.pointer.interact_pos())
+                .unwrap_or_default(),
+        )
+    {
+        ctx.data_mut(|data| data.insert_temp(id, false));
     }
 }
 
@@ -723,8 +831,21 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
         Screen::Shell(route) => Some(route),
         _ => None,
     };
-    // The title bar already carries the brand; avoid a duplicate logo.
     ui.add_space(8.0);
+    ui.vertical_centered(|ui| {
+        if collapsed {
+            crate::branding::mark(ui, palette, 24.0);
+        } else {
+            crate::branding::lockup(ui, palette, 26.0);
+            ui.label(
+                RichText::new(t!(app.locale, "Stock & invoicing"))
+                    .color(palette.secondary)
+                    .size(10.0),
+            );
+        }
+    });
+    ui.add_space(8.0);
+    ui.separator();
     // Only implemented destinations are actionable. The remaining entries
     // are visible but explicitly unavailable; they never issue API requests.
     type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str, bool)]);

@@ -13,6 +13,18 @@ use crate::widgets::{card, icon, page_title, pill, primary_button};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let width = ui.available_width().min(1040.0);
+    let margin = ((ui.available_width() - width) / 2.0).max(0.0);
+    ui.horizontal_top(|ui| {
+        ui.add_space(margin);
+        ui.vertical(|ui| {
+            ui.set_width(width);
+            draw_dashboard(app, ui, palette);
+        });
+    });
+}
+
+fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Dashboard"), palette);
@@ -27,6 +39,30 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         });
     });
+    let name = app
+        .session
+        .as_ref()
+        .map(|session| {
+            if session.display_name.is_empty() {
+                session.username.as_str()
+            } else {
+                session.display_name.as_str()
+            }
+        })
+        .unwrap_or("");
+    if !name.is_empty() {
+        ui.label(
+            RichText::new(format!("{}, {name}.", t!(app.locale, "Hello")))
+                .color(palette.text)
+                .size(20.0)
+                .strong(),
+        );
+        ui.label(
+            RichText::new(t!(app.locale, "Your workspace at a glance."))
+                .color(palette.secondary)
+                .size(13.0),
+        );
+    }
     ui.add_space(12.0);
 
     if let Some(error) = app.dashboard.error.clone() {
@@ -35,7 +71,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.dashboard.loading && app.dashboard.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
         return;
     }
 
@@ -53,34 +89,20 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     metric_cards(app, ui, palette, &data);
     ui.add_space(14.0);
 
-    // Calculate outer widths once, before either card consumes the row.
-    // On narrower windows stack them rather than clipping their contents.
-    let available = ui.available_width();
-    if available >= 650.0 {
-        let gap = ui.spacing().item_spacing.x;
-        let left = ((available - gap) * 0.55 - 34.0).max(0.0);
-        let right = ((available - gap) * 0.45 - 34.0).max(0.0);
-        ui.horizontal_top(|ui| {
-            card(palette).show(ui, |ui| {
-                ui.set_width(left);
-                ui.vertical(|ui| unpaid_card(app, ui, palette, &data));
-            });
-            card(palette).show(ui, |ui| {
-                ui.set_width(right);
-                ui.vertical(|ui| monthly_card(app, ui, palette, &data));
-            });
-        });
-    } else {
-        card(palette).show(ui, |ui| {
-            ui.set_width((available - 34.0).max(0.0));
-            ui.vertical(|ui| unpaid_card(app, ui, palette, &data));
-        });
-        ui.add_space(12.0);
-        card(palette).show(ui, |ui| {
-            ui.set_width((available - 34.0).max(0.0));
-            ui.vertical(|ui| monthly_card(app, ui, palette, &data));
-        });
+    if data.operational_only {
+        return;
     }
+
+    // Server-provided monthly series; no new finance calculation or request.
+    card(palette).show(ui, |ui| {
+        ui.set_width((ui.available_width() - 34.0).max(0.0));
+        monthly_card(app, ui, palette, &data);
+    });
+    ui.add_space(14.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width((ui.available_width() - 34.0).max(0.0));
+        unpaid_card(app, ui, palette, &data);
+    });
 
     ui.add_space(14.0);
     card(palette).show(ui, |ui| {
@@ -98,6 +120,29 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
     let currency = data.currency();
+    if data.operational_only {
+        let cards = [
+            (
+                Icon::Package,
+                t!(app.locale, "Products").into_owned(),
+                number(data.products as f64),
+                false,
+            ),
+            (
+                Icon::TriangleAlert,
+                t!(app.locale, "Low stock").into_owned(),
+                if data.low_stock.len() >= 50 {
+                    "50+".to_owned()
+                } else {
+                    number(data.low_stock.len() as f64)
+                },
+                !data.low_stock.is_empty(),
+            ),
+        ];
+        render_metric_cards(ui, palette, &cards);
+        ui.label(RichText::new(t!(app.locale, "Operational overview")).color(palette.secondary));
+        return;
+    }
     let cards: [(Icon, String, String, bool); 4] = [
         (
             Icon::Wallet,
@@ -277,7 +322,7 @@ fn stat_row(
 
 fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Dashboard) {
     ui.label(
-        RichText::new(t!(app.locale, "Monthly activity"))
+        RichText::new(t!(app.locale, "Cash flow"))
             .color(palette.text)
             .strong()
             .size(15.0),
@@ -299,7 +344,7 @@ fn monthly_card(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
         .map(|point| point.sales.max(point.expenses))
         .fold(1.0, f64::max);
     let label_height = 18.0;
-    let chart_height = 110.0;
+    let chart_height = 220.0;
     let width = ui.available_width();
     let count = data.monthly_series.len().max(1) as f32;
     let slot = width / count;

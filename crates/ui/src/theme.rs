@@ -95,8 +95,8 @@ impl Palette {
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xfa, 0xf9, 0xf8),
-            panel: hex(0xf3, 0xf2, 0xf1),
+            window: hex(0xf3, 0xf4, 0xf6),
+            panel: hex(0xff, 0xff, 0xff),
             surface: hex(0xff, 0xff, 0xff),
             surface_hover: hex(0xed, 0xeb, 0xe9),
             surface_active: hex(0xeb, 0xf3, 0xfc),
@@ -133,8 +133,8 @@ const fn hex(r: u8, g: u8, b: u8) -> Color32 {
 }
 
 /// Desktop radius scale for controls, cards and larger panels.
-pub const RADIUS_CONTROL: u8 = 4;
-pub const RADIUS_CARD: u8 = 6;
+pub const RADIUS_CONTROL: u8 = 8;
+pub const RADIUS_CARD: u8 = 10;
 pub const RADIUS_LARGE: u8 = 8;
 pub const RADIUS_HERO: u8 = 8;
 
@@ -475,9 +475,9 @@ mod tests {
         assert_eq!(dark.secondary, hex(0xa1, 0xa1, 0xaa));
         // Dark mode has no shadow at all (--ac-shadow: none).
         assert_eq!(dark.shadow, Color32::TRANSPARENT);
-        assert_eq!(light.window, hex(0xfa, 0xf9, 0xf8));
+        assert_eq!(light.window, hex(0xf3, 0xf4, 0xf6));
         assert_eq!(light.surface, hex(0xff, 0xff, 0xff));
-        assert_eq!(light.panel, hex(0xf3, 0xf2, 0xf1));
+        assert_eq!(light.panel, hex(0xff, 0xff, 0xff));
         assert_eq!(light.accent, hex(0x0f, 0x6c, 0xbd));
         for color in [
             light.window,

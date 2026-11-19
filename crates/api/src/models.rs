@@ -251,6 +251,13 @@ pub struct MonthlyPoint {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Dashboard {
+    /// Restricted inventory roles receive operational counts instead of money.
+    #[serde(default)]
+    pub operational_only: bool,
+    #[serde(default)]
+    pub products: i64,
+    #[serde(default)]
+    pub low_stock: Vec<serde_json::Value>,
     #[serde(default)]
     pub currency: Option<String>,
     #[serde(rename = "currentBalance", default)]
@@ -1091,5 +1098,21 @@ mod trusted_device_contract_tests {
         assert_eq!(device.revoke_id(), "abc123");
         assert_eq!(device.last_ip.as_deref(), Some("192.0.2.1"));
         assert!(device.current);
+    }
+}
+
+#[cfg(test)]
+mod operational_dashboard_tests {
+    use super::Dashboard;
+
+    #[test]
+    fn operational_response_keeps_counts_and_hides_financial_section() {
+        let response: Dashboard = serde_json::from_str(
+            r#"{"operational_only":true,"products":14,"low_stock":[{"id":1},{"id":2}]}"#,
+        )
+        .unwrap();
+        assert!(response.operational_only);
+        assert_eq!(response.products, 14);
+        assert_eq!(response.low_stock.len(), 2);
     }
 }

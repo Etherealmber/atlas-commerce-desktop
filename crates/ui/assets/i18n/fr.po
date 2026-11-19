@@ -1693,3 +1693,30 @@ msgstr "Pas encore disponible"
 
 msgid "Loading…"
 msgstr "Chargement…"
+
+msgid "Toggle sidebar"
+msgstr "Réduire ou agrandir le menu"
+
+msgid "Toggle theme"
+msgstr "Changer le thème"
+
+msgid "All caught up"
+msgstr "Tout est à jour"
+
+msgid "View all"
+msgstr "Tout voir"
+
+msgid "Stock & invoicing"
+msgstr "Stock & facturation"
+
+msgid "Hello"
+msgstr "Bonjour"
+
+msgid "Your workspace at a glance."
+msgstr "Votre activité en un coup d’œil."
+
+msgid "Operational overview"
+msgstr "Vue opérationnelle"
+
+msgid "Cash flow"
+msgstr "Flux de trésorerie"
