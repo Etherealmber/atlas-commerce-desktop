@@ -1026,7 +1026,14 @@ impl AtlasApp {
                     self.load_products();
                 }
             }
-            Route::Notifications if self.alerts.data.is_none() => self.load_alerts(),
+            Route::Notifications => {
+                if self.alerts.data.is_none() && !self.alerts.loading {
+                    self.load_alerts();
+                }
+                if self.nav_badges.data.is_none() && !self.nav_badges.loading {
+                    self.load_nav_badges();
+                }
+            }
             // Settings aggregates four independent caches; load each once,
             // leaving the in-screen Retry action in charge of failed loads.
             Route::Settings => {

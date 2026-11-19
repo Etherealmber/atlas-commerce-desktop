@@ -65,26 +65,19 @@ impl ApiClient {
         self.patch_data("/api/auth/me", patch).await
     }
 
-    /// `GET /api/auth/devices`.
+    /// `GET /api/auth/trusted-devices` (the worker's current device list).
     pub async fn devices(&self) -> Result<Vec<TrustedDevice>, ApiError> {
-        self.get_data("/api/auth/devices").await
+        self.get_data("/api/auth/trusted-devices").await
     }
 
-    /// `POST /api/auth/devices/revoke`.
+    /// `DELETE /api/auth/trusted-devices/:fingerprint`.
     pub async fn revoke_device(&self, fingerprint: &str) -> Result<(), ApiError> {
-        let body = serde_json::json!({ "fingerprint": fingerprint });
-        let status: ApiStatus = self.post_data("/api/auth/devices/revoke", &body).await?;
-        if status.success {
-            Ok(())
-        } else {
-            Err(ApiError {
-                status: 400,
-                code: status.code,
-                message: status
-                    .error
-                    .unwrap_or_else(|| "Révocation impossible.".to_owned()),
-            })
+        if fingerprint.is_empty() || fingerprint == "." || fingerprint == ".." {
+            return Err(ApiError::transport("Empreinte invalide.".to_owned()));
         }
+        let encoded = crate::commerce::urlencoding(fingerprint).replace('+', "%20");
+        self.delete_success(&format!("/api/auth/trusted-devices/{encoded}"))
+            .await
     }
 
     /// Creates the PC-side QR session the phone scans
@@ -109,5 +102,65 @@ impl ApiClient {
             fingerprint: &self.fingerprint,
         };
         self.post_data(&path, &body).await
+    }
+}
+
+#[cfg(test)]
+mod trusted_device_tests {
+    use crate::ApiClient;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    #[test]
+    fn worker_device_list_and_revoke_use_documented_routes() {
+        for (expected, response, revoke) in [
+            (
+                "GET /api/auth/trusted-devices HTTP/1.1",
+                r#"{"success":true,"data":[{"fingerprint":"abc","label":"Laptop","is_current":true}]}"#,
+                false,
+            ),
+            (
+                "DELETE /api/auth/trusted-devices/a%2Fb HTTP/1.1",
+                r#"{"success":true}"#,
+                true,
+            ),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = Vec::new();
+                while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                    let mut bytes = [0; 1024];
+                    let count = stream.read(&mut bytes).unwrap();
+                    assert!(count > 0);
+                    request.extend_from_slice(&bytes[..count]);
+                }
+                assert!(String::from_utf8_lossy(&request).starts_with(expected));
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+            });
+            let client =
+                ApiClient::new(&format!("http://{address}"), "fixture", "fixture").unwrap();
+            let runner = atlas_core::jobs::JobRunner::new();
+            let result = runner
+                .spawn(async move {
+                    if revoke {
+                        client.revoke_device("a/b").await
+                    } else {
+                        let devices = client.devices().await?;
+                        assert_eq!(devices[0].label, "Laptop");
+                        assert!(devices[0].current);
+                        Ok(())
+                    }
+                })
+                .wait()
+                .unwrap();
+            assert!(result.is_ok());
+            server.join().unwrap();
+        }
     }
 }

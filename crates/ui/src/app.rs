@@ -220,14 +220,6 @@ impl AtlasApp {
         } else {
             self.ensure_route_data(route);
         }
-        // Native stock toasts need alert data even if the user never opens
-        // the Notifications screen; only spend the request when the
-        // persisted setting is enabled.
-        if self.settings.notifications_enabled
-            && self.role_policy().allows_route(Route::Notifications)
-        {
-            self.load_alerts();
-        }
         self.update.cache = crate::update::UpdateCache::load(&self.paths.update_state_file());
         let cached_manifest = match self.settings.update_channel {
             atlas_core::settings::UpdateChannel::Stable => {
@@ -638,28 +630,6 @@ impl AtlasApp {
         };
         let job = self.runner.spawn(async move { client.nav_badges().await });
         self.nav_badges.start(job);
-    }
-
-    /// Lazy fetch of the title-bar badge count. The first call starts a
-    /// request immediately; after a failure (`data` still `None`) retries are
-    /// rate-limited by [`crate::state::NAV_BADGES_RETRY_BACKOFF`] so a
-    /// persistently failing endpoint cannot trigger one request per frame.
-    pub fn ensure_nav_badges(&mut self) {
-        if !self.role_policy().allows_route(Route::Notifications) {
-            return;
-        }
-        let backoff_open = self
-            .nav_badges_retry_at
-            .is_none_or(|at| Instant::now() >= at);
-        if self.session.is_some()
-            && self.nav_badges.data.is_none()
-            && !self.nav_badges.loading
-            && backoff_open
-        {
-            self.load_nav_badges();
-            self.nav_badges_retry_at =
-                Some(Instant::now() + crate::state::NAV_BADGES_RETRY_BACKOFF);
-        }
     }
 
     pub fn load_devices(&mut self) {
@@ -1639,26 +1609,29 @@ impl AtlasApp {
         self.maybe_auto_check_updates();
         self.enforce_session_binding();
 
-        // Periodic refresh while a session is live. A cache only enters the
-        // rotation once its screen has actually been opened (last_updated is
-        // Some): an unvisited route never generates background traffic, so
-        // the app no longer fans out one request per screen on a timer.
+        // Refresh only the route currently displayed. Unvisited or hidden
+        // pages must not generate periodic database traffic.
         if self.session.is_some() && !self.power_paused {
             let interval = Duration::from_secs(self.settings.poll_interval_secs.max(15));
-            if self.dashboard.last_updated.is_some() && self.dashboard.stale_for(interval) {
-                self.load_dashboard();
-            }
-            if self.products.last_updated.is_some()
-                && self.products.stale_for(interval)
-                && self.product_search.is_empty()
-            {
-                self.load_products();
-            }
-            if self.alerts.last_updated.is_some() && self.alerts.stale_for(interval) {
-                self.load_alerts();
-            }
-            if self.nav_badges.last_updated.is_some() && self.nav_badges.stale_for(interval) {
-                self.load_nav_badges();
+            match self.screen {
+                Screen::Shell(Route::Dashboard)
+                    if !self.dashboard.loading && self.dashboard.stale_for(interval) =>
+                {
+                    self.load_dashboard();
+                }
+                Screen::Shell(Route::Products)
+                    if !self.products.loading
+                        && self.product_search.is_empty()
+                        && self.products.stale_for(interval) =>
+                {
+                    self.load_products();
+                }
+                Screen::Shell(Route::Notifications)
+                    if !self.alerts.loading && self.alerts.stale_for(interval) =>
+                {
+                    self.load_alerts();
+                }
+                _ => {}
             }
         }
     }
@@ -1784,22 +1757,9 @@ impl AtlasApp {
     /// Called by the binary when the system resumes from sleep.
     pub fn handle_resume(&mut self) {
         self.power_paused = false;
-        // Reload every cache the user has actually opened. Clearing the
-        // timestamps instead would make the periodic rotation skip them,
-        // since it only refreshes caches whose last_updated is Some.
+        // Resume only the visible route; other caches refresh on demand.
         if self.session.is_some() {
-            if self.dashboard.last_updated.is_some() {
-                self.load_dashboard();
-            }
-            if self.products.last_updated.is_some() && self.product_search.is_empty() {
-                self.load_products();
-            }
-            if self.alerts.last_updated.is_some() {
-                self.load_alerts();
-            }
-            if self.nav_badges.last_updated.is_some() {
-                self.load_nav_badges();
-            }
+            self.refresh_current_route();
         }
     }
 
@@ -2252,15 +2212,47 @@ impl eframe::App for EframeShell {
         }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
-            egui::CentralPanel::default()
+            #[cfg(target_os = "windows")]
+            let (loading, offer_browser) = self
+                .login_view
+                .as_ref()
+                .map(|view| (view.loading(), view.waiting_long()))
+                .unwrap_or_default();
+            #[cfg(target_os = "macos")]
+            let (loading, offer_browser) = (false, false);
+            #[cfg(target_os = "windows")]
+            if loading || !offer_browser {
+                ctx.request_repaint_after(Duration::from_millis(250));
+            }
+            let response = egui::CentralPanel::default()
                 .frame(
                     egui::Frame::NONE
                         .fill(palette.window)
                         .inner_margin(egui::Margin::symmetric(16, 0)),
                 )
                 .show(ui, |ui| {
-                    screens::auth::draw_embedded_header(&mut self.held, ui, &palette)
+                    screens::auth::draw_embedded_header(
+                        &mut self.held,
+                        ui,
+                        &palette,
+                        loading,
+                        offer_browser,
+                    )
                 });
+            #[cfg(target_os = "windows")]
+            if response.inner
+                && let Some(view) = self.login_view.take()
+            {
+                let url = view.authorization_url();
+                drop(view);
+                crate::browser_auth::fallback_to_browser(
+                    &mut self.held,
+                    url,
+                    "Connexion poursuivie dans le navigateur.",
+                );
+            }
+            #[cfg(target_os = "macos")]
+            let _ = response;
             return;
         }
         if matches!(self.held.screen, Screen::Shell(_)) {

@@ -90,7 +90,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(12.0);
 
     if app.employees.loading && app.employees.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
     } else if app
         .employees
         .data

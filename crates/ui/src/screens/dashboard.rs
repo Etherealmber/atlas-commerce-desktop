@@ -24,7 +24,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 !app.dashboard.loading,
             ) {
                 app.load_dashboard();
-                app.load_alerts();
             }
         });
     });

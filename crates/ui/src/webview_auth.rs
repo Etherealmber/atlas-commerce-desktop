@@ -2,7 +2,11 @@
 //! No injected script, token access, IPC bridge, or network interception.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
 
 use atlas_core::webview_policy::{Frame, NavigationPolicy};
 use wry::{WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
@@ -12,6 +16,9 @@ pub(crate) struct LoginView {
     view: Option<WebView>,
     context: Option<WebContext>,
     profile: Option<tempfile::TempDir>,
+    url: url::Url,
+    completed: Arc<AtomicBool>,
+    opened: Instant,
 }
 
 fn bounds(width: u32, height: u32, scale: f64) -> wry::Rect {
@@ -73,9 +80,19 @@ impl LoginView {
             .tempdir_in(&root)
             .map_err(|_| "Profil de connexion indisponible.")?;
         let mut context = WebContext::new(Some(profile.path().to_owned()));
+        let completed = Arc::new(AtomicBool::new(false));
+        let completed_callback = completed.clone();
         let view = WebViewBuilder::new_with_web_context(&mut context)
             .with_url(url.as_str())
             .with_incognito(true)
+            .with_background_color((255, 255, 255, 255))
+            // Wry reports completion even for failed navigation: this only
+            // ends the loading indicator, never asserts success.
+            .with_on_page_load_handler(move |event, _| {
+                if matches!(event, wry::PageLoadEvent::Finished) {
+                    completed_callback.store(true, Ordering::Relaxed);
+                }
+            })
             .with_devtools(false)
             // Wry's defaults disable SmartScreen; preserve the runtime defaults.
             .with_additional_browser_args("")
@@ -90,7 +107,22 @@ impl LoginView {
             view: Some(view),
             context: Some(context),
             profile: Some(profile),
+            url: url.clone(),
+            completed,
+            opened: Instant::now(),
         })
+    }
+
+    pub(crate) fn loading(&self) -> bool {
+        !self.completed.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn waiting_long(&self) -> bool {
+        self.opened.elapsed() >= Duration::from_secs(8)
+    }
+
+    pub(crate) fn authorization_url(&self) -> url::Url {
+        self.url.clone()
     }
 
     pub(crate) fn resize(&self, width: u32, height: u32, scale: f64) {

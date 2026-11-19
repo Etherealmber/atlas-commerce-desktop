@@ -146,6 +146,8 @@ pub struct TrustedDevice {
     #[serde(default)]
     pub fingerprint: String,
     #[serde(default)]
+    pub label: String,
+    #[serde(default)]
     pub full: String,
     #[serde(default, rename = "last_ip")]
     pub last_ip: Option<String>,
@@ -153,7 +155,7 @@ pub struct TrustedDevice {
     pub last_seen: Option<String>,
     #[serde(default, rename = "user_agent")]
     pub user_agent: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "is_current")]
     pub current: bool,
 }
 
@@ -1072,5 +1074,22 @@ mod tests {
         let dashboard: Dashboard = serde_json::from_str(r#"{"productCount":12}"#).unwrap();
         assert_eq!(dashboard.product_count, 12);
         assert_eq!(dashboard.currency(), "MAD");
+    }
+}
+
+#[cfg(test)]
+mod trusted_device_contract_tests {
+    use super::TrustedDevice;
+
+    #[test]
+    fn worker_device_fields_keep_full_identifier_and_current_flag() {
+        let device: TrustedDevice = serde_json::from_str(
+            r#"{"fingerprint":"abc123","label":"Atlas Desktop","last_ip":"192.0.2.1","is_current":true}"#,
+        )
+        .unwrap();
+        assert_eq!(device.label, "Atlas Desktop");
+        assert_eq!(device.revoke_id(), "abc123");
+        assert_eq!(device.last_ip.as_deref(), Some("192.0.2.1"));
+        assert!(device.current);
     }
 }

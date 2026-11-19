@@ -970,26 +970,16 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     section_header(ui, palette, t!(app.locale, "Security"));
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        setting_row(
-            ui,
-            palette,
-            t!(app.locale, "Device fingerprint"),
-            None,
-            |ui| {
+        egui::CollapsingHeader::new(t!(app.locale, "This device"))
+            .id_salt("local-device-details")
+            .show(ui, |ui| {
+                ui.label(t!(app.locale, "Device fingerprint"));
                 let fingerprint = app.identity.fingerprint();
-                let short = fingerprint.chars().take(16).collect::<String>();
-                ui.horizontal(|ui| {
-                    ui.monospace(
-                        RichText::new(format!("{short}…"))
-                            .color(palette.text)
-                            .size(12.5),
-                    );
-                    if secondary_button(ui, t!(app.locale, "Copy"), palette) {
-                        ui.ctx().copy_text(fingerprint.to_owned());
-                    }
-                });
-            },
-        );
+                ui.monospace(fingerprint);
+                if secondary_button(ui, t!(app.locale, "Copy"), palette) {
+                    ui.ctx().copy_text(fingerprint.to_owned());
+                }
+            });
 
         ui.add_space(12.0);
         ui.horizontal(|ui| {
@@ -1009,6 +999,8 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
         if app.devices.loading && app.devices.data.is_none() {
             super::centered_spinner(ui, palette);
+        } else if let Some(error) = app.devices.error.clone() {
+            error_banner(ui, &error, palette);
         } else if let Some(devices) = app.devices.data.clone() {
             if devices.is_empty() {
                 widgets::empty_state(
@@ -1020,32 +1012,36 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 );
             }
             for device in devices {
-                ui.horizontal_top(|ui| {
-                    icon(ui, Icon::Smartphone, palette.secondary, 18.0);
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(device.full.clone())
-                                .color(palette.text)
-                                .size(13.0)
-                                .strong(),
-                        );
-                        if let Some(ip) = &device.last_ip {
-                            ui.label(
-                                RichText::new(format!("IP : {ip}"))
-                                    .color(palette.dim)
-                                    .size(11.5),
-                            );
+                let name = if device.label.trim().is_empty() {
+                    t!(app.locale, "Device").into_owned()
+                } else {
+                    device.label.clone()
+                };
+                let title = if device.current {
+                    format!("{} · {}", name, t!(app.locale, "This device"))
+                } else {
+                    name
+                };
+                egui::CollapsingHeader::new(title)
+                    .id_salt(("trusted-device", &device.fingerprint))
+                    .show(ui, |ui| {
+                        ui.label(format!(
+                            "{}: {}",
+                            t!(app.locale, "Device fingerprint"),
+                            device.revoke_id()
+                        ));
+                        ui.label(format!(
+                            "IP : {}",
+                            device
+                                .last_ip
+                                .as_deref()
+                                .filter(|v| !v.is_empty())
+                                .unwrap_or("—")
+                        ));
+                        ui.label(t!(app.locale, "City and country unavailable"));
+                        if secondary_button(ui, t!(app.locale, "Copy"), palette) {
+                            ui.ctx().copy_text(device.revoke_id().to_owned());
                         }
-                        if device.current {
-                            pill(
-                                ui,
-                                t!(app.locale, "This device"),
-                                palette.accent.gamma_multiply(0.18),
-                                palette.accent,
-                            );
-                        }
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         if !device.current
                             && danger_button(ui, t!(app.locale, "Revoke"), palette, true)
                         {
@@ -1059,7 +1055,6 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             });
                         }
                     });
-                });
                 ui.separator();
             }
         }

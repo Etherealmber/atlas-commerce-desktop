@@ -43,11 +43,6 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Ctrl+F and Escape, all suppressed while a text field owns the keys.
     crate::shortcuts::handle_shortcuts(app, ctx);
 
-    // The title-bar bell is shell chrome and needs its counter before the
-    // user ever opens Notifications: one lazy request, then backoff-gated
-    // retries so a failing endpoint cannot fire once per frame.
-    app.ensure_nav_badges();
-
     // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
     // with an exact size reserves its width up front, so the rail can never
     // expand to the full window and starve the central column (the blank
@@ -730,32 +725,56 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
     };
     // The title bar already carries the brand; avoid a duplicate logo.
     ui.add_space(8.0);
-    // Only destinations implemented by the native client are listed; no
-    // placeholder routes or unverified worker endpoints are introduced.
-    let groups: [(std::borrow::Cow<'_, str>, &[Route]); 3] = [
+    // Only implemented destinations are actionable. The remaining entries
+    // are visible but explicitly unavailable; they never issue API requests.
+    let groups: [(std::borrow::Cow<'_, str>, &[(Route, &str, bool)]); 6] = [
         (
-            t!(app.locale, "Operations"),
+            t!(app.locale, "Overview"),
+            &[(Route::Dashboard, "Dashboard", true)],
+        ),
+        (
+            t!(app.locale, "Catalog"),
+            &[(Route::Products, "Products and stock", true)],
+        ),
+        (
+            t!(app.locale, "Customer relations"),
+            &[(Route::Clients, "Clients", true)],
+        ),
+        (
+            t!(app.locale, "Team"),
             &[
-                Route::Dashboard,
-                Route::Sales,
-                Route::Clients,
-                Route::DeliveryNotes,
+                (Route::Employees, "Employees", true),
+                (Route::Employees, "Attendance", false),
+                (Route::Sales, "Quotes", false),
+                (Route::Sales, "Quick sale", false),
+                (Route::Sales, "Sales invoices", true),
+                (Route::Sales, "Reimbursements", false),
+                (Route::Sales, "Receipts", false),
             ],
         ),
         (
-            t!(app.locale, "Catalog and stock"),
-            &[Route::Products, Route::Vendors],
+            t!(app.locale, "Purchases"),
+            &[
+                (Route::Vendors, "Vendors", true),
+                (Route::Expenses, "Purchase invoices", false),
+            ],
         ),
         (
-            t!(app.locale, "Management"),
-            &[Route::Expenses, Route::Employees],
+            t!(app.locale, "Finance"),
+            &[
+                (Route::Expenses, "Balance and income", false),
+                (Route::Expenses, "Reports and closing", false),
+                (Route::Products, "Stock operations", false),
+                (Route::Expenses, "Expenses", true),
+                (Route::DeliveryNotes, "Delivery notes", true),
+            ],
         ),
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
-        for (heading, routes) in groups {
-            if !routes
+        for (heading, entries) in groups {
+            if !entries
                 .iter()
-                .any(|route| app.role_policy().allows_route(*route))
+                .any(|(route, _, _)| app.role_policy().allows_route(*route))
             {
                 continue;
             }
@@ -767,15 +786,24 @@ fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, collapsed
                         .size(10.5),
                 );
             }
-            for &route in routes {
+            for &(route, label, implemented) in entries {
                 if !app.role_policy().allows_route(route) {
                     continue;
                 }
-                let (which, label) = route_meta(app.locale, route);
-                let response =
-                    rail_row(ui, palette, which, &label, active == Some(route), collapsed);
-                if response.clicked() {
-                    app.go(route);
+                let (which, _) = route_meta(app.locale, route);
+                let label = crate::i18n::gettext(app.locale, label);
+                if implemented {
+                    let response =
+                        rail_row(ui, palette, which, &label, active == Some(route), collapsed);
+                    if response.clicked() {
+                        app.go(route);
+                    }
+                } else {
+                    ui.add_enabled_ui(false, |ui| {
+                        rail_row(ui, palette, which, &label, false, collapsed)
+                    })
+                    .inner
+                    .on_hover_text(t!(app.locale, "Not available yet"));
                 }
             }
         }

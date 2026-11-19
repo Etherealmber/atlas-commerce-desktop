@@ -148,7 +148,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.products.loading && app.products.data.is_none() {
-        super::centered_spinner(ui, palette);
+        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
     } else if app
         .products
         .data

@@ -47,6 +47,48 @@ pub fn centered_spinner(ui: &mut Ui, palette: &Palette) {
     });
 }
 
+/// Lightweight structural placeholders for a page's initial list load.
+/// Existing data stays visible during refresh; failures use the page's error UI.
+pub fn list_skeleton(
+    ui: &mut Ui,
+    palette: &Palette,
+    locale: crate::i18n::Locale,
+    reduced_motion: bool,
+) {
+    ui.label(RichText::new(crate::t!(locale, "Loading…")).color(palette.secondary));
+    let phase = if reduced_motion {
+        0.65
+    } else {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(80));
+        0.60 + 0.15 * (ui.input(|input| input.time) as f32 * 2.0).sin()
+    };
+    let width = ui.available_width().max(0.0);
+    for _ in 0..5 {
+        let (row, _) = ui.allocate_exact_size(egui::vec2(width, 58.0), Sense::hover());
+        let color = palette.surface_active.gamma_multiply(phase);
+        ui.painter()
+            .rect_filled(row.shrink2(egui::vec2(2.0, 5.0)), 7.0, color);
+        let left = row.left() + 16.0;
+        ui.painter().rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(left, row.top() + 15.0),
+                egui::vec2((width * 0.30).min(220.0), 9.0),
+            ),
+            4.0,
+            palette.secondary.gamma_multiply(0.28),
+        );
+        ui.painter().rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(left, row.top() + 32.0),
+                egui::vec2((width * 0.18).min(140.0), 7.0),
+            ),
+            3.0,
+            palette.secondary.gamma_multiply(0.20),
+        );
+    }
+}
+
 /// Renders the transient notice stack (bottom-left toasts).
 pub fn notices(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
     if app.notices.is_empty() {

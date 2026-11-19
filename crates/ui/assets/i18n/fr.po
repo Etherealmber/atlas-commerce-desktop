@@ -1657,3 +1657,36 @@ msgstr "Code de sécurité"
 
 msgid "Compare:"
 msgstr "À comparer :"
+
+msgid "Device"
+msgstr "Appareil"
+
+msgid "City and country unavailable"
+msgstr "Ville et pays indisponibles"
+
+msgid "Products and stock"
+msgstr "Produits & stock"
+
+msgid "Attendance"
+msgstr "Présence"
+
+msgid "Sales invoices"
+msgstr "Factures de vente"
+
+msgid "Reimbursements"
+msgstr "Remboursements"
+
+msgid "Purchase invoices"
+msgstr "Factures d’achat"
+
+msgid "Balance and income"
+msgstr "Solde & recettes"
+
+msgid "Reports and closing"
+msgstr "Rapports & clôture"
+
+msgid "Stock operations"
+msgstr "Ops stock"
+
+msgid "Not available yet"
+msgstr "Pas encore disponible"
