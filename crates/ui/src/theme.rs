@@ -200,6 +200,96 @@ pub fn resolve(dark: bool) -> Palette {
     }
 }
 
+/// WCAG relative luminance for an opaque sRGB colour.
+fn luminance(color: Color32) -> f64 {
+    fn linear(component: u8) -> f64 {
+        let value = f64::from(component) / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
+}
+
+fn contrast(a: Color32, b: Color32) -> f64 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+/// Adapt a system accent to the active surfaces and keep button text legible.
+/// Windows can return very pale or very dark colours, so use the nearest
+/// incremental shade that meets the text contrast target on both surfaces.
+#[must_use]
+pub fn with_system_accent(mut palette: Palette, source: Color32) -> Palette {
+    let target = if palette.dark {
+        Color32::WHITE
+    } else {
+        Color32::BLACK
+    };
+    let mut chosen = source;
+    for step in 0..=100 {
+        let mix = step as f32 / 100.0;
+        let c = source.lerp_to_gamma(target, mix);
+        if contrast(c, palette.surface) >= 4.5 && contrast(c, palette.window) >= 4.5 {
+            chosen = c;
+            break;
+        }
+    }
+    palette.accent = chosen;
+    palette.accent_hover = chosen.lerp_to_gamma(target, 0.12);
+    palette.on_accent = if contrast(chosen, Color32::BLACK) >= contrast(chosen, Color32::WHITE) {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    };
+    palette
+}
+
+/// Observe the Windows accent away from the render thread. Failure, high
+/// contrast, or an unavailable WinRT service leaves the solid base palette.
+#[cfg(target_os = "windows")]
+#[must_use]
+pub fn windows_accent() -> Option<Color32> {
+    use std::sync::{
+        OnceLock,
+        atomic::{AtomicU32, Ordering},
+    };
+    static ACCENT: AtomicU32 = AtomicU32::new(0);
+    static START: OnceLock<()> = OnceLock::new();
+    START.get_or_init(|| {
+        let _ = std::thread::Builder::new()
+            .name("atlas-windows-accent".into())
+            .spawn(|| {
+                use windows::UI::ViewManagement::{AccessibilitySettings, UIColorType, UISettings};
+                loop {
+                    let value = (|| {
+                        if AccessibilitySettings::new().ok()?.HighContrast().ok()? {
+                            return None;
+                        }
+                        let color = UISettings::new()
+                            .ok()?
+                            .GetColorValue(UIColorType::Accent)
+                            .ok()?;
+                        Some(
+                            0x0100_0000
+                                | (u32::from(color.R) << 16)
+                                | (u32::from(color.G) << 8)
+                                | u32::from(color.B),
+                        )
+                    })()
+                    .unwrap_or(0);
+                    ACCENT.store(value, Ordering::Relaxed);
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+            });
+    });
+    let value = ACCENT.load(Ordering::Relaxed);
+    (value & 0x0100_0000 != 0)
+        .then(|| Color32::from_rgb((value >> 16) as u8, (value >> 8) as u8, value as u8))
+}
+
 /// Reads a custom JSON palette file, or explains why it is invalid.
 ///
 /// # Errors
@@ -520,5 +610,28 @@ mod tests {
         assert_eq!(dark.visuals.panel_fill, Palette::dark().window);
         assert_eq!(light.visuals.panel_fill, Palette::light().window);
         assert_ne!(dark.visuals.panel_fill, light.visuals.panel_fill);
+    }
+}
+
+#[cfg(test)]
+mod system_accent_tests {
+    use super::{Palette, contrast, with_system_accent};
+    use egui::Color32;
+
+    #[test]
+    fn system_colors_keep_text_contrast_in_both_modes() {
+        for base in [Palette::light(), Palette::dark()] {
+            for color in [
+                Color32::WHITE,
+                Color32::BLACK,
+                Color32::from_rgb(255, 230, 40),
+                Color32::from_rgb(0, 120, 212),
+            ] {
+                let palette = with_system_accent(base, color);
+                assert!(contrast(palette.accent, palette.surface) >= 4.5);
+                assert!(contrast(palette.accent, palette.window) >= 4.5);
+                assert!(contrast(palette.on_accent, palette.accent) >= 4.5);
+            }
+        }
     }
 }

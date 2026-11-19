@@ -818,7 +818,12 @@ impl AtlasApp {
             atlas_core::settings::ThemeMode::Light => false,
             atlas_core::settings::ThemeMode::System => ctx.theme() == egui::Theme::Dark,
         };
-        crate::theme::resolve(dark)
+        let palette = crate::theme::resolve(dark);
+        #[cfg(target_os = "windows")]
+        if let Some(accent) = crate::theme::windows_accent() {
+            return crate::theme::with_system_accent(palette, accent);
+        }
+        palette
     }
 
     // ── client helpers ───────────────────────────────────────────────────

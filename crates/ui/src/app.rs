@@ -1976,6 +1976,10 @@ impl eframe::App for EframeShell {
         // Keep egui's preference and the native window chrome aligned with
         // the app setting before resolving the palette for this frame.
         self.held.sync_egui_theme(ctx);
+        // The native accent observer is off-thread; occasionally repaint so
+        // system colour or high-contrast changes can reach an idle window.
+        #[cfg(target_os = "windows")]
+        ctx.request_repaint_after(Duration::from_secs(5));
         self.held.scrolling.apply(ctx);
         let palette = self.held.palette(ctx);
         // Keep the framebuffer clear colour in sync, and rebuild the global
