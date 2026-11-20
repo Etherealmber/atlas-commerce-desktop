@@ -583,6 +583,7 @@ pub struct AtlasApp {
     pub(crate) product_delete: Option<crate::screens::products::ProductDelete>,
     pub(crate) product_label: Option<crate::screens::products::ProductLabel>,
     pub(crate) product_label_evict: Option<String>,
+    pub(crate) product_scanner_open: bool,
     pub client_editor: Option<ClientEditor>,
     pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
@@ -784,6 +785,7 @@ impl AtlasApp {
             product_delete: None,
             product_label: None,
             product_label_evict: None,
+            product_scanner_open: false,
             client_editor: None,
             vendor_editor: None,
             category_editor: None,
@@ -1121,6 +1123,8 @@ impl AtlasApp {
         self.confirm_dialog.is_some()
             || self.product_editor.is_some()
             || self.product_label.is_some()
+            || self.product_scanner_open
+            || self.stock_report_open
             || self.client_editor.is_some()
             || self.vendor_editor.is_some()
             || self.expense_editor.is_some()
@@ -1163,6 +1167,14 @@ impl AtlasApp {
         }
         if let Some(label) = self.product_label.take() {
             self.product_label_evict = Some(label.uri);
+            return true;
+        }
+        if self.stock_report_open {
+            self.stock_report_open = false;
+            return true;
+        }
+        if self.product_scanner_open {
+            self.product_scanner_open = false;
             return true;
         }
         // The stock dialog paints above the product editor, so Escape must
@@ -1324,6 +1336,7 @@ impl AtlasApp {
         self.business_search = Cache::default();
         self.product_editor = None;
         self.product_delete = None;
+        self.product_scanner_open = false;
         if let Some(label) = self.product_label.take() {
             self.product_label_evict = Some(label.uri);
         }

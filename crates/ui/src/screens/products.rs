@@ -33,7 +33,7 @@ impl Drop for ProductDelete {
 }
 
 pub(crate) struct ProductLabel {
-    uri: String,
+    pub(crate) uri: String,
     name: String,
     job: Option<Job<Result<Vec<u8>, ApiError>>>,
     loaded: bool,
@@ -341,12 +341,19 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
-    // The catalogue no longer embeds the stock-report and scanner blocks.
-    // Keep an already-open report renderable (including offline fixtures).
-    if app.stock_report_open {
-        draw_stock_report(app, ui, palette);
-        ui.add_space(12.0);
-    }
+    // Keep these tools available on demand, without embedding separate
+    // scanner and report blocks above the catalogue.
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Scan barcode"), palette) {
+            app.product_scanner_open = true;
+        }
+        if app.role_policy().can_view_reports()
+            && secondary_button(ui, t!(app.locale, "Stock valuation report"), palette)
+        {
+            app.load_stock_report();
+        }
+    });
+    ui.add_space(10.0);
 
     draw_search(app, ui, palette);
     ui.add_space(10.0);
@@ -384,9 +391,76 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.stock_history.is_some() {
         draw_history_dialog(app, ui, palette);
     }
+    if app.product_scanner_open {
+        draw_product_tool(app, ui, palette, false);
+    }
+    if app.stock_report_open {
+        draw_product_tool(app, ui, palette, true);
+    }
     if app.product_label.is_some() {
         draw_product_label(app, ui, palette);
     }
+}
+
+/// Scanner/report are on-demand native overlays, rather than permanent blocks.
+fn draw_product_tool(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, report: bool) {
+    let screen = ui.ctx().input(|i| i.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            760.0_f32.min((screen.width() - 32.0).max(1.0)),
+            600.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
+    );
+    let id = egui::Id::new(if report {
+        "product-report-scrim"
+    } else {
+        "product-scan-scrim"
+    });
+    if widgets::scrim_clicked(ui, screen, rect, id) {
+        if report {
+            app.stock_report_open = false;
+        } else {
+            app.product_scanner_open = false;
+        }
+        return;
+    }
+    widgets::overlay_at(ui, rect, |ui| {
+        widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(if report {
+                        t!(app.locale, "Stock valuation report")
+                    } else {
+                        t!(app.locale, "Scan barcode")
+                    })
+                    .strong()
+                    .color(palette.text)
+                    .size(17.0),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if secondary_button(ui, t!(app.locale, "Close"), palette) {
+                        if report {
+                            app.stock_report_open = false;
+                        } else {
+                            app.product_scanner_open = false;
+                        }
+                    }
+                });
+            });
+            ui.add_space(8.0);
+            egui::ScrollArea::vertical()
+                .max_height((rect.height() - 100.0).max(1.0))
+                .show(ui, |ui| {
+                    if report {
+                        draw_stock_report(app, ui, palette);
+                    } else {
+                        super::scan::draw_scan_bar(app, ui, palette);
+                    }
+                });
+        });
+    });
 }
 
 /// Values and inventory rows are supplied by the worker, not local caches.

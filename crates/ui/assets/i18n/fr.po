@@ -1852,3 +1852,6 @@ msgstr "Supprimer"
 
 msgid "Undo"
 msgstr "Annuler"
+
+msgid "Scan barcode"
+msgstr "Scanner un code-barres"
