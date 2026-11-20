@@ -1487,6 +1487,7 @@ impl AtlasApp {
         self.poll_vault();
         self.consume_deep_links();
         self.product_images.poll(ctx);
+        screens::products::poll_product_actions(self, ctx);
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
             ctx.forget_image(&uri);

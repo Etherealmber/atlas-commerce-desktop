@@ -13,6 +13,20 @@ struct CreateProductRequest<'a> {
     force_duplicate: bool,
 }
 
+/// Top-level response from the Worker's single-product delete endpoint.
+#[derive(Debug, serde::Deserialize)]
+pub struct ProductDeletion {
+    pub success: bool,
+    #[serde(default)]
+    pub archived: bool,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub code: Option<String>,
+}
+
 impl ApiClient {
     /// `GET /api/products` — the mobile/light field set, capped like Android.
     pub async fn products(&self, query: &str, limit: u32) -> Result<Vec<Product>, ApiError> {
@@ -63,6 +77,83 @@ impl ApiClient {
         product: &UpdateProduct,
     ) -> Result<Product, ApiError> {
         self.put_data(&format!("/api/products/{id}"), product).await
+    }
+
+    /// `DELETE /api/products/:id`: the web client uses a ten-second undo
+    /// period before sending this session-confirmed request. The worker may
+    /// archive products with history rather than deleting them.
+    pub async fn delete_product(&self, id: i64) -> Result<ProductDeletion, ApiError> {
+        let response = self
+            .request(reqwest::Method::DELETE, &format!("/api/products/{id}"))
+            .json(&serde_json::json!({"confirm_mode": "timed_undo", "session_confirm": true}))
+            .send()
+            .await
+            .map_err(|_| ApiError::transport("Échec de la connexion au serveur."))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(crate::error::response_into_error(response).await);
+        }
+        let result: ProductDeletion = response
+            .json()
+            .await
+            .map_err(|_| ApiError::client("Réponse de suppression illisible."))?;
+        if !result.success {
+            return Err(ApiError {
+                status: status.as_u16(),
+                code: result.code,
+                message: result
+                    .error
+                    .unwrap_or_else(|| "Suppression refusée par le serveur.".into()),
+            });
+        }
+        Ok(result)
+    }
+
+    /// `GET /api/products/:id/label.svg`; authenticated, size-bounded SVG.
+    pub async fn product_label(&self, id: i64) -> Result<Vec<u8>, ApiError> {
+        let mut response = self
+            .request(
+                reqwest::Method::GET,
+                &format!("/api/products/{id}/label.svg"),
+            )
+            .send()
+            .await
+            .map_err(|_| ApiError::transport("Échec de la connexion au serveur."))?;
+        if !response.status().is_success() {
+            return Err(crate::error::response_into_error(response).await);
+        }
+        let mime = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(';').next())
+            .unwrap_or("")
+            .trim();
+        if !mime.eq_ignore_ascii_case("image/svg+xml") {
+            return Err(ApiError::client("Étiquette de format inattendu."));
+        }
+        const MAX: usize = 256 * 1024;
+        if response
+            .content_length()
+            .is_some_and(|size| size > MAX as u64)
+        {
+            return Err(ApiError::client("Étiquette trop volumineuse."));
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| ApiError::transport("Étiquette incomplète."))?
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX {
+                return Err(ApiError::client("Étiquette trop volumineuse."));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        if bytes.is_empty() {
+            return Err(ApiError::client("Étiquette vide."));
+        }
+        Ok(bytes)
     }
 
     /// `POST /api/products/:id/adjust-stock`.
@@ -246,6 +337,94 @@ mod tests {
                     .unwrap()
                     .is_ok()
             );
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn label_and_timed_product_delete_follow_worker_contract() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+        for delete in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut raw = Vec::new();
+                let end = loop {
+                    let mut bytes = [0; 1024];
+                    let n = stream.read(&mut bytes).unwrap();
+                    assert!(n > 0);
+                    raw.extend_from_slice(&bytes[..n]);
+                    if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                        break i + 4;
+                    }
+                };
+                let headers = String::from_utf8_lossy(&raw[..end]).to_lowercase();
+                let path = if delete {
+                    "delete /api/products/9 http/1.1"
+                } else {
+                    "get /api/products/9/label.svg http/1.1"
+                };
+                assert!(headers.starts_with(path));
+                assert!(headers.contains("authorization: bearer fixture-token"));
+                if delete {
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.strip_prefix("content-length:")
+                                .and_then(|v| v.trim().parse().ok())
+                        })
+                        .unwrap();
+                    while raw.len() - end < length {
+                        let mut bytes = [0; 1024];
+                        let n = stream.read(&mut bytes).unwrap();
+                        assert!(n > 0);
+                        raw.extend_from_slice(&bytes[..n]);
+                    }
+                    let body: serde_json::Value =
+                        serde_json::from_slice(&raw[end..end + length]).unwrap();
+                    assert_eq!(body["confirm_mode"], "timed_undo");
+                    assert_eq!(body["session_confirm"], true);
+                    assert!(body.get("confirm_password").is_none());
+                }
+                let (content_type, body) = if delete {
+                    (
+                        "application/json",
+                        r#"{"success":true,"archived":true,"message":"Archivé"}"#,
+                    )
+                } else {
+                    (
+                        "image/svg+xml",
+                        "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+                    )
+                };
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            });
+            let runner = atlas_core::jobs::JobRunner::new();
+            let client =
+                ApiClient::new(&format!("http://{address}"), "fixture", "fixture").unwrap();
+            client.set_token(Some("fixture-token".into()));
+            if delete {
+                let result = runner
+                    .spawn(async move { client.delete_product(9).await })
+                    .wait()
+                    .unwrap()
+                    .unwrap();
+                assert!(result.archived);
+                assert_eq!(result.message.as_deref(), Some("Archivé"));
+            } else {
+                let result = runner
+                    .spawn(async move { client.product_label(9).await })
+                    .wait()
+                    .unwrap()
+                    .unwrap();
+                assert!(result.starts_with(b"<svg"));
+            }
             server.join().unwrap();
         }
     }

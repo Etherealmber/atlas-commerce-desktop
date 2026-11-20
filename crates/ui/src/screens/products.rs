@@ -1,6 +1,4 @@
-//! Produits: searchable catalogue, product creation and stock movements.
-//! The worker contract is read-only here apart from `POST /api/products`
-//! and `POST /api/products/:id/adjust-stock`.
+//! Native catalogue, product editor, labels, deletion and stock movements.
 
 use atlas_api::ApiError;
 use atlas_api::models::{Product, StockAdjust, StockMovement};
@@ -17,6 +15,170 @@ use crate::widgets::{
     secondary_button,
 };
 use crate::{t, widgets};
+
+/// One undoable deletion at a time. No request is sent before the deadline.
+pub(crate) struct ProductDelete {
+    id: i64,
+    deadline: std::time::Instant,
+    job: Option<Job<Result<atlas_api::commerce::ProductDeletion, ApiError>>>,
+    cancel: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl Drop for ProductDelete {
+    fn drop(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(());
+        }
+    }
+}
+
+pub(crate) struct ProductLabel {
+    uri: String,
+    name: String,
+    job: Option<Job<Result<Vec<u8>, ApiError>>>,
+    loaded: bool,
+    error: Option<String>,
+}
+
+/// Run only one bounded request, and cancel the countdown on navigation.
+pub(crate) fn poll_product_actions(app: &mut AtlasApp, ctx: &egui::Context) {
+    if let Some(uri) = app.product_label_evict.take() {
+        ctx.forget_image(&uri);
+    }
+    if let Some(label) = app.product_label.as_mut() {
+        if let Some(result) = label.job.as_ref().and_then(Job::poll) {
+            label.job = None;
+            match result {
+                Ok(bytes) => {
+                    ctx.forget_image(&label.uri);
+                    ctx.include_bytes(label.uri.clone(), bytes);
+                    label.loaded = true;
+                }
+                Err(error) => label.error = Some(error.message),
+            }
+            ctx.request_repaint();
+        }
+        if label.job.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+    let on_products = matches!(
+        app.screen,
+        crate::state::Screen::Shell(crate::state::Route::Products)
+    );
+    if let Some(pending) = app.product_delete.as_mut() {
+        if pending.job.is_none() && !on_products {
+            app.product_delete = None;
+            return;
+        }
+        if pending.job.is_none() && pending.deadline <= std::time::Instant::now() {
+            if let Some(client) = app.client.clone() {
+                let id = pending.id;
+                let (cancel, cancelled) = tokio::sync::oneshot::channel();
+                pending.cancel = Some(cancel);
+                pending.job = Some(app.runner.spawn(async move {
+                    tokio::select! {
+                        result = client.delete_product(id) => result,
+                        _ = cancelled => Err(ApiError::client("Suppression annulée.")),
+                    }
+                }));
+            } else {
+                app.product_delete = None;
+                return;
+            }
+        }
+        let result = pending.job.as_ref().and_then(Job::poll);
+        if let Some(result) = result {
+            app.product_delete = None;
+            match result {
+                Ok(result) => {
+                    let fallback = if result.archived {
+                        t!(app.locale, "Product archived.")
+                    } else {
+                        t!(app.locale, "Product deleted.")
+                    };
+                    app.notice(result.message.unwrap_or_else(|| fallback.into_owned()));
+                    app.load_products();
+                }
+                Err(error) => app.notice(error.message),
+            }
+            ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+}
+
+fn open_product_label(app: &mut AtlasApp, product: &Product) {
+    let Some(client) = app.client.clone() else {
+        return;
+    };
+    if let Some(old) = app.product_label.take() {
+        app.product_label_evict = Some(old.uri);
+    }
+    let id = product.id;
+    app.product_label = Some(ProductLabel {
+        uri: format!("bytes://atlas-product-label-{id}.svg"),
+        name: product.name.clone(),
+        job: Some(
+            app.runner
+                .spawn(async move { client.product_label(id).await }),
+        ),
+        loaded: false,
+        error: None,
+    });
+}
+
+fn draw_product_label(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let Some(label) = app.product_label.as_ref() else {
+        return;
+    };
+    let screen = ui.ctx().input(|i| i.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            440.0_f32.min((screen.width() - 32.0).max(1.0)),
+            300.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
+    );
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-label-scrim")) {
+        if let Some(label) = app.product_label.take() {
+            app.product_label_evict = Some(label.uri);
+        }
+        return;
+    }
+    let name = label.name.clone();
+    let uri = label.uri.clone();
+    let error = label.error.clone();
+    let loaded = label.loaded;
+    widgets::overlay_at(ui, rect, |ui| {
+        widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(format!("{} · {}", t!(app.locale, "Label"), name))
+                    .strong()
+                    .color(palette.text),
+            );
+            ui.add_space(12.0);
+            if let Some(error) = error {
+                error_banner(ui, &error, palette);
+            } else if loaded {
+                ui.add(
+                    egui::Image::new(uri)
+                        .fit_to_exact_size(vec2(320.0_f32.min(ui.available_width()), 180.0)),
+                );
+            } else {
+                super::centered_spinner(ui, palette);
+            }
+            ui.add_space(12.0);
+            if secondary_button(ui, t!(app.locale, "Close"), palette)
+                && let Some(label) = app.product_label.take()
+            {
+                app.product_label_evict = Some(label.uri);
+            }
+        });
+    });
+}
 
 /// The create-product dialog state.
 #[derive(Default)]
@@ -222,6 +384,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.stock_history.is_some() {
         draw_history_dialog(app, ui, palette);
     }
+    if app.product_label.is_some() {
+        draw_product_label(app, ui, palette);
+    }
 }
 
 /// Values and inventory rows are supplied by the worker, not local caches.
@@ -321,7 +486,7 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     for product in products {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
-            let wide = ui.available_width() >= 850.0;
+            let wide = ui.available_width() >= 1120.0;
             ui.horizontal_centered(|ui| {
                 let source = product.image_url.as_deref().unwrap_or("");
                 let visible = ui.is_rect_visible(egui::Rect::from_min_size(
@@ -341,7 +506,7 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     icon(ui, Icon::Package, palette.accent, 20.0);
                 }
                 let identity_width = if wide {
-                    (ui.available_width() - 610.0).max(120.0)
+                    (ui.available_width() - 780.0).max(120.0)
                 } else {
                     ui.available_width().max(40.0)
                 };
@@ -420,6 +585,46 @@ fn product_actions(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, pro
     if app.role_policy().can_edit_prices() && secondary_button(ui, t!(app.locale, "Edit"), palette)
     {
         app.product_editor = Some(ProductEditor::for_product(product));
+    }
+    // The worker's label includes a price, which stock-only users must not see.
+    if app.role_policy().show_prices() && secondary_button(ui, t!(app.locale, "Label"), palette) {
+        open_product_label(app, product);
+    }
+    if app.role_policy().can_delete_products() {
+        let current = app
+            .product_delete
+            .as_ref()
+            .filter(|pending| pending.id == product.id);
+        if let Some(pending) = current {
+            if pending.job.is_some() {
+                ui.label(RichText::new(t!(app.locale, "Deleting…")).color(palette.secondary));
+            } else {
+                let seconds = pending
+                    .deadline
+                    .saturating_duration_since(std::time::Instant::now())
+                    .as_secs_f32()
+                    .ceil() as u32;
+                if secondary_button(
+                    ui,
+                    format!("{} ({seconds})", t!(app.locale, "Undo")),
+                    palette,
+                ) {
+                    app.product_delete = None;
+                }
+            }
+        } else {
+            ui.add_enabled_ui(app.product_delete.is_none(), |ui| {
+                if secondary_button(ui, t!(app.locale, "Delete"), palette) {
+                    app.product_delete = Some(ProductDelete {
+                        id: product.id,
+                        deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
+                        job: None,
+                        cancel: None,
+                    });
+                    ui.ctx().request_repaint();
+                }
+            });
+        }
     }
 }
 

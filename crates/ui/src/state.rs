@@ -182,6 +182,10 @@ impl RolePolicy {
         self.office || self.stock
     }
 
+    pub(crate) fn can_delete_products(self) -> bool {
+        self.admin
+    }
+
     pub(crate) fn can_edit_prices(self) -> bool {
         self.office
     }
@@ -576,6 +580,9 @@ pub struct AtlasApp {
 
     // ── editors / dialogs ──
     pub product_editor: Option<ProductEditor>,
+    pub(crate) product_delete: Option<crate::screens::products::ProductDelete>,
+    pub(crate) product_label: Option<crate::screens::products::ProductLabel>,
+    pub(crate) product_label_evict: Option<String>,
     pub client_editor: Option<ClientEditor>,
     pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
@@ -774,6 +781,9 @@ impl AtlasApp {
             nav_badges: Cache::default(),
             nav_badges_retry_at: None,
             product_editor: None,
+            product_delete: None,
+            product_label: None,
+            product_label_evict: None,
             client_editor: None,
             vendor_editor: None,
             category_editor: None,
@@ -1110,6 +1120,7 @@ impl AtlasApp {
     pub fn modal_open(&self) -> bool {
         self.confirm_dialog.is_some()
             || self.product_editor.is_some()
+            || self.product_label.is_some()
             || self.client_editor.is_some()
             || self.vendor_editor.is_some()
             || self.expense_editor.is_some()
@@ -1148,6 +1159,10 @@ impl AtlasApp {
                 self.scan.duplicate = false;
                 self.scan.error = None;
             }
+            return true;
+        }
+        if let Some(label) = self.product_label.take() {
+            self.product_label_evict = Some(label.uri);
             return true;
         }
         // The stock dialog paints above the product editor, so Escape must
@@ -1308,6 +1323,10 @@ impl AtlasApp {
         self.business_search_query.clear();
         self.business_search = Cache::default();
         self.product_editor = None;
+        self.product_delete = None;
+        if let Some(label) = self.product_label.take() {
+            self.product_label_evict = Some(label.uri);
+        }
         self.stock_dialog = None;
         self.stock_history = None;
         self.quick_sale = None;
