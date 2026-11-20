@@ -585,6 +585,7 @@ pub struct AtlasApp {
     pub(crate) product_label_evict: Option<String>,
     pub(crate) product_scanner_open: bool,
     pub client_editor: Option<ClientEditor>,
+    pub(crate) client_delete: Option<crate::screens::clients::ClientDelete>,
     pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
     pub(crate) stock_history: Option<crate::screens::products::StockHistory>,
@@ -787,6 +788,7 @@ impl AtlasApp {
             product_label_evict: None,
             product_scanner_open: false,
             client_editor: None,
+            client_delete: None,
             vendor_editor: None,
             category_editor: None,
             unit_editor: None,
@@ -1126,6 +1128,7 @@ impl AtlasApp {
             || self.product_scanner_open
             || self.stock_report_open
             || self.client_editor.is_some()
+            || self.client_delete.as_ref().is_some_and(|pending| pending.confirming)
             || self.vendor_editor.is_some()
             || self.expense_editor.is_some()
             || self.delivery_note_editor.is_some()
@@ -1162,6 +1165,20 @@ impl AtlasApp {
                 self.scan.quick = None;
                 self.scan.duplicate = false;
                 self.scan.error = None;
+            }
+            return true;
+        }
+        if self
+            .client_delete
+            .as_ref()
+            .is_some_and(|pending| pending.confirming)
+        {
+            if self
+                .client_delete
+                .as_ref()
+                .is_some_and(|pending| !pending.saving())
+            {
+                self.client_delete = None;
             }
             return true;
         }
@@ -1336,6 +1353,7 @@ impl AtlasApp {
         self.business_search = Cache::default();
         self.product_editor = None;
         self.product_delete = None;
+        self.client_delete = None;
         self.product_scanner_open = false;
         if let Some(label) = self.product_label.take() {
             self.product_label_evict = Some(label.uri.clone());

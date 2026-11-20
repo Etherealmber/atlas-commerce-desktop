@@ -1867,3 +1867,12 @@ msgstr "Suivant"
 
 msgid "Previous"
 msgstr "Précédent"
+
+msgid "Delete client"
+msgstr "Supprimer le client"
+
+msgid "Client deleted."
+msgstr "Client supprimé."
+
+msgid "This action is permanent. Confirm to continue."
+msgstr "Cette action est définitive. Confirmez pour continuer."

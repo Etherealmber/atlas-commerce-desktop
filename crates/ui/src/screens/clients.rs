@@ -17,6 +17,180 @@ use crate::widgets::{
 };
 use crate::{t, widgets};
 
+/// Web-compatible ten-second undo followed by an explicit confirmation.
+pub(crate) struct ClientDelete {
+    id: i64,
+    name: String,
+    deadline: std::time::Instant,
+    pub(crate) confirming: bool,
+    job: Option<Job<Result<atlas_api::clients::ClientDeletion, ApiError>>>,
+    cancel: Option<tokio::sync::oneshot::Sender<()>>,
+    error: Option<String>,
+}
+
+impl ClientDelete {
+    pub(crate) fn saving(&self) -> bool {
+        self.job.is_some()
+    }
+}
+impl Drop for ClientDelete {
+    fn drop(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(());
+        }
+    }
+}
+
+pub(crate) fn poll_client_delete(app: &mut AtlasApp, ctx: &egui::Context) {
+    let on_clients = matches!(
+        app.screen,
+        crate::state::Screen::Shell(crate::state::Route::Clients)
+    );
+    if let Some(pending) = app.client_delete.as_mut() {
+        if pending.job.is_none() && !on_clients {
+            app.client_delete = None;
+            return;
+        }
+        if !pending.confirming && pending.deadline <= std::time::Instant::now() {
+            pending.confirming = true;
+            ctx.request_repaint();
+        }
+        if let Some(result) = pending.job.as_ref().and_then(Job::poll) {
+            pending.job = None;
+            pending.cancel = None;
+            match result {
+                Ok(result) => {
+                    let id = pending.id;
+                    app.client_delete = None;
+                    if app.selected_client == Some(id) {
+                        app.selected_client = None;
+                        app.client_invoice_id = None;
+                        app.client_invoices = Default::default();
+                        app.invoice_detail_id = None;
+                        app.invoice_detail = Default::default();
+                        app.client_report_id = None;
+                        app.client_report = Default::default();
+                    }
+                    app.notice(
+                        result
+                            .message
+                            .unwrap_or_else(|| t!(app.locale, "Client deleted.").into_owned()),
+                    );
+                    app.load_clients();
+                }
+                Err(error) => pending.error = Some(error.message),
+            }
+            ctx.request_repaint();
+        } else if !pending.confirming || pending.job.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+}
+
+fn delete_client_button(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, client: &Client) {
+    let current = app
+        .client_delete
+        .as_ref()
+        .filter(|pending| pending.id == client.id);
+    if let Some(pending) = current {
+        if !pending.confirming {
+            let seconds = pending
+                .deadline
+                .saturating_duration_since(std::time::Instant::now())
+                .as_secs_f32()
+                .ceil() as u32;
+            if secondary_button(
+                ui,
+                format!("{} ({seconds})", t!(app.locale, "Undo")),
+                palette,
+            ) {
+                app.client_delete = None;
+            }
+        }
+    } else {
+        ui.add_enabled_ui(app.client_delete.is_none(), |ui| {
+            if secondary_button(ui, t!(app.locale, "Delete"), palette) {
+                app.client_delete = Some(ClientDelete {
+                    id: client.id,
+                    name: client.name.clone(),
+                    deadline: std::time::Instant::now() + std::time::Duration::from_secs(10),
+                    confirming: false,
+                    job: None,
+                    cancel: None,
+                    error: None,
+                });
+                ui.ctx().request_repaint();
+            }
+        });
+    }
+}
+
+fn draw_delete_confirmation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let Some(pending) = app
+        .client_delete
+        .as_ref()
+        .filter(|pending| pending.confirming)
+    else {
+        return;
+    };
+    let name = pending.name.clone();
+    let saving = pending.saving();
+    let error = pending.error.clone();
+    let screen = ui.ctx().input(|i| i.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            440.0_f32.min((screen.width() - 32.0).max(1.0)),
+            230.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
+    );
+    if !saving && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-delete-scrim")) {
+        app.client_delete = None;
+        return;
+    }
+    widgets::overlay_at(ui, rect, |ui| {
+        widgets::dialog_frame(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(t!(app.locale, "Delete client"))
+                    .strong()
+                    .color(palette.text)
+                    .size(17.0),
+            );
+            ui.add_space(8.0);
+            ui.label(format!(
+                "{} : {}",
+                t!(app.locale, "This action is permanent. Confirm to continue."),
+                name
+            ));
+            if let Some(error) = error {
+                error_banner(ui, &error, palette);
+            }
+            ui.add_space(12.0);
+            ui.horizontal_wrapped(|ui| {
+                if primary_button(ui, t!(app.locale, "Delete"), palette, !saving)
+                    && let (Some(api), Some(pending)) =
+                        (app.client.clone(), app.client_delete.as_mut())
+                {
+                    let id = pending.id;
+                    let (cancel, cancelled) = tokio::sync::oneshot::channel();
+                    pending.cancel = Some(cancel);
+                    pending.error = None;
+                    pending.job = Some(app.runner.spawn(async move {
+                        tokio::select! {
+                            result = api.delete_client(id) => result,
+                            _ = cancelled => Err(ApiError::client("Suppression annulée.")),
+                        }
+                    }));
+                }
+                if !saving && secondary_button(ui, t!(app.locale, "Cancel"), palette) {
+                    app.client_delete = None;
+                }
+            });
+        });
+    });
+}
+
 /// Create/edit form. `editing_id` is `None` for creation.
 #[derive(Default)]
 pub struct ClientEditor {
@@ -199,6 +373,13 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.client_editor.is_some() {
         draw_editor(app, ui, palette);
     }
+    if app
+        .client_delete
+        .as_ref()
+        .is_some_and(|pending| pending.confirming)
+    {
+        draw_delete_confirmation(app, ui, palette);
+    }
 }
 
 fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -265,8 +446,8 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             let width = ui.available_width();
             ui.horizontal_centered(|ui| {
                 icon(ui, Icon::User, palette.secondary, 18.0);
-                let wide = width >= 700.0;
-                let text_width = (width - if wide { 440.0 } else { 160.0 }).max(40.0);
+                let wide = width >= 850.0;
+                let text_width = (width - if wide { 550.0 } else { 160.0 }).max(40.0);
                 ui.allocate_ui_with_layout(
                     vec2(text_width, height),
                     egui::Layout::top_down(egui::Align::Min),
@@ -313,6 +494,7 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if secondary_button(ui, t!(app.locale, "Edit"), palette) {
                         app.client_editor = Some(ClientEditor::for_client(client));
                     }
+                    delete_client_button(app, ui, palette, client);
                 }
             });
         });
@@ -380,6 +562,7 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if secondary_button(ui, t!(app.locale, "Edit"), palette) {
             app.client_editor = Some(ClientEditor::for_client(client));
         }
+        delete_client_button(app, ui, palette, client);
     });
     ui.add_space(10.0);
 
