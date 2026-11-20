@@ -38,6 +38,15 @@ pub(crate) struct ProductLabel {
     job: Option<Job<Result<Vec<u8>, ApiError>>>,
     loaded: bool,
     error: Option<String>,
+    cancel: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl Drop for ProductLabel {
+    fn drop(&mut self) {
+        if let Some(cancel) = self.cancel.take() {
+            let _ = cancel.send(());
+        }
+    }
 }
 
 /// Run only one bounded request, and cancel the countdown on navigation.
@@ -48,6 +57,7 @@ pub(crate) fn poll_product_actions(app: &mut AtlasApp, ctx: &egui::Context) {
     if let Some(label) = app.product_label.as_mut() {
         if let Some(result) = label.job.as_ref().and_then(Job::poll) {
             label.job = None;
+            label.cancel = None;
             match result {
                 Ok(bytes) => {
                     ctx.forget_image(&label.uri);
@@ -114,16 +124,20 @@ fn open_product_label(app: &mut AtlasApp, product: &Product) {
         return;
     };
     if let Some(old) = app.product_label.take() {
-        app.product_label_evict = Some(old.uri);
+        app.product_label_evict = Some(old.uri.clone());
     }
     let id = product.id;
+    let (cancel, cancelled) = tokio::sync::oneshot::channel();
     app.product_label = Some(ProductLabel {
         uri: format!("bytes://atlas-product-label-{id}.svg"),
         name: product.name.clone(),
-        job: Some(
-            app.runner
-                .spawn(async move { client.product_label(id).await }),
-        ),
+        job: Some(app.runner.spawn(async move {
+            tokio::select! {
+                result = client.product_label(id) => result,
+                _ = cancelled => Err(ApiError::client("Chargement annulé.")),
+            }
+        })),
+        cancel: Some(cancel),
         loaded: false,
         error: None,
     });
@@ -143,7 +157,7 @@ fn draw_product_label(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
     );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-label-scrim")) {
         if let Some(label) = app.product_label.take() {
-            app.product_label_evict = Some(label.uri);
+            app.product_label_evict = Some(label.uri.clone());
         }
         return;
     }
@@ -174,7 +188,7 @@ fn draw_product_label(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
             if secondary_button(ui, t!(app.locale, "Close"), palette)
                 && let Some(label) = app.product_label.take()
             {
-                app.product_label_evict = Some(label.uri);
+                app.product_label_evict = Some(label.uri.clone());
             }
         });
     });

@@ -1166,7 +1166,7 @@ impl AtlasApp {
             return true;
         }
         if let Some(label) = self.product_label.take() {
-            self.product_label_evict = Some(label.uri);
+            self.product_label_evict = Some(label.uri.clone());
             return true;
         }
         if self.stock_report_open {
@@ -1338,7 +1338,7 @@ impl AtlasApp {
         self.product_delete = None;
         self.product_scanner_open = false;
         if let Some(label) = self.product_label.take() {
-            self.product_label_evict = Some(label.uri);
+            self.product_label_evict = Some(label.uri.clone());
         }
         self.stock_dialog = None;
         self.stock_history = None;
