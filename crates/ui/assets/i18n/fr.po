@@ -1855,3 +1855,15 @@ msgstr "Annuler"
 
 msgid "Scan barcode"
 msgstr "Scanner un code-barres"
+
+msgid "Classification"
+msgstr "Classement"
+
+msgid "Price and stock"
+msgstr "Prix et stock"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Previous"
+msgstr "Précédent"

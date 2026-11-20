@@ -184,6 +184,7 @@ fn draw_product_label(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
 #[derive(Default)]
 pub struct ProductEditor {
     pub editing_id: Option<i64>,
+    pub step: usize,
     pub name: String,
     pub sku: String,
     pub barcode: String,
@@ -196,6 +197,7 @@ pub struct ProductEditor {
     pub saving: bool,
     /// A 409 `DUPLICATE_PRODUCT` was answered; the next save forces it.
     pub force_duplicate: bool,
+    duplicate_identity: Option<(String, String, String)>,
     pub error: Option<String>,
     pub job: Option<Job<Result<Product, ApiError>>>,
 }
@@ -205,6 +207,9 @@ impl ProductEditor {
     pub fn new() -> Self {
         Self {
             unit: "unité".to_owned(),
+            price: "0".to_owned(),
+            stock: "0".to_owned(),
+            threshold: "5".to_owned(),
             ..Self::default()
         }
     }
@@ -937,6 +942,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             Err(error) => {
                 if error.code.as_deref() == Some("DUPLICATE_PRODUCT") {
                     editor.force_duplicate = true;
+                    editor.duplicate_identity = Some(editor.identity());
                     editor.error = Some(
                         if editor.editing_id.is_some() {
                             t!(
@@ -993,7 +999,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             egui::ScrollArea::vertical()
                 .max_height((rect.height() - 46.0).max(1.0))
                 .show(ui, |ui| {
-                    ui.set_min_size(vec2(476.0, 0.0));
+                    ui.set_width(ui.available_width());
                     ui.label(
                         RichText::new(
                             if app
@@ -1019,6 +1025,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .product_editor
                         .as_ref()
                         .is_some_and(|editor| editor.saving);
+                    let step = app.product_editor.as_ref().map_or(0, |editor| editor.step);
                     let name_empty = app
                         .product_editor
                         .as_ref()
@@ -1027,55 +1034,95 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .product_editor
                         .as_ref()
                         .and_then(|editor| editor.error.clone());
-
+                    let section = match step {
+                        0 => t!(locale, "Identity"),
+                        1 => t!(locale, "Classification"),
+                        _ => t!(locale, "Price and stock"),
+                    };
+                    ui.label(
+                        RichText::new(format!(
+                            "{} {}/3 · {}",
+                            t!(locale, "Step"),
+                            step + 1,
+                            section
+                        ))
+                        .color(palette.secondary),
+                    );
+                    ui.add_space(8.0);
                     if let Some(editor) = app.product_editor.as_mut() {
-                        labelled_field(ui, t!(locale, "Name"), &mut editor.name, palette, false);
-                        labelled_field(ui, t!(locale, "SKU"), &mut editor.sku, palette, false);
-                        labelled_field(
-                            ui,
-                            t!(locale, "Barcode"),
-                            &mut editor.barcode,
-                            palette,
-                            false,
-                        );
-                        labelled_field(
-                            ui,
-                            t!(locale, "Category"),
-                            &mut editor.category,
-                            palette,
-                            false,
-                        );
-                        labelled_field(ui, t!(locale, "Unit"), &mut editor.unit, palette, false);
-                        labelled_field(
-                            ui,
-                            t!(locale, "Price (MAD)"),
-                            &mut editor.price,
-                            palette,
-                            false,
-                        );
-                        if editor.editing_id.is_none() {
-                            labelled_field(
-                                ui,
-                                t!(locale, "Initial stock"),
-                                &mut editor.stock,
-                                palette,
-                                false,
-                            );
+                        match step {
+                            0 => {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Name"),
+                                    &mut editor.name,
+                                    palette,
+                                    false,
+                                );
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "SKU"),
+                                    &mut editor.sku,
+                                    palette,
+                                    false,
+                                );
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Description"),
+                                    &mut editor.description,
+                                    palette,
+                                    false,
+                                );
+                            }
+                            1 => {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Category"),
+                                    &mut editor.category,
+                                    palette,
+                                    false,
+                                );
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Unit"),
+                                    &mut editor.unit,
+                                    palette,
+                                    false,
+                                );
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Barcode"),
+                                    &mut editor.barcode,
+                                    palette,
+                                    false,
+                                );
+                            }
+                            _ => {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Price (MAD)"),
+                                    &mut editor.price,
+                                    palette,
+                                    false,
+                                );
+                                if editor.editing_id.is_none() {
+                                    labelled_field(
+                                        ui,
+                                        t!(locale, "Initial stock"),
+                                        &mut editor.stock,
+                                        palette,
+                                        false,
+                                    );
+                                }
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Low stock threshold"),
+                                    &mut editor.threshold,
+                                    palette,
+                                    false,
+                                );
+                            }
                         }
-                        labelled_field(
-                            ui,
-                            t!(locale, "Description"),
-                            &mut editor.description,
-                            palette,
-                            false,
-                        );
-                        labelled_field(
-                            ui,
-                            t!(locale, "Low stock threshold"),
-                            &mut editor.threshold,
-                            palette,
-                            false,
-                        );
                     }
 
                     if let Some(error) = &error {
@@ -1084,8 +1131,24 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
                     ui.add_space(10.0);
                     widgets::dialog_actions(ui, |ui| {
-                        let save =
-                            primary_button(ui, t!(locale, "Save"), palette, !saving && !name_empty);
+                        let save = primary_button(
+                            ui,
+                            if step == 2 {
+                                t!(locale, "Save")
+                            } else {
+                                t!(locale, "Next")
+                            },
+                            palette,
+                            !saving && !name_empty,
+                        );
+                        if step > 0
+                            && !saving
+                            && secondary_button(ui, t!(locale, "Previous"), palette)
+                            && let Some(editor) = app.product_editor.as_mut()
+                        {
+                            editor.step -= 1;
+                            editor.error = None;
+                        }
                         let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
                         if cancel {
                             if dirty {
@@ -1102,7 +1165,14 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             }
                         }
                         if save {
-                            submit_product(app);
+                            if step < 2 {
+                                if let Some(editor) = app.product_editor.as_mut() {
+                                    editor.step += 1;
+                                    editor.error = None;
+                                }
+                            } else {
+                                submit_product(app);
+                            }
                         }
                     });
                 });
@@ -1112,17 +1182,26 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 impl ProductEditor {
     pub(crate) fn is_dirty(&self) -> bool {
-        !self.name.is_empty()
+        self.editing_id.is_some()
+            || !self.name.is_empty()
             || !self.sku.is_empty()
             || !self.barcode.is_empty()
             || !self.category.is_empty()
             // The form seeds Unit with its default "unité"; only a deviation
             // (not any non-empty value) counts as an unsaved edit.
             || self.unit.trim() != "unité"
-            || !self.price.is_empty()
-            || !self.stock.is_empty()
-            || !self.threshold.trim().is_empty()
+            || self.price.trim() != "0"
+            || self.stock.trim() != "0"
+            || self.threshold.trim() != "5"
             || !self.description.trim().is_empty()
+    }
+
+    fn identity(&self) -> (String, String, String) {
+        (
+            self.name.trim().to_owned(),
+            self.sku.trim().to_owned(),
+            self.barcode.trim().to_owned(),
+        )
     }
 
     fn parse(&self) -> Result<atlas_api::models::CreateProduct, String> {
@@ -1186,7 +1265,8 @@ fn submit_product(app: &mut AtlasApp) {
             return;
         }
     };
-    let force = editor.force_duplicate;
+    let force =
+        editor.force_duplicate && editor.duplicate_identity.as_ref() == Some(&editor.identity());
     let editing_id = editor.editing_id;
     let update = atlas_api::models::UpdateProduct {
         name: product.name.clone(),
@@ -1396,4 +1476,33 @@ fn submit_adjust(app: &mut AtlasApp) {
     dialog.saving = true;
     dialog.error = None;
     dialog.job = Some(job);
+}
+
+#[cfg(test)]
+mod product_editor_tests {
+    use super::ProductEditor;
+
+    #[test]
+    fn fresh_defaults_are_clean_and_wire_stock_is_not_used_on_edit() {
+        let mut editor = ProductEditor::new();
+        assert!(!editor.is_dirty());
+        editor.name = "Produit".into();
+        assert!(editor.is_dirty());
+        assert_eq!(editor.parse().unwrap().stock_quantity, 0.0);
+        editor.editing_id = Some(42);
+        editor.stock = "-12".into();
+        assert_eq!(editor.parse().unwrap().stock_quantity, 0.0);
+    }
+
+    #[test]
+    fn rejects_non_finite_and_negative_amounts() {
+        let mut editor = ProductEditor::new();
+        editor.name = "Produit".into();
+        for value in ["-1", "NaN", "inf"] {
+            editor.price = value.into();
+            assert!(editor.parse().is_err());
+        }
+        editor.price = "1,5".into();
+        assert_eq!(editor.parse().unwrap().price, 1.5);
+    }
 }
