@@ -76,6 +76,16 @@ pub(crate) fn poll_product_actions(app: &mut AtlasApp, ctx: &egui::Context) {
         app.screen,
         crate::state::Screen::Shell(crate::state::Route::Products)
     );
+    if !on_products {
+        if let Some(label) = app.product_label.take() {
+            ctx.forget_image(&label.uri);
+        }
+        app.stock_report_open = false;
+        app.product_scanner_open = false;
+        if app.scan.create_job.is_none() {
+            app.scan.quick = None;
+        }
+    }
     if let Some(pending) = app.product_delete.as_mut() {
         if pending.job.is_none() && !on_products {
             app.product_delete = None;
