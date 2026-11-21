@@ -9,7 +9,7 @@ publish = false
 [target.'cfg(target_os = "macos")'.dependencies]
 atlas-core.workspace = true
 url.workspace = true
-wry = { version = "=0.56.1", default-features = false }
+wry = { version = "=0.57.2", default-features = false }
 objc2 = "0.6"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSString", "NSURL", "NSURLRequest"] }
 objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "objc2-app-kit", "WKWebView", "WKNavigation", "WKNavigationDelegate", "WKNavigationAction", "WKNavigationResponse", "WKFrameInfo"] }
