@@ -92,7 +92,7 @@ fn build(route: &str) -> AtlasApp {
         "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
-        "employees" => Route::Employees,
+        "employees" | "employee-editor" | "employee-editor-narrow" => Route::Employees,
         "settings" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
@@ -114,6 +114,7 @@ fn build(route: &str) -> AtlasApp {
         app.login.error = None;
         app.qr.active = true;
         app.qr.status = "claimed".into();
+        app.qr.qr_url = "https://fixture.invalid/login/qr?t=fictional&mode=pc".into();
     }
     if route == "settings" {
         // Fictional update state: proves the title-bar icon and the
@@ -327,6 +328,9 @@ fn build(route: &str) -> AtlasApp {
         app.client_invoice_id = Some(1);
         app.client_invoices.data = app.invoices.data.clone();
     }
+    if matches!(route, "employee-editor" | "employee-editor-narrow") {
+        app.employee_new = Some(atlas_ui::screens::employees::NewEmployeeForm::default());
+    }
     if route == "employees" {
         app.employee_detail_id = Some(1);
         app.employee_detail.data = Some(
@@ -388,7 +392,10 @@ fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
     let size = if route == "palette-narrow" {
         [640.0, 480.0]
-    } else if matches!(route.as_str(), "products-narrow" | "clients-narrow") {
+    } else if matches!(
+        route.as_str(),
+        "products-narrow" | "clients-narrow" | "employee-editor-narrow"
+    ) {
         [720.0, 520.0]
     } else {
         [1280.0, 800.0]

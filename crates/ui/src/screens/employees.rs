@@ -121,16 +121,29 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             detail(app, ui, palette);
         });
     }
+}
 
-    if app.employee_new.is_some() {
-        new_dialog(app, ui, palette);
+/// Render dialogs outside the page scroll area so they are not clipped by it.
+pub(super) fn draw_dialogs(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    if app.employee_new.is_none() && app.employee_pay.is_none() && app.employee_resign.is_none() {
+        return;
     }
-    if app.employee_pay.is_some() {
-        pay_dialog(app, ui, palette);
-    }
-    if app.employee_resign.is_some() {
-        resign_dialog(app, ui, palette);
-    }
+    let screen = ctx.input(|input| input.viewport_rect());
+    egui::Area::new(egui::Id::new("employee-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            if app.employee_new.is_some() {
+                new_dialog(app, ui, palette);
+            }
+            if app.employee_pay.is_some() {
+                pay_dialog(app, ui, palette);
+            }
+            if app.employee_resign.is_some() {
+                resign_dialog(app, ui, palette);
+            }
+        });
 }
 
 fn toolbar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -620,8 +633,8 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(560.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if !app.employee_new.as_ref().is_some_and(|form| form.saving)
-        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-new-scrim"))
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-new-scrim"))
+        && !app.employee_new.as_ref().is_some_and(|form| form.saving)
     {
         app.employee_new = None;
         return;
@@ -798,8 +811,8 @@ fn pay_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(480.0, 360.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if !app.employee_pay.as_ref().is_some_and(|form| form.saving)
-        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-pay-scrim"))
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-pay-scrim"))
+        && !app.employee_pay.as_ref().is_some_and(|form| form.saving)
     {
         app.employee_pay = None;
         return;
@@ -847,8 +860,8 @@ fn resign_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(480.0, 320.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if !app.employee_resign.as_ref().is_some_and(|form| form.saving)
-        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-resign-scrim"))
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-resign-scrim"))
+        && !app.employee_resign.as_ref().is_some_and(|form| form.saving)
     {
         app.employee_resign = None;
         return;

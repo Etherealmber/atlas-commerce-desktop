@@ -203,6 +203,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 
     // The palette sits above the panels but below a blocking confirmation,
     // which always owns the topmost layer.
+    if matches!(app.screen, Screen::Shell(Route::Employees)) {
+        super::employees::draw_dialogs(app, ctx, palette);
+    }
     crate::shortcuts::draw_palette(app, ui, ctx, palette);
 
     if app.confirm_dialog.is_some() {
