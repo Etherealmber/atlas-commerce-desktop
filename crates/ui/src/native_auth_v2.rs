@@ -37,7 +37,9 @@ pub(crate) fn fictional(server: String) -> NativeLogin {
         server: Some(server),
         qr_url: phone_qr(&base, &"a".repeat(64)),
         pairing_code: Some("ABCDE-FGHIJ".to_owned()),
-        ..Default::default()
+        cancel: None,
+        events: None,
+        job: None,
     }
 }
 
@@ -396,7 +398,8 @@ pub(crate) fn start(app: &mut AtlasApp) {
         cancel: Some(flag),
         events: Some(rx),
         job: Some(job),
-        ..Default::default()
+        qr_url: None,
+        pairing_code: None,
     };
 }
 pub(crate) fn cancel(app: &mut AtlasApp) {
