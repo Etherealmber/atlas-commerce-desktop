@@ -1963,3 +1963,6 @@ msgstr "Identification"
 
 msgid "Work"
 msgstr "Travail"
+
+msgid "Password and passkey sign-in use your browser until the server supports a secure native flow."
+msgstr "La connexion par mot de passe ou clé d’accès utilise votre navigateur tant que le serveur ne propose pas de parcours natif sécurisé."

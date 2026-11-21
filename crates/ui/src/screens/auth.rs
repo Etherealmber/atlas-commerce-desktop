@@ -806,8 +806,8 @@ enum LoginTab {
     Qr,
 }
 
-/// Start the hosted login automatically, never the legacy native form. The
-/// local screen only reports progress/errors and offers an explicit fallback.
+/// Native sign-in entry point. QR pairing is opt-in; the proof-bound desktop
+/// browser flow remains an explicit fallback for server-side challenges.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
     if !matches!(app.screen, Screen::Login) {
@@ -821,20 +821,6 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         app.login.browser_auto_started = true;
         start_verify_link(app, link);
     }
-    if app.login.pending_link.is_none()
-        && should_start_hosted_login(
-            app.login.browser_auto_started,
-            app.login.busy,
-            app.qr.active,
-        )
-    {
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        let started = crate::browser_auth::start_embedded(app);
-        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-        let started = crate::browser_auth::start(app);
-        app.login.browser_auto_started = started;
-    }
-
     // During the required v1 handshake, show a minimal cancellable status,
     // not a second login page. The validated server page opens as soon as its
     // authorization URL is available.
@@ -868,7 +854,9 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 crate::browser_auth::cancel(app);
             }
             ui.add_space(8.0);
-            if secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette) {
+            if !app.requires_password
+                && secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette)
+            {
                 crate::browser_auth::cancel(app);
                 start_qr_session(app);
             }
@@ -876,8 +864,8 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
 
-    // This is status and recovery chrome only; the login form remains the
-    // server's unmodified page inside its isolated browser context.
+    // Native entry screen. The external browser fallback uses the server's
+    // unmodified page, and never injects credentials or scripts.
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.vertical_centered(|ui| {
             // Keep the native sign-in surface centered on a large window and
@@ -919,7 +907,9 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.label(RichText::new(notice).color(palette.secondary));
                             ui.add_space(8.0);
                         }
-                        if secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette) {
+                        if !app.requires_password
+                            && primary_button(ui, t!(app.locale, "Sign in with a QR code"), palette, !app.login.busy)
+                        {
                             start_qr_session(app);
                         }
                         ui.add_space(8.0);
@@ -927,19 +917,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.spinner();
                             ui.add_space(8.0);
                         }
-                        #[cfg(any(
-                            target_os = "windows",
-                            target_os = "linux",
-                            target_os = "macos"
-                        ))]
-                        if primary_button(
-                            ui,
-                            t!(app.locale, "Retry integrated sign-in"),
-                            palette,
-                            !app.login.busy,
-                        ) {
-                            crate::browser_auth::start_embedded(app);
-                        }
+                        ui.label(RichText::new(t!(app.locale, "Password and passkey sign-in use your browser until the server supports a secure native flow.")).color(palette.secondary).size(12.5));
                         ui.add_space(8.0);
                         ui.add_enabled_ui(!app.login.busy, |ui| {
                             if secondary_button(
@@ -956,12 +934,6 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             });
         });
     });
-}
-
-/// Do not retry automatically after cancellation or failure, and do not race
-/// an existing deep-link or QR operation.
-fn should_start_hosted_login(started: bool, busy: bool, qr_active: bool) -> bool {
-    !started && !busy && !qr_active
 }
 
 // The earlier native login implementation is retained for its existing QR,
@@ -2054,7 +2026,7 @@ pub(crate) fn draw_embedded_header(
 
 #[cfg(test)]
 mod hosted_login_entry_tests {
-    use super::{should_start_hosted_login, splash_can_finish};
+    use super::splash_can_finish;
     use std::time::Duration;
 
     #[test]
@@ -2063,13 +2035,5 @@ mod hosted_login_entry_tests {
         assert!(!splash_can_finish(Duration::ZERO, true, true));
         assert!(!splash_can_finish(Duration::ZERO, false, false));
         assert!(splash_can_finish(Duration::from_millis(650), false, false));
-    }
-
-    #[test]
-    fn starts_once_and_never_races_an_existing_flow() {
-        assert!(should_start_hosted_login(false, false, false));
-        assert!(!should_start_hosted_login(true, false, false));
-        assert!(!should_start_hosted_login(false, true, false));
-        assert!(!should_start_hosted_login(false, false, true));
     }
 }
