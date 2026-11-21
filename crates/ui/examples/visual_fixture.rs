@@ -35,11 +35,16 @@ impl eframe::App for Fixture {
             );
         }
         self.app.draw(ui, &ctx, &self.palette);
-        if matches!(self.route.as_str(), "product-wizard" | "client-wizard") {
+        if matches!(
+            self.route.as_str(),
+            "product-wizard" | "client-wizard" | "employee-wizard"
+        ) {
             let step = if self.route == "product-wizard" {
                 self.app.product_editor.as_ref().map(|editor| editor.step)
-            } else {
+            } else if self.route == "client-wizard" {
                 self.app.client_editor.as_ref().map(|editor| editor.step)
+            } else {
+                self.app.employee_new.as_ref().map(|editor| editor.step)
             };
             if step != self.wizard_step {
                 self.wizard_step = step;
@@ -108,7 +113,9 @@ fn build(route: &str) -> AtlasApp {
         "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
-        "employees" | "employee-editor" | "employee-editor-narrow" => Route::Employees,
+        "employees" | "employee-editor" | "employee-editor-narrow" | "employee-wizard" => {
+            Route::Employees
+        }
         "settings" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
@@ -347,6 +354,13 @@ fn build(route: &str) -> AtlasApp {
     if matches!(route, "employee-editor" | "employee-editor-narrow") {
         app.employee_new = Some(atlas_ui::screens::employees::NewEmployeeForm::default());
     }
+    if route == "employee-wizard" {
+        let form = atlas_ui::screens::employees::NewEmployeeForm {
+            first_name: "Amina".into(),
+            ..Default::default()
+        };
+        app.employee_new = Some(form);
+    }
     if route == "employees" {
         app.employee_detail_id = Some(1);
         app.employee_detail.data = Some(
@@ -420,6 +434,7 @@ fn main() -> eframe::Result<()> {
             | "employee-editor-narrow"
             | "product-wizard"
             | "client-wizard"
+            | "employee-wizard"
     ) {
         [720.0, 520.0]
     } else {

@@ -18,6 +18,7 @@ use crate::{t, widgets};
 
 #[derive(Default)]
 pub struct NewEmployeeForm {
+    pub step: usize,
     pub first_name: String,
     pub last_name: String,
     pub phone: String,
@@ -624,7 +625,10 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let screen = ui.ctx().input(|input| input.viewport_rect());
     let rect = egui::Rect::from_center_size(
         screen.center(),
-        vec2(560.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
+        vec2(
+            560.0_f32.min((screen.width() - 32.0).max(1.0)),
+            620.0_f32.min((screen.height() - 32.0).max(1.0)),
+        ),
     );
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-new-scrim"))
         && !app.employee_new.as_ref().is_some_and(|form| form.saving)
@@ -636,136 +640,181 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let (mut save, mut cancel) = (false, false);
     widgets::overlay_at(ui, rect, |ui| {
         dialog_frame(palette).show(ui, |ui| {
+            ui.set_width((rect.width() - 44.0).max(1.0));
+            let Some(form) = app.employee_new.as_mut() else {
+                return;
+            };
+            let step = form.step;
+            let section = match step {
+                0 => t!(locale, "Personal"),
+                1 => t!(locale, "Identification"),
+                2 => t!(locale, "Work"),
+                3 => t!(locale, "Contact"),
+                _ => t!(locale, "Salary"),
+            };
+            ui.label(
+                RichText::new(t!(locale, "New employee"))
+                    .color(palette.text)
+                    .font(crate::fonts::semibold(17.0)),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} {}/5 · {}",
+                    t!(locale, "Step"),
+                    step + 1,
+                    section
+                ))
+                .color(palette.secondary),
+            );
+            ui.add_space(8.0);
             egui::ScrollArea::vertical()
-                .max_height((rect.height() - 46.0).max(1.0))
+                .id_salt(("employee-wizard-step", step))
+                .max_height((rect.height() - 190.0).max(1.0))
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    ui.set_min_size(vec2(512.0, 0.0));
-                    ui.label(
-                        RichText::new(t!(locale, "New employee"))
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
-                    );
-                    ui.add_space(10.0);
-                    if let Some(form) = app.employee_new.as_mut() {
-                        ui.columns(2, |columns| {
+                    match step {
+                        0 => {
                             labelled_field(
-                                &mut columns[0],
+                                ui,
                                 t!(locale, "First name"),
                                 &mut form.first_name,
                                 palette,
                                 false,
                             );
                             labelled_field(
-                                &mut columns[1],
+                                ui,
                                 t!(locale, "Last name"),
                                 &mut form.last_name,
                                 palette,
                                 false,
                             );
-                        });
-                        ui.add_space(8.0);
-                        ui.columns(2, |columns| {
+                        }
+                        1 => labelled_field(
+                            ui,
+                            t!(locale, "National ID"),
+                            &mut form.national_id,
+                            palette,
+                            false,
+                        ),
+                        2 => {
                             labelled_field(
-                                &mut columns[0],
-                                t!(locale, "Phone"),
-                                &mut form.phone,
-                                palette,
-                                false,
-                            );
-                            labelled_field(
-                                &mut columns[1],
-                                t!(locale, "E-mail"),
-                                &mut form.email,
-                                palette,
-                                false,
-                            );
-                        });
-                        ui.add_space(8.0);
-                        ui.columns(2, |columns| {
-                            labelled_field(
-                                &mut columns[0],
+                                ui,
                                 t!(locale, "Role"),
                                 &mut form.role_title,
                                 palette,
                                 false,
                             );
                             labelled_field(
-                                &mut columns[1],
+                                ui,
                                 t!(locale, "Department"),
                                 &mut form.department,
                                 palette,
                                 false,
                             );
-                        });
-                        ui.add_space(8.0);
-                        ui.columns(2, |columns| {
                             labelled_field(
-                                &mut columns[0],
-                                t!(locale, "National ID"),
-                                &mut form.national_id,
+                                ui,
+                                t!(locale, "Category"),
+                                &mut form.category,
+                                palette,
+                                false,
+                            );
+                        }
+                        3 => {
+                            labelled_field(ui, t!(locale, "City"), &mut form.city, palette, false);
+                            labelled_field(
+                                ui,
+                                t!(locale, "Phone"),
+                                &mut form.phone,
                                 palette,
                                 false,
                             );
                             labelled_field(
-                                &mut columns[1],
-                                t!(locale, "City"),
-                                &mut form.city,
+                                ui,
+                                t!(locale, "E-mail"),
+                                &mut form.email,
                                 palette,
                                 false,
                             );
-                        });
-                        ui.add_space(8.0);
-                        ui.columns(2, |columns| {
+                        }
+                        _ => {
                             labelled_field(
-                                &mut columns[0],
+                                ui,
                                 t!(locale, "Salary"),
                                 &mut form.salary,
                                 palette,
                                 false,
                             );
-                            columns[1].vertical(|ui| {
-                                ui.label(
-                                    RichText::new(t!(locale, "Pay cycle"))
-                                        .color(palette.secondary)
-                                        .font(crate::fonts::medium(12.0)),
+                            ui.label(
+                                RichText::new(t!(locale, "Pay cycle"))
+                                    .color(palette.secondary)
+                                    .font(crate::fonts::medium(12.0)),
+                            );
+                            ui.horizontal_wrapped(|ui| {
+                                ui.selectable_value(
+                                    &mut form.days_cycle,
+                                    false,
+                                    t!(locale, "Monthly"),
                                 );
-                                ui.horizontal(|ui| {
-                                    ui.selectable_value(
-                                        &mut form.days_cycle,
-                                        false,
-                                        t!(locale, "Monthly"),
-                                    );
-                                    ui.selectable_value(
-                                        &mut form.days_cycle,
-                                        true,
-                                        t!(locale, "Every N days"),
-                                    );
-                                });
-                                if form.days_cycle {
-                                    labelled_field(
-                                        ui,
-                                        t!(locale, "Days"),
-                                        &mut form.cycle_days,
-                                        palette,
-                                        false,
-                                    );
-                                }
+                                ui.selectable_value(
+                                    &mut form.days_cycle,
+                                    true,
+                                    t!(locale, "Every N days"),
+                                );
                             });
-                        });
-                        ui.add_space(8.0);
-                        labelled_field(ui, t!(locale, "Notes"), &mut form.notes, palette, false);
-                        if let Some(error) = form.error.clone() {
-                            ui.add_space(8.0);
-                            error_banner(ui, &error, palette);
+                            if form.days_cycle {
+                                labelled_field(
+                                    ui,
+                                    t!(locale, "Days"),
+                                    &mut form.cycle_days,
+                                    palette,
+                                    false,
+                                );
+                            }
+                            labelled_field(
+                                ui,
+                                t!(locale, "Notes"),
+                                &mut form.notes,
+                                palette,
+                                false,
+                            );
                         }
-                        ui.add_space(12.0);
-                        let saving = form.saving;
-                        widgets::dialog_actions(ui, |ui| {
-                            save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                            cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
-                        });
+                    }
+                    if let Some(error) = &form.error {
+                        ui.add_space(8.0);
+                        error_banner(ui, error, palette);
                     }
                 });
+            ui.add_space(10.0);
+            let saving = form.saving;
+            widgets::dialog_actions(ui, |ui| {
+                if primary_button(
+                    ui,
+                    if step == 4 {
+                        t!(locale, "Save")
+                    } else {
+                        t!(locale, "Next")
+                    },
+                    palette,
+                    !saving,
+                ) {
+                    if step == 0
+                        && form.first_name.trim().is_empty()
+                        && form.last_name.trim().is_empty()
+                    {
+                        form.error = Some("Indiquez le prénom ou le nom de famille.".into());
+                    } else if step < 4 {
+                        form.step += 1;
+                        form.error = None;
+                    } else {
+                        save = true;
+                    }
+                }
+                if step > 0 && !saving && secondary_button(ui, t!(locale, "Previous"), palette) {
+                    form.step -= 1;
+                    form.error = None;
+                }
+                cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
+            });
         });
     });
     if cancel {
@@ -794,6 +843,16 @@ fn validate_new(form: &NewEmployeeForm) -> Option<&'static str> {
             .map_or(true, |value| !value.is_finite() || value < 0.0)
     {
         return Some("Chiffres uniquement pour le salaire.");
+    }
+    if form.days_cycle
+        && !form.cycle_days.trim().is_empty()
+        && !form
+            .cycle_days
+            .trim()
+            .parse::<i64>()
+            .is_ok_and(|days| (1..=365).contains(&days))
+    {
+        return Some("Le cycle doit être compris entre 1 et 365 jours.");
     }
     None
 }

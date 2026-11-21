@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses vendors employees employee-editor employee-editor-narrow settings delivery agent; do
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses vendors employees employee-editor employee-editor-narrow employee-wizard settings delivery agent; do
               ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -85,12 +85,12 @@ jobs:
                 sleep 1
                 import -window root visual-output/client-invoices-scrolled.png
               fi
-              if [ "$page" = client-wizard ] || [ "$page" = product-wizard ]; then
+              if [ "$page" = client-wizard ] || [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then
                 # Click the real Next control through every non-final step in a compact window.
                 window=$(xdotool search --name "Atlas fixture" | head -n 1)
                 xdotool windowfocus "$window"
                 count=2
-                if [ "$page" = product-wizard ]; then count=4; fi
+                if [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then count=4; fi
                 for step in $(seq 1 "$count"); do
                   pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1)
                   read -r _ x y <<< "$pos"
