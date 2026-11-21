@@ -487,29 +487,31 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
-        setting_row(
-            ui,
-            palette,
-            t!(app.locale, "Interface size"),
-            Some(&t!(
+        ui.label(
+            RichText::new(t!(app.locale, "Interface size"))
+                .color(palette.text)
+                .strong()
+                .size(13.5),
+        );
+        ui.label(
+            RichText::new(t!(
                 app.locale,
                 "Adjust the size of text and controls on this device."
-            )),
-            |ui| {
-                let options = [
-                    ("90 %", 90_u16),
-                    ("100 %", 100),
-                    ("110 %", 110),
-                    ("125 %", 125),
-                ];
-                if let Some(scale) =
-                    segmented(ui, palette, &options, Some(app.settings.ui_scale_percent))
-                {
-                    app.settings.ui_scale_percent = scale;
-                    app.save_settings();
-                }
-            },
+            ))
+            .color(palette.dim)
+            .size(11.5),
         );
+        ui.add_space(6.0);
+        let options = [
+            ("90 %", 90_u16),
+            ("100 %", 100),
+            ("110 %", 110),
+            ("125 %", 125),
+        ];
+        if let Some(scale) = segmented(ui, palette, &options, Some(app.settings.ui_scale_percent)) {
+            app.settings.ui_scale_percent = scale;
+            app.save_settings();
+        }
         ui.add_space(12.0);
         setting_row(
             ui,
