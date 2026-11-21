@@ -48,8 +48,14 @@ impl eframe::App for Fixture {
             };
             if step != self.wizard_step {
                 self.wizard_step = step;
-                if let Some(step) = step {
-                    println!("FIXTURE_WIZARD_STEP {step}");
+                // Fixed fixture markers only: never log application data.
+                match step {
+                    Some(0) => println!("FIXTURE_WIZARD_STEP 0"),
+                    Some(1) => println!("FIXTURE_WIZARD_STEP 1"),
+                    Some(2) => println!("FIXTURE_WIZARD_STEP 2"),
+                    Some(3) => println!("FIXTURE_WIZARD_STEP 3"),
+                    Some(4) => println!("FIXTURE_WIZARD_STEP 4"),
+                    _ => {}
                 }
             }
         }
