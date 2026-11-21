@@ -1054,6 +1054,13 @@ fn dropped_image_data(
         bytes
     } else {
         let path = path.ok_or_else(|| ApiError::client("Fichier image indisponible."))?;
+        let metadata = std::fs::metadata(&path)
+            .map_err(|_| ApiError::client("Impossible de lire l’image."))?;
+        if !metadata.is_file() || metadata.len() > MAX as u64 {
+            return Err(ApiError::client(
+                "L’image doit être un fichier de 4 Mo maximum.",
+            ));
+        }
         let file = std::fs::File::open(path)
             .map_err(|_| ApiError::client("Impossible de lire l’image."))?;
         let metadata = file
@@ -1099,19 +1106,12 @@ fn draw_images(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if editor.images.loading || editor.images.data.is_none() {
             editor.image_error =
                 Some(t!(locale, "Load the image list before adding a photo.").into_owned());
-        } else if file
-            .bytes
-            .as_ref()
-            .is_some_and(|bytes| bytes.len() > 4 * 1024 * 1024)
-        {
-            editor.image_error = Some("L’image doit faire au maximum 4 Mo.".into());
         } else {
-            let path = file.path;
-            let bytes = file.bytes.as_ref().map(|bytes| bytes.to_vec());
+            let path = file.path().to_path_buf();
             let is_primary = editor.images.data.as_ref().is_some_and(Vec::is_empty);
             editor.image_error = None;
             editor.image_job = Some(app.runner.spawn(async move {
-                let data_url = dropped_image_data(path, bytes)?;
+                let data_url = dropped_image_data(Some(path), None)?;
                 api.add_product_image(
                     id,
                     &atlas_api::models::AddProductImage {
