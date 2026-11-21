@@ -659,6 +659,7 @@ mod tests {
     /// closure's value, so the probe writes into a captured variable.
     fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let ctx = egui::Context::default();
+        ctx.set_fonts(crate::fonts::definitions());
         let mut result = R::default();
         // run_ui takes an FnMut, so the FnOnce probe rides in an Option and
         // runs on the single headless frame.
