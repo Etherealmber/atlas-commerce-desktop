@@ -121,6 +121,7 @@ impl AtlasApp {
         // a late completion cannot replace the active account.
         self.login = Default::default();
         self.qr = Default::default();
+        crate::native_auth_v2::cancel(self);
         self.session = Some(record.clone());
         if !persist {
             match self.vault_worker.save(record.clone()) {
@@ -894,6 +895,16 @@ impl AtlasApp {
         self.finance_report.data = Some(crate::client_report::fictional_finance_combined());
     }
 
+    /// Show a fictional native v2 QR without opening a connection.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_native_v2(&mut self) {
+        if let Some(server) = self.server_store.selected_url() {
+            self.native_login = crate::native_auth_v2::fictional(server.to_owned());
+            self.login.busy = true;
+        }
+    }
+
     /// Display the pre-authorization waiting state without making a request.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
@@ -1491,6 +1502,7 @@ impl AtlasApp {
             {
                 // A deep link supersedes an in-flight hosted login.
                 crate::browser_auth::cancel(self);
+                crate::native_auth_v2::cancel(self);
                 self.qr = Default::default();
                 self.login.pending_link = Some(link);
                 self.screen = Screen::Login;
@@ -1500,6 +1512,7 @@ impl AtlasApp {
                 && self.login.job_link.is_none()
             {
                 crate::browser_auth::cancel(self);
+                crate::native_auth_v2::cancel(self);
                 self.login.pending_link = None;
                 self.qr = Default::default();
                 self.qr.active = true;
@@ -1823,6 +1836,7 @@ impl AtlasApp {
             || self.vault_restore.is_some()
             || !self.vault_saves.is_empty()
             || !self.vault_removals.is_empty()
+            || self.native_login.active
             || self.qr.job_status.is_some()
             || self.qr.job_create.is_some()
             || self.qr.job_complete.is_some()

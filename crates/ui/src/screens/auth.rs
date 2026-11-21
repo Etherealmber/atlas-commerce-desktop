@@ -810,6 +810,7 @@ enum LoginTab {
 /// browser flow remains an explicit fallback for server-side challenges.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
+    crate::native_auth_v2::poll(app);
     if !matches!(app.screen, Screen::Login) {
         return;
     }
@@ -870,7 +871,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.vertical_centered(|ui| {
             // Keep the native sign-in surface centered on a large window and
             // scrollable rather than clipped when the viewport is compact.
-            let estimated_height = if app.qr.active { 610.0 } else { 390.0 };
+            let estimated_height = if app.qr.active || app.native_login.active { 610.0 } else { 390.0 };
             ui.add_space(((ui.available_height() - estimated_height) * 0.5).max(16.0));
             let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
             card(palette).show(ui, |ui| {
@@ -891,7 +892,25 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .size(13.0),
                     );
                     ui.add_space(20.0);
-                    if app.qr.active {
+                    if app.native_login.active {
+                        if let Some(url) = &app.native_login.qr_url {
+                            qr_image(ui, url, palette);
+                            ui.add_space(12.0);
+                            ui.label(RichText::new(t!(app.locale, "Scan with your signed-in phone, then compare this code on both devices:")).color(palette.secondary));
+                            if let Some(code) = &app.native_login.pairing_code {
+                                ui.label(RichText::new(code).font(crate::fonts::mono_semibold(20.0)).color(palette.text));
+                            }
+                            if let Some(server) = app.server_store.selected_url() {
+                                ui.label(RichText::new(server).color(palette.secondary).size(12.0));
+                            }
+                            ui.label(RichText::new(t!(app.locale, "Waiting for phone approval…")).color(palette.secondary));
+                        } else {
+                            ui.spinner();
+                            ui.label(RichText::new(t!(app.locale, "Preparing secure QR sign-in…")).color(palette.secondary));
+                        }
+                        ui.add_space(12.0);
+                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) { crate::native_auth_v2::cancel(app); }
+                    } else if app.qr.active {
                         draw_qr(app, ui, palette);
                         ui.add_space(12.0);
                         if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
@@ -908,7 +927,13 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.add_space(8.0);
                         }
                         if !app.requires_password
-                            && primary_button(ui, t!(app.locale, "Sign in with a QR code"), palette, !app.login.busy)
+                            && primary_button(ui, t!(app.locale, "Sign in with secure QR v2"), palette, !app.login.busy)
+                        {
+                            crate::native_auth_v2::start(app);
+                        }
+                        ui.add_space(8.0);
+                        if !app.requires_password && !app.login.busy
+                            && secondary_button(ui, t!(app.locale, "Use legacy QR"), palette)
                         {
                             start_qr_session(app);
                         }

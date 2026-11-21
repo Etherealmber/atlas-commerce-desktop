@@ -1999,3 +1999,18 @@ msgstr "Charger le rapport"
 
 msgid "Period applies to balance and VAT; stock, receivables, payables, employees and aging are current server views."
 msgstr "La période concerne le solde et la TVA ; le stock, les créances, les dettes, les employés et la balance âgée reflètent la situation actuelle du serveur."
+
+msgid "Sign in with secure QR v2"
+msgstr "Connexion par QR sécurisé v2"
+
+msgid "Use legacy QR"
+msgstr "Utiliser l’ancien QR"
+
+msgid "Scan with your signed-in phone, then compare this code on both devices:"
+msgstr "Scannez avec votre téléphone connecté, puis comparez ce code sur les deux appareils :"
+
+msgid "Waiting for phone approval…"
+msgstr "En attente de l’approbation sur le téléphone…"
+
+msgid "Preparing secure QR sign-in…"
+msgstr "Préparation du QR sécurisé…"

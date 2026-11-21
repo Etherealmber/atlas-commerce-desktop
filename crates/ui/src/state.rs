@@ -479,6 +479,7 @@ pub struct AtlasApp {
     /// Browser-v1 tokens remain in memory until OS-vault storage is available.
     pub transient_session: bool,
     pub(crate) browser_login: crate::browser_auth::BrowserLogin,
+    pub(crate) native_login: crate::native_auth_v2::NativeLogin,
     pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
     pub(crate) vault_restore: Option<VaultRestore>,
     pub(crate) vault_saves:
@@ -691,6 +692,7 @@ impl AtlasApp {
             requires_password: false,
             transient_session: false,
             browser_login: Default::default(),
+            native_login: Default::default(),
             vault_worker,
             vault_restore: None,
             vault_saves: Vec::new(),
@@ -1322,6 +1324,7 @@ impl AtlasApp {
     }
 
     pub fn sign_out(&mut self) {
+        crate::native_auth_v2::cancel(self);
         let was_browser = self.transient_session;
         let mut vault_problem = false;
         if let Some(session) = self.session.as_ref()

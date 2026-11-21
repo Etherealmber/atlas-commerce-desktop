@@ -19,6 +19,7 @@ pub mod fonts;
 pub mod i18n;
 pub mod icons;
 pub mod motion;
+mod native_auth_v2;
 mod product_images;
 pub mod screens;
 pub mod server_probe;

@@ -126,7 +126,7 @@ fn build(route: &str) -> AtlasApp {
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
-    if route == "login" || route == "login-qr" || route == "login-wait" {
+    if route == "login" || route == "login-qr" || route == "login-wait" || route == "login-v2" {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
@@ -137,6 +137,11 @@ fn build(route: &str) -> AtlasApp {
     if route == "login-wait" {
         app.login.error = None;
         app.show_fictional_browser_wait();
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "login-v2" {
+        app.login.error = None;
+        app.show_fictional_native_v2();
     }
     if route == "login-qr" {
         // Inert deep-link state: no token and no server request.
