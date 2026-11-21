@@ -10,6 +10,7 @@ pub mod app;
 pub mod branding;
 mod browser_auth;
 mod business_search;
+pub mod buttons;
 mod client_invoices;
 mod client_report;
 pub mod dialogs;
