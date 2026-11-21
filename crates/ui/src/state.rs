@@ -1208,6 +1208,10 @@ impl AtlasApp {
             return true;
         }
         if let Some(editor) = self.product_editor.take() {
+            if editor.is_busy() {
+                self.product_editor = Some(editor);
+                return true;
+            }
             if editor.is_dirty() {
                 self.product_editor = Some(editor);
                 self.confirm_dialog = Some(crate::dialogs::Confirm {

@@ -453,6 +453,41 @@ pub struct UpdateProduct {
     pub bulk_discounts: Option<Vec<BulkDiscount>>,
 }
 
+/// Minimal projection for the product variant route; cost is intentionally
+/// omitted because the variant endpoint does not scrub it for all roles.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductVariant {
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub variant_label: Option<String>,
+    #[serde(default)]
+    pub sku: Option<String>,
+    #[serde(default)]
+    pub barcode: Option<String>,
+    #[serde(default)]
+    pub price: f64,
+    #[serde(default, rename = "stock_quantity")]
+    pub stock: f64,
+    #[serde(default = "default_one")]
+    pub track_inventory: i64,
+    #[serde(default = "default_one")]
+    pub is_active: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateVariant {
+    pub variant_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sku: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub barcode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<f64>,
+    pub stock_quantity: f64,
+}
+
 /// `in` (entrée), `out` (sortie) or `adjustment` (signed quantity).
 #[derive(Debug, Clone, Serialize)]
 pub struct StockAdjust {

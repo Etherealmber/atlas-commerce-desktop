@@ -156,6 +156,27 @@ impl ApiClient {
         Ok(bytes)
     }
 
+    /// Product variants are loaded only when the variants step is opened.
+    pub async fn product_variants(&self, id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+        self.get_data(&format!("/api/products/{id}/variants")).await
+    }
+
+    /// Create a variant. Its initial stock is distinct from the parent.
+    pub async fn create_variant(
+        &self,
+        id: i64,
+        variant: &CreateVariant,
+    ) -> Result<ProductVariant, ApiError> {
+        self.post_data(&format!("/api/products/{id}/variants"), variant)
+            .await
+    }
+
+    /// The Worker defaults to soft deactivation; no hard-delete flag is sent.
+    pub async fn deactivate_variant(&self, id: i64) -> Result<(), ApiError> {
+        self.delete_success(&format!("/api/products/variants/{id}"))
+            .await
+    }
+
     /// `POST /api/products/:id/adjust-stock`.
     pub async fn adjust_stock(&self, id: i64, adjust: &StockAdjust) -> Result<Product, ApiError> {
         self.post_data(&format!("/api/products/{id}/adjust-stock"), adjust)
@@ -274,6 +295,23 @@ mod tests {
         assert!(value.get("cost").is_none());
         assert!(value.get("image_url").is_none());
         assert!(value.get("bulk_discounts").is_none());
+    }
+
+    #[test]
+    fn variant_payload_can_start_at_zero_without_sending_cost_or_parent_data() {
+        let variant = CreateVariant {
+            variant_label: "Grand".into(),
+            sku: None,
+            barcode: None,
+            price: None,
+            stock_quantity: 0.0,
+        };
+        let value = serde_json::to_value(variant).unwrap();
+        assert_eq!(value["variant_label"], "Grand");
+        assert_eq!(value["stock_quantity"], 0.0);
+        for absent in ["cost", "parent_id", "hard", "price"] {
+            assert!(value.get(absent).is_none());
+        }
     }
 
     #[test]

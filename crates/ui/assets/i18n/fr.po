@@ -1897,3 +1897,30 @@ msgstr "Les paliers supplémentaires du serveur seront conservés."
 
 msgid "Discount data is unavailable; existing server values will be preserved."
 msgstr "Les remises sont indisponibles ; les valeurs du serveur seront conservées."
+
+msgid "Variants"
+msgstr "Variantes"
+
+msgid "Variant changes are saved immediately."
+msgstr "Les modifications des variantes sont enregistrées immédiatement."
+
+msgid "Confirm deactivation"
+msgstr "Confirmer la désactivation"
+
+msgid "Deactivate"
+msgstr "Désactiver"
+
+msgid "Variant label"
+msgstr "Libellé de variante"
+
+msgid "Price (optional)"
+msgstr "Prix (facultatif)"
+
+msgid "New variants start at zero stock; adjust stock after creation."
+msgstr "Les nouvelles variantes commencent à zéro ; ajustez leur stock après création."
+
+msgid "Add variant"
+msgstr "Ajouter la variante"
+
+msgid "Invalid price."
+msgstr "Prix invalide."

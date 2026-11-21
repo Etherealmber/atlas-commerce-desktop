@@ -222,6 +222,14 @@ pub struct ProductEditor {
     bulk_qty: [String; 2],
     bulk_percent: [String; 2],
     bulk_extra: Vec<atlas_api::models::BulkDiscount>,
+    variants: crate::state::Cache<Vec<atlas_api::models::ProductVariant>>,
+    variant_job: Option<Job<Result<(), ApiError>>>,
+    variant_error: Option<String>,
+    variant_confirm: Option<i64>,
+    variant_label: String,
+    variant_sku: String,
+    variant_barcode: String,
+    variant_price: String,
     pub saving: bool,
     /// A 409 `DUPLICATE_PRODUCT` was answered; the next save forces it.
     pub force_duplicate: bool,
@@ -241,6 +249,10 @@ impl ProductEditor {
             bulk_available: true,
             ..Self::default()
         }
+    }
+
+    pub(crate) fn is_busy(&self) -> bool {
+        self.saving || self.variant_job.is_some()
     }
 
     #[must_use]
@@ -980,9 +992,205 @@ fn stock_pill(
     pill(ui, text, fill, tint);
 }
 
+fn load_variants(app: &mut AtlasApp) {
+    let (Some(api), Some(editor)) = (app.client.clone(), app.product_editor.as_mut()) else {
+        return;
+    };
+    let Some(id) = editor.editing_id else {
+        return;
+    };
+    if editor.variants.loading {
+        return;
+    }
+    editor.variants.start(
+        app.runner
+            .spawn(async move { api.product_variants(id).await }),
+    );
+}
+
+fn poll_variants(app: &mut AtlasApp, ctx: &egui::Context) {
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    if editor.variants.poll() {
+        ctx.request_repaint();
+    }
+    if let Some(result) = editor.variant_job.as_ref().and_then(Job::poll) {
+        editor.variant_job = None;
+        match result {
+            Ok(()) => {
+                editor.variant_error = None;
+                editor.variant_confirm = None;
+                editor.variant_label.clear();
+                editor.variant_sku.clear();
+                editor.variant_barcode.clear();
+                editor.variant_price.clear();
+                load_variants(app);
+            }
+            Err(error) => editor.variant_error = Some(error.message),
+        }
+        ctx.request_repaint();
+    }
+    if app
+        .product_editor
+        .as_ref()
+        .is_some_and(|editor| editor.variants.loading || editor.variant_job.is_some())
+    {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+}
+
+fn draw_variants(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    let can_adjust = app.role_policy().can_manage_stock();
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    ui.label(
+        RichText::new(t!(locale, "Variant changes are saved immediately."))
+            .color(palette.secondary),
+    );
+    if editor.variants.loading {
+        super::centered_spinner(ui, palette);
+    }
+    if let Some(error) = &editor.variants.error {
+        error_banner(ui, error, palette);
+    }
+    if let Some(error) = &editor.variant_error {
+        error_banner(ui, error, palette);
+    }
+    let variants = editor.variants.data.clone().unwrap_or_default();
+    for variant in variants.iter().filter(|variant| variant.is_active != 0) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(variant.variant_label.as_deref().unwrap_or(&variant.name))
+                    .strong()
+                    .color(palette.text),
+            );
+            if let Some(sku) = variant.sku.as_deref().filter(|value| !value.is_empty()) {
+                ui.label(sku);
+            }
+            ui.label(format!(
+                "{}: {}",
+                t!(locale, "Stock"),
+                number(variant.stock)
+            ));
+            if variant.track_inventory != 0
+                && can_adjust
+                && secondary_button(ui, t!(locale, "Adjust stock"), palette)
+            {
+                app.stock_dialog = Some(StockDialog::new(&Product {
+                    id: variant.id,
+                    name: variant.name.clone(),
+                    stock: variant.stock,
+                    track_inventory: variant.track_inventory,
+                    ..Product::default()
+                }));
+            }
+            if editor.variant_confirm == Some(variant.id) {
+                if secondary_button(ui, t!(locale, "Confirm deactivation"), palette)
+                    && editor.variant_job.is_none()
+                    && let Some(api) = app.client.clone()
+                {
+                    let id = variant.id;
+                    editor.variant_job = Some(
+                        app.runner
+                            .spawn(async move { api.deactivate_variant(id).await }),
+                    );
+                }
+                if secondary_button(ui, t!(locale, "Cancel"), palette) {
+                    editor.variant_confirm = None;
+                }
+            } else if secondary_button(ui, t!(locale, "Deactivate"), palette) {
+                editor.variant_confirm = Some(variant.id);
+            }
+        });
+    }
+    if secondary_button(ui, t!(locale, "Refresh"), palette) {
+        load_variants(app);
+    }
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    ui.separator();
+    labelled_field(
+        ui,
+        t!(locale, "Variant label"),
+        &mut editor.variant_label,
+        palette,
+        false,
+    );
+    labelled_field(
+        ui,
+        t!(locale, "SKU"),
+        &mut editor.variant_sku,
+        palette,
+        false,
+    );
+    labelled_field(
+        ui,
+        t!(locale, "Barcode"),
+        &mut editor.variant_barcode,
+        palette,
+        false,
+    );
+    labelled_field(
+        ui,
+        t!(locale, "Price (optional)"),
+        &mut editor.variant_price,
+        palette,
+        false,
+    );
+    ui.label(
+        RichText::new(t!(
+            locale,
+            "New variants start at zero stock; adjust stock after creation."
+        ))
+        .color(palette.secondary),
+    );
+    if primary_button(
+        ui,
+        t!(locale, "Add variant"),
+        palette,
+        editor.variant_job.is_none() && !editor.variant_label.trim().is_empty(),
+    ) {
+        let parsed_price = if editor.variant_price.trim().is_empty() {
+            Some(None)
+        } else {
+            editor
+                .variant_price
+                .trim()
+                .replace(',', ".")
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 1e12)
+                .map(Some)
+        };
+        if let Some(price) = parsed_price {
+            if let (Some(api), Some(id)) = (app.client.clone(), editor.editing_id) {
+                let body = atlas_api::models::CreateVariant {
+                    variant_label: editor.variant_label.trim().to_owned(),
+                    sku: optional(&editor.variant_sku),
+                    barcode: optional(&editor.variant_barcode),
+                    price,
+                    stock_quantity: 0.0,
+                };
+                editor.variant_error = None;
+                editor.variant_job = Some(
+                    app.runner
+                        .spawn(async move { api.create_variant(id, &body).await.map(|_| ()) }),
+                );
+            }
+        } else {
+            editor.variant_error = Some(t!(locale, "Invalid price.").into_owned());
+        }
+    }
+}
+
 // ── Create product dialog ──────────────────────────────────────────────────
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    poll_variants(app, ui.ctx());
     // Poll the save job first, so a result applies this frame.
     if let Some(editor) = app.product_editor.as_mut()
         && let Some(job) = &editor.job
@@ -1040,6 +1248,13 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     );
     let locale = app.locale;
     if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("product-editor-scrim")) {
+        if app
+            .product_editor
+            .as_ref()
+            .is_some_and(ProductEditor::is_busy)
+        {
+            return;
+        }
         // Same dirty-draft decision as the Cancel button and Escape: an
         // incidental outside click must not silently lose unsaved input.
         let dirty = app
@@ -1090,8 +1305,9 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     let saving = app
                         .product_editor
                         .as_ref()
-                        .is_some_and(|editor| editor.saving);
+                        .is_some_and(|editor| editor.saving || editor.variant_job.is_some());
                     let step = app.product_editor.as_ref().map_or(0, |editor| editor.step);
+                    let total = if app.product_editor.as_ref().is_some_and(|editor| editor.editing_id.is_some()) { 5 } else { 4 };
                     let name_empty = app
                         .product_editor
                         .as_ref()
@@ -1104,13 +1320,15 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         0 => t!(locale, "Identity"),
                         1 => t!(locale, "Classification"),
                         2 => t!(locale, "Price and stock"),
-                        _ => t!(locale, "Volume discounts"),
+                        3 => t!(locale, "Volume discounts"),
+                        _ => t!(locale, "Variants"),
                     };
                     ui.label(
                         RichText::new(format!(
-                            "{} {}/4 · {}",
+                            "{} {}/{} · {}",
                             t!(locale, "Step"),
                             step + 1,
+                            total,
                             section
                         ))
                         .color(palette.secondary),
@@ -1189,7 +1407,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     false,
                                 );
                             }
-                            _ => {
+                            3 => {
                                 if editor.bulk_available {
                                     ui.label(RichText::new(t!(locale, "Discounts apply at the quantity threshold when no manual promotional price is set.")).color(palette.secondary));
                                     for index in 0..2 {
@@ -1204,8 +1422,10 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     ui.label(RichText::new(t!(locale, "Discount data is unavailable; existing server values will be preserved.")).color(palette.secondary));
                                 }
                             }
+                            _ => {}
                         }
                     }
+                    if step == 4 { draw_variants(app, ui, palette); }
 
                     if let Some(error) = &error {
                         error_banner(ui, error, palette);
@@ -1215,7 +1435,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     widgets::dialog_actions(ui, |ui| {
                         let save = primary_button(
                             ui,
-                            if step == 3 {
+                            if step + 1 == total {
                                 t!(locale, "Save")
                             } else {
                                 t!(locale, "Next")
@@ -1231,7 +1451,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             editor.step -= 1;
                             editor.error = None;
                         }
-                        let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                        let cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
                         if cancel {
                             if dirty {
                                 app.confirm_dialog = Some(Confirm {
@@ -1247,11 +1467,12 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             }
                         }
                         if save {
-                            if step < 3 {
+                            if step + 1 < total {
                                 if let Some(editor) = app.product_editor.as_mut() {
                                     editor.step += 1;
                                     editor.error = None;
                                 }
+                                if step + 1 == 4 { load_variants(app); }
                             } else {
                                 submit_product(app);
                             }
@@ -1424,6 +1645,13 @@ fn draw_stock_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 app.stock_dialog = None;
                 app.notice(t!(app.locale, "Stock updated.").into_owned());
                 app.load_products();
+                if app
+                    .product_editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.editing_id.is_some())
+                {
+                    load_variants(app);
+                }
                 return;
             }
             Err(error) => dialog.error = Some(error.message),
