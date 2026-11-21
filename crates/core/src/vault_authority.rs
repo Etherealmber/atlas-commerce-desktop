@@ -51,10 +51,9 @@ fn server_hash(server: &str) -> Option<String> {
     {
         return None;
     }
-    Some(format!(
-        "{:x}",
-        Sha256::digest(url.origin().ascii_serialization().as_bytes())
-    ))
+    Some(hex::encode(Sha256::digest(
+        url.origin().ascii_serialization().as_bytes(),
+    )))
 }
 
 /// Determines the startup source. Invalid, unreadable or corrupt marker data
@@ -167,6 +166,14 @@ impl Authority {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn existing_authority_hash_remains_stable_after_sha_upgrade() {
+        assert_eq!(
+            server_hash("https://example.com").as_deref(),
+            Some("100680ad546ce6a577f42f52df33b4cfdca756859e664b8d7de329b150d09ce9")
+        );
+    }
 
     #[test]
     fn blocked_logout_cannot_be_undone_by_a_late_save() {
