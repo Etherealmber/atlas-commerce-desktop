@@ -91,10 +91,17 @@ impl ExpenseEditor {
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
+    if app.finance_report_open && app.role_policy().can_view_reports() {
+        ui.add_space(8.0);
+        page_title(ui, t!(app.locale, "Reports and closing"), palette);
+        ui.add_space(12.0);
+        draw_finance_reports(app, ui, palette);
+        return;
+    }
 
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Expenses"), palette);
+        page_title(ui, t!(app.locale, "Balance and income"), palette);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if primary_button(ui, t!(app.locale, "New entry"), palette, true) {
                 app.expense_editor = Some(ExpenseEditor::new());
@@ -105,17 +112,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
     });
     ui.add_space(12.0);
-
-    if app.role_policy().can_view_reports() {
-        if secondary_button(ui, t!(app.locale, "Finance reports"), palette) {
-            app.finance_report_open = !app.finance_report_open;
-        }
-        if app.finance_report_open {
-            ui.add_space(10.0);
-            draw_finance_reports(app, ui, palette);
-            ui.add_space(12.0);
-        }
-    }
 
     if let Some(error) = app.expenses.error.clone() {
         error_banner(ui, &error, palette);

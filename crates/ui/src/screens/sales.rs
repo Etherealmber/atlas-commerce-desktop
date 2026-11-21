@@ -66,67 +66,63 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_sale_job(app);
 
     ui.add_space(8.0);
+    let title = if app.quick_sale_open {
+        t!(app.locale, "Quick sale")
+    } else if app.quotes_open {
+        t!(app.locale, "Quotes")
+    } else if app.receipts_open {
+        t!(app.locale, "Receipts")
+    } else if app.refunds_open {
+        t!(app.locale, "Refunds")
+    } else {
+        t!(app.locale, "Sales invoices")
+    };
     ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Sales"), palette);
+        page_title(ui, title, palette);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_invoices();
+            if app.quick_sale_open {
+                if secondary_button(ui, t!(app.locale, "Back"), palette) {
+                    app.quick_sale_open = false;
+                }
+            } else if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                if app.receipts_open {
+                    app.load_receipts();
+                } else {
+                    app.load_invoices();
+                }
             }
         });
     });
     ui.add_space(12.0);
-
-    ui.horizontal_wrapped(|ui| {
-        if secondary_button(ui, t!(app.locale, "Quotes"), palette) {
-            app.quotes_open = !app.quotes_open;
-            if app.quotes_open && app.invoices.data.is_none() && !app.invoices.loading {
-                app.load_invoices();
-            }
-        }
-        if secondary_button(ui, t!(app.locale, "Receipts"), palette) {
-            app.receipts_open = !app.receipts_open;
-            if app.receipts_open && app.receipts.data.is_none() && !app.receipts.loading {
-                app.load_receipts();
-            }
-        }
-        if secondary_button(ui, t!(app.locale, "Refunds"), palette) {
-            app.refunds_open = !app.refunds_open;
-            if app.refunds_open && app.invoices.data.is_none() && !app.invoices.loading {
-                app.load_invoices();
-            }
-        }
-    });
-    if app.quotes_open {
-        ui.add_space(12.0);
+    if app.quick_sale_open {
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            quick_sale_form(app, ui, palette);
+        });
+    } else if app.quotes_open {
         quote_list(app, ui, palette);
-        ui.add_space(12.0);
-    }
-    if app.receipts_open {
-        ui.add_space(12.0);
+        if app.invoice_detail_id.is_some() {
+            ui.add_space(12.0);
+            draw_invoice_detail(app, ui, palette);
+        }
+    } else if app.receipts_open {
         receipt_list(app, ui, palette);
-        ui.add_space(12.0);
-    }
-    if app.refunds_open {
-        ui.add_space(12.0);
+    } else if app.refunds_open {
         refund_list(app, ui, palette);
-        ui.add_space(12.0);
+        if app.invoice_detail_id.is_some() {
+            ui.add_space(12.0);
+            draw_invoice_detail(app, ui, palette);
+        }
+    } else {
+        if app.invoice_detail_id.is_some() {
+            draw_invoice_detail(app, ui, palette);
+            ui.add_space(12.0);
+        }
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            invoice_history(app, ui, palette);
+        });
     }
-
-    if app.invoice_detail_id.is_some() {
-        ui.add_space(12.0);
-        draw_invoice_detail(app, ui, palette);
-    }
-    // Full-width content avoids starving the history or quick-sale form in
-    // horizontal layouts and follows the web's stacked page structure.
-    card(palette).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        invoice_history(app, ui, palette);
-    });
-    ui.add_space(12.0);
-    card(palette).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        quick_sale_form(app, ui, palette);
-    });
 }
 
 /// Quotes are invoices whose status is `quote` or legacy `devis`, as in

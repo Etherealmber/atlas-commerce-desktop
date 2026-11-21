@@ -70,10 +70,9 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         (
             t!(app.locale, "Finance"),
             &[
-                (Route::Expenses, "Balance and income", false),
-                (Route::Expenses, "Reports and closing", false),
+                (Route::Expenses, "Balance and income", true),
+                (Route::Expenses, "Reports and closing", true),
                 (Route::Products, "Stock operations", false),
-                (Route::Expenses, "Expenses", true),
                 (Route::DeliveryNotes, "Delivery notes", true),
             ],
         ),
@@ -95,7 +94,9 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                 );
             }
             for &(route, source, implemented) in entries {
-                if !app.role_policy().allows_route(route) {
+                if !app.role_policy().allows_route(route)
+                    || (source == "Reports and closing" && !app.role_policy().can_view_reports())
+                {
                     continue;
                 }
                 let (which, _) = route_meta(app.locale, route);
@@ -103,14 +104,21 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                 let selected = active == Some(route)
                     && match (route, source) {
                         (Route::Sales, "Quotes") => app.quotes_open,
+                        (Route::Sales, "Quick sale") => app.quick_sale_open,
                         (Route::Sales, "Receipts") => app.receipts_open,
                         (Route::Sales, "Reimbursements") => app.refunds_open,
                         (Route::Sales, "Sales invoices") => {
-                            !app.quotes_open && !app.receipts_open && !app.refunds_open
+                            !app.quotes_open
+                                && !app.receipts_open
+                                && !app.refunds_open
+                                && !app.quick_sale_open
                         }
                         (Route::Sales, _) => false,
                         (Route::Expenses, "Purchase invoices") => app.bills_open,
-                        (Route::Expenses, "Expenses") => !app.bills_open,
+                        (Route::Expenses, "Balance and income") => {
+                            !app.bills_open && !app.finance_report_open
+                        }
+                        (Route::Expenses, "Reports and closing") => app.finance_report_open,
                         _ => true,
                     };
                 if implemented {
@@ -119,7 +127,10 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                         app.go(route);
                         match (route, source) {
                             (Route::Sales, _) => {
+                                app.invoice_detail_id = None;
+                                app.invoice_detail = Default::default();
                                 app.quotes_open = source == "Quotes";
+                                app.quick_sale_open = source == "Quick sale";
                                 app.receipts_open = source == "Receipts";
                                 app.refunds_open = source == "Reimbursements";
                                 if app.receipts_open
@@ -131,6 +142,8 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                             }
                             (Route::Expenses, _) => {
                                 app.bills_open = source == "Purchase invoices";
+                                app.finance_report_open = source == "Reports and closing"
+                                    && app.role_policy().can_view_reports();
                                 if app.bills_open && app.bills.data.is_none() && !app.bills.loading
                                 {
                                     app.load_bills();

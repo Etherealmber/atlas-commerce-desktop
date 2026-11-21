@@ -34,7 +34,7 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Catalog => (Icon::Boxes, t!(locale, "Catalog").into_owned()),
         Route::Clients => (Icon::Users, t!(locale, "Clients").into_owned()),
         Route::Vendors => (Icon::Store, t!(locale, "Vendors").into_owned()),
-        Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
+        Route::Expenses => (Icon::Wallet, t!(locale, "Balance and income").into_owned()),
         Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
         Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
         Route::Employees => (Icon::Users, t!(locale, "Employees").into_owned()),
@@ -355,8 +355,8 @@ fn draw_business_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                         Route::Vendors => { app.vendor_search.clear(); app.selected_vendor = Some(hit.id); app.go(Route::Vendors); app.load_vendors(); }
                         Route::DeliveryNotes => { app.delivery_search = hit.label.clone(); app.go(Route::DeliveryNotes); app.load_delivery_notes(); }
                         Route::Expenses => { app.bills_open = true; app.bill_search = hit.label.clone(); app.go(Route::Expenses); app.load_bills(); }
-                        Route::Sales if hit.receipt => { app.receipts_open = true; app.receipt_search = hit.label.clone(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Sales); app.load_receipts(); }
-                        Route::Sales => { app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
+                        Route::Sales if hit.receipt => { app.quotes_open = false; app.refunds_open = false; app.quick_sale_open = false; app.receipts_open = true; app.receipt_search = hit.label.clone(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Sales); app.load_receipts(); }
+                        Route::Sales => { app.quotes_open = false; app.refunds_open = false; app.quick_sale_open = false; app.receipts_open = false; app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
                         _ => {}
                     }
                 }

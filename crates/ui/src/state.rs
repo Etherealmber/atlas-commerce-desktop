@@ -578,6 +578,8 @@ pub struct AtlasApp {
     pub refunds_open: bool,
     /// Open the read-only quotes list within Sales.
     pub quotes_open: bool,
+    /// Dedicated quick-sale workspace, independent from invoice history.
+    pub quick_sale_open: bool,
     pub(crate) quote_search: String,
     pub(crate) refund_search: String,
     pub(crate) receipt_search: String,
@@ -792,6 +794,7 @@ impl AtlasApp {
             receipts_open: false,
             refunds_open: false,
             quotes_open: false,
+            quick_sale_open: false,
             quote_search: String::new(),
             refund_search: String::new(),
             receipt_search: String::new(),
@@ -1437,6 +1440,7 @@ impl AtlasApp {
         self.refunds_open = false;
         self.refund_search.clear();
         self.quotes_open = false;
+        self.quick_sale_open = false;
         self.quote_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
