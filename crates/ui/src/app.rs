@@ -1978,6 +1978,7 @@ impl EframeShell {
         // palette and make the first frame skip theme::apply on that fresh
         // context, so every new context starts with an empty cache.
         held.applied_palette = None;
+        held.applied_ui_scale = None;
         held.applied_reduced_motion = None;
         crate::theme::install_fonts_and_icons(ctx);
         log::info!("Startup: fonts and image loaders ready");
@@ -2048,6 +2049,11 @@ impl eframe::App for EframeShell {
         // Keep egui's preference and the native window chrome aligned with
         // the app setting before resolving the palette for this frame.
         self.held.sync_egui_theme(ctx);
+        let scale = self.held.settings.ui_scale_percent.clamp(90, 125);
+        if self.held.applied_ui_scale != Some(scale) {
+            ctx.set_zoom_factor(f32::from(scale) / 100.0);
+            self.held.applied_ui_scale = Some(scale);
+        }
         // The native accent observer is off-thread; occasionally repaint so
         // system colour or high-contrast changes can reach an idle window.
         #[cfg(target_os = "windows")]
@@ -2104,6 +2110,12 @@ impl eframe::App for EframeShell {
             || self.held.applied_reduced_motion != Some(reduced_motion)
         {
             crate::theme::apply(ctx, &palette, reduced_motion);
+            #[cfg(not(target_os = "macos"))]
+            if self.held.applied_palette.map(|p| p.dark) != Some(palette.dark) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(std::sync::Arc::new(
+                    crate::tray::window_icon_for_theme(palette.dark),
+                ))));
+            }
             self.held.applied_palette = Some(palette);
             self.held.applied_reduced_motion = Some(reduced_motion);
         }

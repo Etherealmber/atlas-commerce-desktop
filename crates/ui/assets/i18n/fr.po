@@ -2014,3 +2014,36 @@ msgstr "En attente de l’approbation sur le téléphone…"
 
 msgid "Preparing secure QR sign-in…"
 msgstr "Préparation du QR sécurisé…"
+
+msgid "Manage your account, workspace and security in one place."
+msgstr "Gérez votre compte, votre espace de travail et votre sécurité au même endroit."
+
+msgid "Your account"
+msgstr "Votre compte"
+
+msgid "Profile and access to your account."
+msgstr "Profil et accès à votre compte."
+
+msgid "Your workspace"
+msgstr "Votre espace de travail"
+
+msgid "Personalize the app and how it behaves on this computer."
+msgstr "Personnalisez l’application et son comportement sur cet ordinateur."
+
+msgid "Connections and security"
+msgstr "Connexions et sécurité"
+
+msgid "Review your server, integrations and connected devices."
+msgstr "Consultez votre serveur, vos intégrations et vos appareils connectés."
+
+msgid "Maintenance"
+msgstr "Maintenance"
+
+msgid "Updates and information about Atlas Commerce."
+msgstr "Mises à jour et informations sur Atlas Commerce."
+
+msgid "Interface size"
+msgstr "Taille de l’interface"
+
+msgid "Adjust the size of text and controls on this device."
+msgstr "Ajustez la taille du texte et des commandes sur cet appareil."

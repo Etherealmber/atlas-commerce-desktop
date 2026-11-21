@@ -34,6 +34,8 @@ pub struct Settings {
     /// `fr` (default) or `en`.
     pub language: String,
     pub theme: ThemeMode,
+    /// User interface scale percentage; clamped before applying.
+    pub ui_scale_percent: u16,
     /// Filename of a custom palette in `themes/`, if any.
     pub custom_theme: Option<String>,
     /// Keep running in the tray with the window closed.
@@ -71,6 +73,7 @@ impl Default for Settings {
         Self {
             language: "fr".to_owned(),
             theme: ThemeMode::Light,
+            ui_scale_percent: 100,
             custom_theme: None,
             close_to_tray: true,
             autostart: false,
@@ -120,6 +123,16 @@ mod tests {
         assert_eq!(settings.theme, ThemeMode::Light);
         assert!(settings.close_to_tray);
         assert!(settings.windows_material);
+    }
+
+    #[test]
+    fn old_settings_keep_a_default_interface_scale() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"theme":"dark","language":"fr"}"#).unwrap();
+        assert_eq!(settings.ui_scale_percent, 100);
+        assert_eq!(settings.theme, ThemeMode::Dark);
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
     }
 
     #[test]

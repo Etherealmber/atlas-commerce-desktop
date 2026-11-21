@@ -122,7 +122,7 @@ fn build(route: &str) -> AtlasApp {
         "employees" | "employee-editor" | "employee-editor-narrow" | "employee-wizard" => {
             Route::Employees
         }
-        "settings" => Route::Settings,
+        "settings" | "settings-narrow" | "settings-dark" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
@@ -150,7 +150,7 @@ fn build(route: &str) -> AtlasApp {
         app.qr.status = "claimed".into();
         app.qr.qr_url = "https://fixture.invalid/login/qr?t=fictional&mode=pc".into();
     }
-    if route == "settings" {
+    if matches!(route, "settings" | "settings-narrow" | "settings-dark") {
         // Fictional update state: proves the title-bar icon and the
         // "restart to install" banner without contacting GitHub.
         let manifest = atlas_core::update_feed::UpdateManifest {
@@ -445,6 +445,7 @@ fn main() -> eframe::Result<()> {
     } else if matches!(
         route.as_str(),
         "products-narrow"
+            | "settings-narrow"
             | "clients-narrow"
             | "employee-editor-narrow"
             | "product-wizard"
@@ -464,8 +465,17 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
-            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
-            let palette = Palette::light();
+            let dark = route == "settings-dark";
+            cc.egui_ctx.set_theme(if dark {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            });
+            let palette = if dark {
+                Palette::dark()
+            } else {
+                Palette::light()
+            };
             theme::apply(&cc.egui_ctx, &palette, true);
             Ok(Box::new(Fixture {
                 app: build(&route),

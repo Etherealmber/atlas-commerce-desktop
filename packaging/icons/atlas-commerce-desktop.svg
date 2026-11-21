@@ -1,6 +1,7 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Atlas Commerce">
   <title>Atlas Commerce</title>
-  <g stroke="#0A0A0A" stroke-width="8" stroke-linecap="round">
+  <circle cx="128" cy="128" r="119" fill="#FAFAFA"/>
+  <g transform="translate(38 38) scale(0.703125)" stroke="#0A0A0A" stroke-width="8" stroke-linecap="round">
     <line x1="188.05" y1="152.87" x2="225.93" y2="168.56"/>
     <line x1="173.96" y1="173.96" x2="202.95" y2="202.95"/>
     <line x1="152.87" y1="188.05" x2="168.56" y2="225.93"/>

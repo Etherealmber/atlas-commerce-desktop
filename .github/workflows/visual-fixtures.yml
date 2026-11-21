@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings delivery agent; do
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings settings-narrow settings-dark delivery agent; do
               ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8

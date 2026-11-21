@@ -48,46 +48,54 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
             page_title(ui, t!(app.locale, "Settings"), palette);
             ui.add_space(8.0);
 
-            // Direct section links avoid making users scroll through every
-            // unrelated setting to reach security or updates.
-            let mut jump = None;
-            ui.horizontal_wrapped(|ui| {
-                for (label, target) in [
-                    (t!(app.locale, "Profile"), 0_u8),
-                    (t!(app.locale, "Application"), 1),
-                    (t!(app.locale, "Appearance"), 2),
-                    (t!(app.locale, "Servers"), 3),
-                    (t!(app.locale, "Security"), 4),
-                    (t!(app.locale, "Updates and about"), 5),
-                ] {
-                    if secondary_button(ui, label, palette) {
-                        jump = Some(target);
-                    }
-                }
-            });
-            ui.add_space(12.0);
-
-            if focus == SettingsFocus::Profile || jump == Some(0) {
+            ui.label(
+                RichText::new(t!(
+                    app.locale,
+                    "Manage your account, workspace and security in one place."
+                ))
+                .color(palette.secondary)
+                .size(13.0),
+            );
+            ui.add_space(20.0);
+            group_heading(
+                ui,
+                palette,
+                t!(app.locale, "Your account"),
+                t!(app.locale, "Profile and access to your account."),
+            );
+            if focus == SettingsFocus::Profile {
                 ui.scroll_to_cursor(Some(egui::Align::Min));
             }
             profile_section(app, ui, palette);
-            ui.add_space(18.0);
+            ui.add_space(24.0);
 
-            if jump == Some(1) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            application_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if jump == Some(2) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
+            group_heading(
+                ui,
+                palette,
+                t!(app.locale, "Your workspace"),
+                t!(
+                    app.locale,
+                    "Personalize the app and how it behaves on this computer."
+                ),
+            );
             appearance_section(app, ui, palette);
             ui.add_space(18.0);
-
-            assist_section(app, ui, palette);
+            application_section(app, ui, palette);
             ui.add_space(18.0);
+            assist_section(app, ui, palette);
+            ui.add_space(24.0);
 
+            group_heading(
+                ui,
+                palette,
+                t!(app.locale, "Connections and security"),
+                t!(
+                    app.locale,
+                    "Review your server, integrations and connected devices."
+                ),
+            );
+            servers_section(app, ui, palette);
+            ui.add_space(18.0);
             if is_admin(app) {
                 if focus == SettingsFocus::Integrations {
                     ui.scroll_to_cursor(Some(egui::Align::Min));
@@ -95,20 +103,16 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
                 integrations_section(app, ui, palette);
                 ui.add_space(18.0);
             }
-
-            if jump == Some(3) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            servers_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if jump == Some(4) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
             security_section(app, ui, palette);
-            ui.add_space(18.0);
+            ui.add_space(24.0);
 
-            if focus == SettingsFocus::About || jump == Some(5) {
+            group_heading(
+                ui,
+                palette,
+                t!(app.locale, "Maintenance"),
+                t!(app.locale, "Updates and information about Atlas Commerce."),
+            );
+            if focus == SettingsFocus::About {
                 ui.scroll_to_cursor(Some(egui::Align::Min));
             }
             updates_section(app, ui, palette);
@@ -119,6 +123,26 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Pal
             }
         });
     });
+}
+
+fn group_heading(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    title: impl AsRef<str>,
+    description: impl AsRef<str>,
+) {
+    ui.label(
+        RichText::new(title.as_ref())
+            .color(palette.text)
+            .strong()
+            .size(18.0),
+    );
+    ui.label(
+        RichText::new(description.as_ref())
+            .color(palette.secondary)
+            .size(12.5),
+    );
+    ui.add_space(12.0);
 }
 
 fn is_admin(app: &AtlasApp) -> bool {
@@ -463,6 +487,30 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
+        setting_row(
+            ui,
+            palette,
+            t!(app.locale, "Interface size"),
+            Some(&t!(
+                app.locale,
+                "Adjust the size of text and controls on this device."
+            )),
+            |ui| {
+                let options = [
+                    ("90 %", 90_u16),
+                    ("100 %", 100),
+                    ("110 %", 110),
+                    ("125 %", 125),
+                ];
+                if let Some(scale) =
+                    segmented(ui, palette, &options, Some(app.settings.ui_scale_percent))
+                {
+                    app.settings.ui_scale_percent = scale;
+                    app.save_settings();
+                }
+            },
+        );
+        ui.add_space(12.0);
         setting_row(
             ui,
             palette,

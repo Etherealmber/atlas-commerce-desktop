@@ -418,6 +418,8 @@ pub struct AtlasApp {
     /// per-frame style rebuild while nothing changed (a flicker/recompute
     /// source) and re-applies as soon as any token changes.
     pub applied_palette: Option<Palette>,
+    /// Scale last applied to the current context.
+    pub applied_ui_scale: Option<u16>,
     /// Last reduced-motion value baked into the egui style, so flipping the
     /// setting rebuilds styles even when the palette is unchanged.
     pub applied_reduced_motion: Option<bool>,
@@ -814,6 +816,7 @@ impl AtlasApp {
             update_receipt: None,
             last_clear_color: None,
             applied_palette: None,
+            applied_ui_scale: None,
             applied_reduced_motion: None,
             applied_title: None,
             notices: Vec::new(),
