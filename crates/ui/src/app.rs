@@ -306,6 +306,20 @@ impl AtlasApp {
 
     /// Mints a short-lived ticket and opens one allowlisted printable
     /// document in the system browser. The ticket is never logged.
+    pub(crate) fn load_finance_report(&mut self) {
+        if !self.role_policy().can_view_reports() || self.finance_report.loading {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let section = self.finance_report_section.clone();
+        let period = self.finance_report_period.clone();
+        self.finance_report.start(self.runner.spawn(async move {
+            crate::client_report::fetch_finance_combined(&api, &section, &period).await
+        }));
+    }
+
     pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
         if path == "/api/reports/stock" && !self.role_policy().can_view_reports() {
             return;
@@ -332,7 +346,17 @@ impl AtlasApp {
                     t!(locale, "Invalid report link.").into_owned(),
                 ));
             }
-            let ticket = api.report_link_ticket().await?;
+            let ticket = if path.starts_with("/api/reports/") {
+                api.report_link_ticket().await?
+            } else {
+                match api.print_link_ticket().await {
+                    Ok(ticket) => ticket,
+                    // Older servers only expose the original broad ticket.
+                    // Never retry with a weaker route on a denial or TLS error.
+                    Err(error) if error.status == 404 => api.report_link_ticket().await?,
+                    Err(error) => return Err(error),
+                }
+            };
             let mut url =
                 url::Url::parse(&format!("{}{path}", api.base_url())).map_err(|error| {
                     log::warn!("invalid printable link: {error}");
@@ -1521,6 +1545,9 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.stock_report.poll() {
+            ctx.request_repaint();
+        }
+        if self.finance_report.poll() {
             ctx.request_repaint();
         }
         if self.payables_report.poll() {

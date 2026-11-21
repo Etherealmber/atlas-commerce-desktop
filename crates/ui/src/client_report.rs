@@ -284,6 +284,45 @@ pub(crate) fn fictional_stock() -> ClientReport {
     parse_stock(r#"<div class="sheet"><h1>Rapport stock par catégories</h1><p>Entrepôt : Tous les emplacements</p><div class="grid"><div class="stat"><div class="l">Valeur au coût</div><div class="v">3 200 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">5 000 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">1 800 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">1</div></div></div><h2>1. Marbre</h2><table><tr><th>Réf.</th><th>Produit</th><th>Qté</th><th>Coût unit.</th><th>Prix unit.</th><th>Valeur coût</th><th>Valeur vente</th><th>Marge</th></tr><tr><td>SKU-DÉMO</td><td>Pierre Exemple</td><td>10</td><td>320</td><td>500</td><td>3 200</td><td>5 000</td><td>1 800</td></tr></table></div>"#).expect("fixture is valid")
 }
 
+/// Exact section and period keys supported by the combined finance report.
+const FINANCE_SECTIONS: &[&str] = &[
+    "balance",
+    "stock",
+    "receivables",
+    "payables",
+    "employees",
+    "aging",
+    "tva",
+];
+const FINANCE_PERIODS: &[&str] = &["month", "3m", "6m", "12m", "year"];
+
+pub(crate) async fn fetch_finance_combined(
+    api: &ApiClient,
+    section: &str,
+    period: &str,
+) -> Result<ClientReport, ApiError> {
+    if !FINANCE_SECTIONS.contains(&section) || !FINANCE_PERIODS.contains(&period) {
+        return Err(ApiError::client("Paramètres du rapport invalides."));
+    }
+    let mut url = url::Url::parse(&format!("{}/api/reports/combined", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    url.query_pairs_mut()
+        .append_pair("sections", section)
+        .append_pair("period", period);
+    let html = fetch_html(api, url).await?;
+    parse_finance_combined(&html)
+}
+
+fn parse_finance_combined(html: &str) -> Result<ClientReport, ApiError> {
+    let doc = Html::parse_document(html);
+    let selector =
+        Selector::parse(".sheet main.report-content > section").expect("static selector");
+    if doc.select(&selector).count() != 1 {
+        return Err(ApiError::client("Format du rapport non reconnu."));
+    }
+    parse_document(html, "Rapports combinés", 0)
+}
+
 /// The server supplies the payable amounts and applies its own bill filters.
 pub(crate) async fn fetch_payables(api: &ApiClient) -> Result<ClientReport, ApiError> {
     let url = url::Url::parse(&format!("{}/api/reports/payables", api.base_url()))
@@ -388,6 +427,15 @@ async fn fetch_html(api: &ApiClient, url: url::Url) -> Result<String, ApiError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn combined_finance_requires_the_expected_single_section() {
+        let html = r#"<div class="sheet"><h1>Rapports combinés</h1><main class="report-content"><section><h2>Solde &amp; mouvements</h2><div class="stat"><span class="l">Solde</span><span class="v">127 MAD</span></div><script>danger()</script></section></main></div>"#;
+        let report = parse_finance_combined(html).unwrap();
+        assert!(report.blocks.iter().any(|block| matches!(block, ReportBlock::Statistic { label, value } if label == "Solde" && value == "127 MAD")));
+        assert!(parse_finance_combined("<div class='sheet'><h1>Connexion</h1></div>").is_err());
+        assert!(parse_finance_combined("<div class='sheet'><h1>Rapports combinés</h1><main class='report-content'></main></div>").is_err());
+    }
+
     #[test]
     fn parses_receivables_without_recalculating_or_accepting_other_pages() {
         let html = r#"<div class="sheet"><h1>Rapport créances clients</h1><div class="stat"><div class="l">Total à recevoir</div><div class="v">1 234 MAD</div></div><h2>Factures de vente impayées</h2><table><tr><th>N°</th><th>Reste dû</th></tr><tr><td>FA-1</td><td>1 234 MAD</td></tr></table><script>secret()</script></div>"#;

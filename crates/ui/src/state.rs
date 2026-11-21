@@ -509,6 +509,10 @@ pub struct AtlasApp {
     pub(crate) receivables_open: bool,
     pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
     pub(crate) payables_open: bool,
+    pub(crate) finance_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) finance_report_open: bool,
+    pub(crate) finance_report_section: String,
+    pub(crate) finance_report_period: String,
     pub(crate) stock_report: Cache<crate::client_report::ClientReport>,
     pub(crate) stock_report_open: bool,
     pub(crate) stock_report_location: Option<i64>,
@@ -708,6 +712,10 @@ impl AtlasApp {
             receivables_open: false,
             payables_report: Cache::default(),
             payables_open: false,
+            finance_report: Cache::default(),
+            finance_report_open: false,
+            finance_report_section: "balance".to_owned(),
+            finance_report_period: "month".to_owned(),
             stock_report: Cache::default(),
             stock_report_open: false,
             stock_report_location: None,
@@ -1440,6 +1448,10 @@ impl AtlasApp {
         self.receivables_open = false;
         self.payables_report = Cache::default();
         self.payables_open = false;
+        self.finance_report = Cache::default();
+        self.finance_report_open = false;
+        self.finance_report_section = "balance".to_owned();
+        self.finance_report_period = "month".to_owned();
         self.stock_report = Cache::default();
         self.stock_report_open = false;
         self.stock_report_location = None;

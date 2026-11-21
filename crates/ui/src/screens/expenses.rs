@@ -106,6 +106,17 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
     ui.add_space(12.0);
 
+    if app.role_policy().can_view_reports() {
+        if secondary_button(ui, t!(app.locale, "Finance reports"), palette) {
+            app.finance_report_open = !app.finance_report_open;
+        }
+        if app.finance_report_open {
+            ui.add_space(10.0);
+            draw_finance_reports(app, ui, palette);
+            ui.add_space(12.0);
+        }
+    }
+
     if let Some(error) = app.expenses.error.clone() {
         error_banner(ui, &error, palette);
         ui.add_space(10.0);
@@ -228,6 +239,55 @@ pub(super) fn draw_dialogs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Pale
     if app.expense_editor.is_some() {
         draw_editor(app, ui, palette);
     }
+}
+
+/// Server-generated report content is parsed into native text and tables.
+/// No browser, script execution or local financial recalculation is involved.
+fn draw_finance_reports(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    const SECTIONS: [(&str, &str); 7] = [
+        ("balance", "Balance and movements"),
+        ("stock", "Stock valuation report"),
+        ("receivables", "Client receivables report"),
+        ("payables", "Supplier payables report"),
+        ("employees", "Employees and payroll"),
+        ("aging", "Aged balance"),
+        ("tva", "VAT summary"),
+    ];
+    const PERIODS: [(&str, &str); 5] = [
+        ("month", "Current month"),
+        ("3m", "Last 3 months"),
+        ("6m", "Last 6 months"),
+        ("12m", "Last 12 months"),
+        ("year", "Current year"),
+    ];
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(t!(app.locale, "Finance reports")).color(palette.text).strong().size(17.0));
+        ui.label(RichText::new(t!(app.locale, "Period applies to balance and VAT; stock, receivables, payables, employees and aging are current server views.")).color(palette.secondary).size(12.5));
+        let before = (app.finance_report_section.clone(), app.finance_report_period.clone());
+        ui.add_enabled_ui(!app.finance_report.loading, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let section = SECTIONS.iter().find(|(key, _)| *key == app.finance_report_section).map_or("Balance and movements", |(_, label)| *label);
+                egui::ComboBox::from_id_salt("finance-report-section").selected_text(crate::i18n::gettext(app.locale, section)).show_ui(ui, |ui| {
+                    for (key, label) in SECTIONS { ui.selectable_value(&mut app.finance_report_section, key.to_owned(), crate::i18n::gettext(app.locale, label)); }
+                });
+                let period = PERIODS.iter().find(|(key, _)| *key == app.finance_report_period).map_or("Current month", |(_, label)| *label);
+                egui::ComboBox::from_id_salt("finance-report-period").selected_text(crate::i18n::gettext(app.locale, period)).show_ui(ui, |ui| {
+                    for (key, label) in PERIODS { ui.selectable_value(&mut app.finance_report_period, key.to_owned(), crate::i18n::gettext(app.locale, label)); }
+                });
+            });
+        });
+        if before != (app.finance_report_section.clone(), app.finance_report_period.clone()) {
+            app.finance_report = Default::default();
+        }
+        ui.add_space(8.0);
+        if primary_button(ui, t!(app.locale, "Load report"), palette, !app.finance_report.loading) {
+            app.load_finance_report();
+        }
+        if app.finance_report.loading { super::centered_spinner(ui, palette); }
+        else if let Some(error) = &app.finance_report.error { error_banner(ui, error, palette); }
+        else if let Some(report) = &app.finance_report.data { super::clients::draw_report_blocks(ui, palette, report); }
+    });
 }
 
 fn expense_row(

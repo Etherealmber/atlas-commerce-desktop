@@ -1966,3 +1966,36 @@ msgstr "Travail"
 
 msgid "Password and passkey sign-in use your browser until the server supports a secure native flow."
 msgstr "La connexion par mot de passe ou clé d’accès utilise votre navigateur tant que le serveur ne propose pas de parcours natif sécurisé."
+
+msgid "Finance reports"
+msgstr "Rapports financiers"
+
+msgid "Balance and movements"
+msgstr "Solde et mouvements"
+
+msgid "Employees and payroll"
+msgstr "Employés et paie"
+
+msgid "Aged balance"
+msgstr "Balance âgée"
+
+msgid "VAT summary"
+msgstr "Récapitulatif TVA"
+
+msgid "Last 3 months"
+msgstr "3 derniers mois"
+
+msgid "Last 6 months"
+msgstr "6 derniers mois"
+
+msgid "Last 12 months"
+msgstr "12 derniers mois"
+
+msgid "Current year"
+msgstr "Année en cours"
+
+msgid "Load report"
+msgstr "Charger le rapport"
+
+msgid "Period applies to balance and VAT; stock, receivables, payables, employees and aging are current server views."
+msgstr "La période concerne le solde et la TVA ; le stock, les créances, les dettes, les employés et la balance âgée reflètent la situation actuelle du serveur."
