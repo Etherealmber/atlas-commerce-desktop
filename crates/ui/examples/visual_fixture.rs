@@ -117,7 +117,7 @@ fn build(route: &str) -> AtlasApp {
             Route::Products
         }
         "sales" | "quotes" => Route::Sales,
-        "expenses" => Route::Expenses,
+        "expenses" | "finance-report" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
         "employees" | "employee-editor" | "employee-editor-narrow" | "employee-wizard" => {
             Route::Employees
@@ -351,6 +351,10 @@ fn build(route: &str) -> AtlasApp {
     #[cfg(feature = "visual-fixtures")]
     if route == "stock-report" {
         app.show_fictional_stock_report();
+    }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "finance-report" {
+        app.show_fictional_finance_report();
     }
     if route == "client-invoices" {
         app.selected_client = Some(1);

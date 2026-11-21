@@ -886,6 +886,14 @@ impl AtlasApp {
         self.payables_report.data = Some(crate::client_report::fictional_payables());
     }
 
+    /// Show a fictional combined report without contacting a server.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_finance_report(&mut self) {
+        self.finance_report_open = true;
+        self.finance_report.data = Some(crate::client_report::fictional_finance_combined());
+    }
+
     /// Display the pre-authorization waiting state without making a request.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
@@ -1826,6 +1834,7 @@ impl AtlasApp {
             || self.receivables_report.loading
             || self.payables_report.loading
             || self.stock_report.loading
+            || self.finance_report.loading
             || self.stock_locations.loading
             || self.invoice_detail.loading
             || self.business_search.loading

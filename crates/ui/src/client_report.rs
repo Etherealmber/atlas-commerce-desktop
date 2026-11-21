@@ -323,6 +323,11 @@ fn parse_finance_combined(html: &str) -> Result<ClientReport, ApiError> {
     parse_document(html, "Rapports combinés", 0)
 }
 
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_finance_combined() -> ClientReport {
+    parse_finance_combined(r#"<div class="sheet"><h1>Rapports combinés</h1><main class="report-content"><p>Période fictive</p><section><h2>Solde &amp; mouvements</h2><div class="stat"><div class="l">Solde</div><div class="v">12 450 MAD</div></div><table><tr><th>Date</th><th>Libellé</th><th>Montant</th></tr><tr><td>2026-01-15</td><td>Vente fictive</td><td>350 MAD</td></tr></table></section></main></div>"#).expect("fixture is valid")
+}
+
 /// The server supplies the payable amounts and applies its own bill filters.
 pub(crate) async fn fetch_payables(api: &ApiClient) -> Result<ClientReport, ApiError> {
     let url = url::Url::parse(&format!("{}/api/reports/payables", api.base_url()))
@@ -492,6 +497,55 @@ mod tests {
 
     fn html_response(body: &str) -> Vec<u8> {
         format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn combined_finance_fetch_uses_authenticated_header_and_allowed_query() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buf = [0; 1024];
+            while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buf[..n]);
+                assert!(request.len() <= 16 * 1024);
+            }
+            let body = "<div class='sheet'><h1>Rapports combinés</h1><main class='report-content'><section><h2>Solde</h2></section></main></div>";
+            stream.write_all(&html_response(body)).unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        let api =
+            ApiClient::new(&format!("http://{address}"), "fixture-device", "Atlas-test").unwrap();
+        api.set_token(Some("fictional-token".into()));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "balance", "month"))
+                .is_ok()
+        );
+        let request = server.join().unwrap().to_lowercase();
+        assert!(request.starts_with("get /api/reports/combined?sections=balance&period=month "));
+        assert!(request.contains("authorization: bearer fictional-token"));
+        assert!(!request.lines().next().unwrap().contains("token"));
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "unknown", "month"))
+                .is_err()
+        );
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "balance", "custom"))
+                .is_err()
+        );
     }
 
     #[test]
