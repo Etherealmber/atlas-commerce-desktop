@@ -508,6 +508,8 @@ pub struct AtlasApp {
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
     pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) employee_situation: Cache<crate::client_report::ClientReport>,
+    pub(crate) employee_situation_id: Option<i64>,
     pub(crate) receivables_report: Cache<crate::client_report::ClientReport>,
     pub(crate) receivables_open: bool,
     pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
@@ -712,6 +714,8 @@ impl AtlasApp {
             key_create_job: None,
             report_job: None,
             client_report: Cache::default(),
+            employee_situation: Cache::default(),
+            employee_situation_id: None,
             receivables_report: Cache::default(),
             receivables_open: false,
             payables_report: Cache::default(),
@@ -1450,6 +1454,8 @@ impl AtlasApp {
         self.key_create_job = None;
         self.report_job = None;
         self.client_report = Cache::default();
+        self.employee_situation = Cache::default();
+        self.employee_situation_id = None;
         self.receivables_report = Cache::default();
         self.receivables_open = false;
         self.payables_report = Cache::default();

@@ -344,6 +344,25 @@ pub(crate) async fn fetch_receivables(api: &ApiClient) -> Result<ClientReport, A
     parse_document(&html, "Rapport créances clients", 1)
 }
 
+/// The official employee situation; render only the server's report content.
+pub(crate) async fn fetch_employee_situation(
+    api: &ApiClient,
+    id: i64,
+) -> Result<ClientReport, ApiError> {
+    if id <= 0 {
+        return Err(ApiError::client("Identifiant employé invalide."));
+    }
+    let mut url = url::Url::parse(&format!(
+        "{}/api/reports/employee-situation",
+        api.base_url()
+    ))
+    .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    url.query_pairs_mut()
+        .append_pair("employee_id", &id.to_string());
+    let html = fetch_html(api, url).await?;
+    parse_document(&html, "Situation employé", 2)
+}
+
 pub(crate) async fn fetch(
     api: &ApiClient,
     client: &atlas_api::models::Client,
@@ -432,6 +451,19 @@ async fn fetch_html(api: &ApiClient, url: url::Url) -> Result<String, ApiError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn employee_situation_requires_the_official_report_shape() {
+        let html = r#"<div class="sheet"><h1>Situation employé — Exemple</h1><table><tr><th>CIN</th><td>—</td></tr></table><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th></tr></table><script>ignored()</script></div>"#;
+        let report = parse_document(html, "Situation employé", 2).unwrap();
+        assert!(
+            report
+                .blocks
+                .iter()
+                .any(|block| matches!(block, ReportBlock::Table(_)))
+        );
+        assert!(parse_document("<h1>Connexion</h1>", "Situation employé", 2).is_err());
+    }
+
     #[test]
     fn combined_finance_requires_the_expected_single_section() {
         let html = r#"<div class="sheet"><h1>Rapports combinés</h1><main class="report-content"><section><h2>Solde &amp; mouvements</h2><div class="stat"><span class="l">Solde</span><span class="v">127 MAD</span></div><script>danger()</script></section></main></div>"#;

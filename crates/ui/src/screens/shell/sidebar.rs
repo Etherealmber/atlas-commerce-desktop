@@ -12,6 +12,11 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         Screen::Shell(route) => Some(route),
         _ => None,
     };
+    // Leave the native macOS traffic lights unobstructed in the top-left.
+    #[cfg(target_os = "macos")]
+    if fastframe_titlebar::enabled() {
+        ui.add_space(super::TITLEBAR_HEIGHT);
+    }
     ui.add_space(8.0);
     ui.vertical_centered(|ui| {
         if collapsed {

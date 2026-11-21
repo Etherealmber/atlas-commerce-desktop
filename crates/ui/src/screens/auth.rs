@@ -926,33 +926,24 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.label(RichText::new(notice).color(palette.secondary));
                             ui.add_space(8.0);
                         }
-                        if !app.requires_password
-                            && primary_button(ui, t!(app.locale, "Sign in with secure QR v2"), palette, !app.login.busy)
-                        {
-                            crate::native_auth_v2::start(app);
+                        ui.label(RichText::new(t!(app.locale, "Sign in with your username and password, or use a passkey, on the secure server page.")).color(palette.secondary).size(12.5));
+                        ui.add_space(10.0);
+                        if primary_button(ui, t!(app.locale, "Password or passkey"), palette, !app.login.busy) {
+                            crate::browser_auth::start(app);
                         }
-                        ui.add_space(8.0);
-                        if !app.requires_password && !app.login.busy
-                            && secondary_button(ui, t!(app.locale, "Use legacy QR"), palette)
-                        {
-                            start_qr_session(app);
-                        }
-                        ui.add_space(8.0);
-                        if app.login.busy {
-                            ui.spinner();
-                            ui.add_space(8.0);
-                        }
-                        ui.label(RichText::new(t!(app.locale, "Password and passkey sign-in use your browser until the server supports a secure native flow.")).color(palette.secondary).size(12.5));
-                        ui.add_space(8.0);
-                        ui.add_enabled_ui(!app.login.busy, |ui| {
-                            if secondary_button(
-                                ui,
-                                t!(app.locale, "Sign in with your browser"),
-                                palette,
-                            ) {
-                                crate::browser_auth::start(app);
+                        ui.add_space(14.0);
+                        if !app.requires_password && !app.login.busy {
+                            ui.label(RichText::new(t!(app.locale, "Or approve with a phone" )).color(palette.secondary).size(12.5));
+                            ui.add_space(6.0);
+                            if secondary_button(ui, t!(app.locale, "Sign in with secure QR v2"), palette) {
+                                crate::native_auth_v2::start(app);
                             }
-                        });
+                            ui.add_space(6.0);
+                            if secondary_button(ui, t!(app.locale, "Use legacy QR"), palette) {
+                                start_qr_session(app);
+                            }
+                        }
+                        if app.login.busy { ui.add_space(8.0); ui.spinner(); }
                     }
                     ui.add_space(8.0);
                 });

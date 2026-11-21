@@ -241,7 +241,9 @@ async fn run(
     )
     .await?;
     if !validate_capability(&caps) {
-        return Err("L’approbation téléphone v2 n’est pas disponible sur ce serveur.");
+        return Err(
+            "Le serveur n’annonce pas l’approbation téléphone v2. Vérifiez ses capacités et sa configuration ; vous pouvez choisir une autre méthode.",
+        );
     }
     if cancelled.load(Ordering::Relaxed) {
         return Err("Connexion annulée.");

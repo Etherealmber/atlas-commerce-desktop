@@ -288,6 +288,21 @@ fn format_float(value: f64) -> String {
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
+    if let Some(id) = app.client_report_id {
+        let client = app
+            .clients
+            .data
+            .as_ref()
+            .and_then(|items| items.iter().find(|item| item.id == id))
+            .cloned();
+        if let Some(client) = client {
+            ui.add_space(8.0);
+            draw_client_report(app, ui, palette, &client);
+            return;
+        }
+        app.client_report_id = None;
+        app.client_report = Default::default();
+    }
 
     ui.add_space(8.0);
     ui.horizontal(|ui| {
@@ -625,10 +640,6 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
-    if app.client_report_id == Some(client.id) {
-        ui.add_space(14.0);
-        draw_client_report(app, ui, palette, client);
-    }
     if app.client_invoice_id == Some(client.id) {
         ui.add_space(14.0);
         ui.separator();

@@ -54,27 +54,6 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // expand to the full window and starve the central column (the blank
     // shell bug came from Frame + set_min_size, whose minimum width did not
     // stop rows calling available_width() from growing the frame).
-    egui::Panel::top(egui::Id::new("shell-titlebar"))
-        .exact_size(TITLEBAR_HEIGHT)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(
-            // Same lifted chrome as the rail, with a single hairline on the
-            // bottom edge so the title bar reads as one piece with the rail
-            // instead of blending into the content background.
-            egui::Frame::NONE
-                .fill(palette.panel)
-                .inner_margin(egui::Margin::same(0)),
-        )
-        .show(ui, |ui| {
-            topbar::draw_titlebar(app, ui, ctx, palette);
-            let bottom = ui.min_rect().bottom();
-            let left = egui::pos2(ui.min_rect().left(), bottom);
-            let right = egui::pos2(ui.max_rect().right(), bottom);
-            ui.painter()
-                .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
-        });
-
     // Below the 1180 px breakpoint the rail drops its labels and becomes
     // the 72 px icon strip, mirroring the web sidebar's collapsed state.
     let viewport_width = ctx.input(|input| input.viewport_rect().width());
@@ -101,6 +80,27 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .frame(rail_frame)
         .show(ui, |ui| {
             sidebar::draw_rail(app, ui, palette, rail_collapsed);
+        });
+
+    egui::Panel::top(egui::Id::new("shell-titlebar"))
+        .exact_size(TITLEBAR_HEIGHT)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(
+            // Same lifted chrome as the rail, with a single hairline on the
+            // bottom edge so the title bar reads as one piece with the rail
+            // instead of blending into the content background.
+            egui::Frame::NONE
+                .fill(palette.panel)
+                .inner_margin(egui::Margin::same(0)),
+        )
+        .show(ui, |ui| {
+            topbar::draw_titlebar(app, ui, ctx, palette);
+            let bottom = ui.min_rect().bottom();
+            let left = egui::pos2(ui.min_rect().left(), bottom);
+            let right = egui::pos2(ui.max_rect().right(), bottom);
+            ui.painter()
+                .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
         });
 
     let agent_available = matches!(

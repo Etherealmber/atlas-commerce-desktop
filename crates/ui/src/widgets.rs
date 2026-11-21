@@ -62,22 +62,24 @@ pub fn no_wrap_scope<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -
 
 /// A compact status pill such as the web app's stock badges.
 pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color: Color32) {
-    egui::Frame::NONE
-        .fill(fill)
-        .corner_radius(999.0)
-        .inner_margin(egui::Margin::symmetric(10, 3))
-        .stroke(Stroke::new(1.0, text_color.gamma_multiply(0.25)))
-        .show(ui, |ui| {
-            // A badge sizes to one line: a starved pill used to break its
-            // label across several lines instead of staying compact.
-            no_wrap_scope(ui, |ui| {
-                ui.label(
-                    RichText::new(text.as_ref())
-                        .color(text_color)
-                        .font(crate::fonts::semibold(12.0)),
-                );
-            });
-        });
+    // A frame in a centered horizontal row can inherit the row's entire
+    // available height. Allocate the badge from its measured text instead.
+    let galley = ui.painter().layout_no_wrap(
+        text.as_ref().to_owned(),
+        crate::fonts::semibold(12.0),
+        text_color,
+    );
+    let size = galley.size() + egui::vec2(20.0, 6.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter().rect_filled(rect, 999.0, fill);
+    ui.painter().rect_stroke(
+        rect,
+        999.0,
+        Stroke::new(1.0, text_color.gamma_multiply(0.25)),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter()
+        .galley(rect.min + egui::vec2(10.0, 3.0), galley, text_color);
 }
 
 /// Draws a small square icon tinted for the current palette.
@@ -680,6 +682,23 @@ mod tests {
         output.textures_delta.set.clear();
         output.textures_delta.free.clear();
         result
+    }
+
+    #[test]
+    fn status_pill_stays_compact_in_a_tall_horizontal_row() {
+        let height = run_headless(|ui| {
+            ui.horizontal_centered(|ui| {
+                pill(
+                    ui,
+                    "51 unités",
+                    egui::Color32::DARK_GREEN,
+                    egui::Color32::WHITE,
+                );
+                ui.min_rect().height()
+            })
+            .inner
+        });
+        assert!(height < 50.0, "pill unexpectedly filled row: {height}");
     }
 
     #[test]

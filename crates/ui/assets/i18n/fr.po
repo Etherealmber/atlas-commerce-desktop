@@ -2047,3 +2047,15 @@ msgstr "Taille de l’interface"
 
 msgid "Adjust the size of text and controls on this device."
 msgstr "Ajustez la taille du texte et des commandes sur cet appareil."
+
+msgid "Employee situation"
+msgstr "Situation employé"
+
+msgid "Sign in with your username and password, or use a passkey, on the secure server page."
+msgstr "Connectez-vous avec votre identifiant et votre mot de passe, ou une clé d’accès, sur la page sécurisée du serveur."
+
+msgid "Password or passkey"
+msgstr "Mot de passe ou clé d’accès"
+
+msgid "Or approve with a phone"
+msgstr "Ou approuver avec un téléphone"

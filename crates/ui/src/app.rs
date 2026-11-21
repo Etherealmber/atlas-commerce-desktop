@@ -995,6 +995,22 @@ impl AtlasApp {
         );
     }
 
+    pub(crate) fn load_employee_situation(&mut self, id: i64) {
+        if id <= 0 || !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_situation_id = Some(id);
+        self.employee_situation = Default::default();
+        self.employee_situation.start(
+            self.runner.spawn(async move {
+                crate::client_report::fetch_employee_situation(&api, id).await
+            }),
+        );
+    }
+
     /// Load the server's report as inert native text and tables.
     pub(crate) fn load_client_report(&mut self, client: &atlas_api::models::Client, full: bool) {
         if !self.role_policy().allows_route(Route::Clients) {
@@ -1577,6 +1593,9 @@ impl AtlasApp {
         if self.receivables_report.poll() {
             ctx.request_repaint();
         }
+        if self.employee_situation.poll() {
+            ctx.request_repaint();
+        }
         if self.client_report.poll() {
             ctx.request_repaint();
         }
@@ -1844,6 +1863,7 @@ impl AtlasApp {
             || self.dashboard.loading
             || self.products.loading
             || self.client_invoices.loading
+            || self.employee_situation.loading
             || self.client_report.loading
             || self.receivables_report.loading
             || self.payables_report.loading
