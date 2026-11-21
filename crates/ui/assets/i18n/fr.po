@@ -1942,3 +1942,15 @@ msgstr "Confirmer la suppression"
 
 msgid "Load the image list before adding a photo."
 msgstr "Chargez la liste des images avant d’ajouter une photo."
+
+msgid "A maximum of four photos can be staged."
+msgstr "Vous pouvez préparer quatre photos maximum."
+
+msgid "Drop up to four JPEG, PNG, WebP or GIF files, one at a time (4 MB each). They upload after the product is created."
+msgstr "Déposez jusqu’à quatre JPEG, PNG, WebP ou GIF, un par un (4 Mo chacun). Ils seront envoyés après la création du produit."
+
+msgid "Photo"
+msgstr "Photo"
+
+msgid "Product created, but some photos could not be added"
+msgstr "Produit créé, mais certaines photos n’ont pas pu être ajoutées"

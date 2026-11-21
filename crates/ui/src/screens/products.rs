@@ -204,6 +204,10 @@ fn draw_product_label(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
     });
 }
 
+struct ProductSaveResult {
+    failed_photos: usize,
+}
+
 /// The create-product dialog state.
 #[derive(Default)]
 pub struct ProductEditor {
@@ -234,12 +238,14 @@ pub struct ProductEditor {
     image_job: Option<Job<Result<(), ApiError>>>,
     image_error: Option<String>,
     image_confirm: Option<i64>,
+    staged_images: Vec<String>,
+    stage_job: Option<Job<Result<String, ApiError>>>,
     pub saving: bool,
     /// A 409 `DUPLICATE_PRODUCT` was answered; the next save forces it.
     pub force_duplicate: bool,
     duplicate_identity: Option<(String, String, String)>,
     pub error: Option<String>,
-    pub job: Option<Job<Result<Product, ApiError>>>,
+    job: Option<Job<Result<ProductSaveResult, ApiError>>>,
 }
 
 impl ProductEditor {
@@ -256,7 +262,10 @@ impl ProductEditor {
     }
 
     pub(crate) fn is_busy(&self) -> bool {
-        self.saving || self.variant_job.is_some() || self.image_job.is_some()
+        self.saving
+            || self.variant_job.is_some()
+            || self.image_job.is_some()
+            || self.stage_job.is_some()
     }
 
     #[must_use]
@@ -1019,6 +1028,17 @@ fn poll_images(app: &mut AtlasApp, ctx: &egui::Context) {
     if editor.images.poll() {
         ctx.request_repaint();
     }
+    if let Some(result) = editor.stage_job.as_ref().and_then(Job::poll) {
+        editor.stage_job = None;
+        match result {
+            Ok(data) => {
+                editor.staged_images.push(data);
+                editor.image_error = None;
+            }
+            Err(error) => editor.image_error = Some(error.message),
+        }
+        ctx.request_repaint();
+    }
     if let Some(result) = editor.image_job.as_ref().and_then(Job::poll) {
         editor.image_job = None;
         match result {
@@ -1032,11 +1052,9 @@ fn poll_images(app: &mut AtlasApp, ctx: &egui::Context) {
         }
         ctx.request_repaint();
     }
-    if app
-        .product_editor
-        .as_ref()
-        .is_some_and(|editor| editor.images.loading || editor.image_job.is_some())
-    {
+    if app.product_editor.as_ref().is_some_and(|editor| {
+        editor.images.loading || editor.image_job.is_some() || editor.stage_job.is_some()
+    }) {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
 }
@@ -1091,6 +1109,52 @@ fn dropped_image_data(
         "data:{mime};base64,{}",
         base64::engine::general_purpose::STANDARD.encode(bytes)
     ))
+}
+
+fn draw_staged_images(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    let dropped = ui
+        .ctx()
+        .input(|input| input.raw.dropped_files.first().cloned());
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    if let Some(file) = dropped
+        && editor.stage_job.is_none()
+    {
+        if editor.staged_images.len() >= 4 {
+            editor.image_error =
+                Some(t!(locale, "A maximum of four photos can be staged.").into_owned());
+        } else {
+            let path = file.path().to_path_buf();
+            editor.stage_job = Some(
+                app.runner
+                    .spawn(async move { dropped_image_data(Some(path), None) }),
+            );
+            editor.image_error = None;
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+    ui.label(RichText::new(t!(locale, "Drop up to four JPEG, PNG, WebP or GIF files, one at a time (4 MB each). They upload after the product is created.")).color(palette.secondary));
+    if editor.stage_job.is_some() {
+        super::centered_spinner(ui, palette);
+    }
+    if let Some(error) = &editor.image_error {
+        error_banner(ui, error, palette);
+    }
+    let mut remove = None;
+    for index in 0..editor.staged_images.len() {
+        ui.horizontal(|ui| {
+            ui.label(format!("{} {}", t!(locale, "Photo"), index + 1));
+            if secondary_button(ui, t!(locale, "Remove"), palette) {
+                remove = Some(index);
+            }
+        });
+    }
+    if let Some(index) = remove {
+        editor.staged_images.remove(index);
+    }
 }
 
 fn draw_images(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -1403,7 +1467,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         editor.job = None;
         editor.saving = false;
         match result {
-            Ok(_) => {
+            Ok(result) => {
                 let editing = editor.editing_id.is_some();
                 app.product_editor = None;
                 app.notice(
@@ -1414,6 +1478,16 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     }
                     .into_owned(),
                 );
+                if result.failed_photos > 0 {
+                    app.notice(format!(
+                        "{} : {}",
+                        t!(
+                            app.locale,
+                            "Product created, but some photos could not be added"
+                        ),
+                        result.failed_photos
+                    ));
+                }
                 app.load_products();
                 return;
             }
@@ -1511,7 +1585,8 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .as_ref()
                         .is_some_and(ProductEditor::is_busy);
                     let step = app.product_editor.as_ref().map_or(0, |editor| editor.step);
-                    let total = if app.product_editor.as_ref().is_some_and(|editor| editor.editing_id.is_some()) { 6 } else { 4 };
+                    let editing = app.product_editor.as_ref().is_some_and(|editor| editor.editing_id.is_some());
+                    let total = if editing { 6 } else { 5 };
                     let name_empty = app
                         .product_editor
                         .as_ref()
@@ -1525,7 +1600,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         1 => t!(locale, "Classification"),
                         2 => t!(locale, "Price and stock"),
                         3 => t!(locale, "Volume discounts"),
-                        4 => t!(locale, "Variants"),
+                        4 if editing => t!(locale, "Variants"),
                         _ => t!(locale, "Photos"),
                     };
                     ui.label(
@@ -1630,7 +1705,8 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             _ => {}
                         }
                     }
-                    if step == 4 { draw_variants(app, ui, palette); }
+                    if step == 4 && editing { draw_variants(app, ui, palette); }
+                    if step == 4 && !editing { draw_staged_images(app, ui, palette); }
                     if step == 5 { draw_images(app, ui, palette); }
 
                     if let Some(error) = &error {
@@ -1678,8 +1754,8 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     editor.step += 1;
                                     editor.error = None;
                                 }
-                                if step + 1 == 4 { load_variants(app); }
-                                if step + 1 == 5 { load_images(app); }
+                                if editing && step + 1 == 4 { load_variants(app); }
+                                if editing && step + 1 == 5 { load_images(app); }
                             } else {
                                 submit_product(app);
                             }
@@ -1706,6 +1782,7 @@ impl ProductEditor {
             || !self.description.trim().is_empty()
             || self.bulk_qty.iter().any(|v| !v.trim().is_empty())
             || self.bulk_percent.iter().any(|v| !v.trim().is_empty())
+            || !self.staged_images.is_empty()
     }
 
     fn identity(&self) -> (String, String, String) {
@@ -1826,11 +1903,31 @@ fn submit_product(app: &mut AtlasApp) {
         force_duplicate: force,
         bulk_discounts: product.bulk_discounts.clone(),
     };
+    let photos = editor.staged_images.clone();
     let job = app.runner.spawn(async move {
         if let Some(id) = editing_id {
-            client.update_product(id, &update).await
+            client.update_product(id, &update).await?;
+            Ok(ProductSaveResult { failed_photos: 0 })
         } else {
-            client.create_product(&product, force).await
+            let created = client.create_product(&product, force).await?;
+            let mut failed_photos = 0;
+            let mut uploaded = 0;
+            for data_url in photos {
+                if created.id <= 0 {
+                    failed_photos += 1;
+                    continue;
+                }
+                let image = atlas_api::models::AddProductImage {
+                    data_url,
+                    is_primary: uploaded == 0,
+                };
+                if client.add_product_image(created.id, &image).await.is_ok() {
+                    uploaded += 1;
+                } else {
+                    failed_photos += 1;
+                }
+            }
+            Ok(ProductSaveResult { failed_photos })
         }
     });
     editor.saving = true;
@@ -2046,6 +2143,18 @@ mod product_editor_tests {
         editor.editing_id = Some(42);
         editor.stock = "-12".into();
         assert_eq!(editor.parse().unwrap().stock_quantity, 0.0);
+    }
+
+    #[test]
+    fn staged_photos_mark_new_editor_dirty() {
+        let mut editor = ProductEditor::new();
+        assert!(!editor.is_dirty());
+        editor
+            .staged_images
+            .push("data:image/png;base64,AA==".into());
+        assert!(editor.is_dirty());
+        editor.staged_images.clear();
+        assert!(!editor.is_dirty());
     }
 
     #[test]
