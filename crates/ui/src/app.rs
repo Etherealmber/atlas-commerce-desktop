@@ -121,6 +121,7 @@ impl AtlasApp {
         // a late completion cannot replace the active account.
         self.login = Default::default();
         self.qr = Default::default();
+        crate::native_auth_v2::cancel(self);
         self.session = Some(record.clone());
         if !persist {
             match self.vault_worker.save(record.clone()) {
@@ -253,7 +254,7 @@ impl AtlasApp {
         let query = self.product_search.clone();
         let job = self
             .runner
-            .spawn(async move { client.products(&query, 300).await });
+            .spawn(async move { client.catalog_products(&query, 300).await });
         self.products.start(job);
     }
 
@@ -306,6 +307,20 @@ impl AtlasApp {
 
     /// Mints a short-lived ticket and opens one allowlisted printable
     /// document in the system browser. The ticket is never logged.
+    pub(crate) fn load_finance_report(&mut self) {
+        if !self.role_policy().can_view_reports() || self.finance_report.loading {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        let section = self.finance_report_section.clone();
+        let period = self.finance_report_period.clone();
+        self.finance_report.start(self.runner.spawn(async move {
+            crate::client_report::fetch_finance_combined(&api, &section, &period).await
+        }));
+    }
+
     pub(crate) fn open_printable(&mut self, path: &str, params: &[(&str, String)]) {
         if path == "/api/reports/stock" && !self.role_policy().can_view_reports() {
             return;
@@ -332,7 +347,17 @@ impl AtlasApp {
                     t!(locale, "Invalid report link.").into_owned(),
                 ));
             }
-            let ticket = api.report_link_ticket().await?;
+            let ticket = if path.starts_with("/api/reports/") {
+                api.report_link_ticket().await?
+            } else {
+                match api.print_link_ticket().await {
+                    Ok(ticket) => ticket,
+                    // Older servers only expose the original broad ticket.
+                    // Never retry with a weaker route on a denial or TLS error.
+                    Err(error) if error.status == 404 => api.report_link_ticket().await?,
+                    Err(error) => return Err(error),
+                }
+            };
             let mut url =
                 url::Url::parse(&format!("{}{path}", api.base_url())).map_err(|error| {
                     log::warn!("invalid printable link: {error}");
@@ -860,6 +885,24 @@ impl AtlasApp {
     pub fn show_fictional_payables(&mut self) {
         self.payables_open = true;
         self.payables_report.data = Some(crate::client_report::fictional_payables());
+    }
+
+    /// Show a fictional combined report without contacting a server.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_finance_report(&mut self) {
+        self.finance_report_open = true;
+        self.finance_report.data = Some(crate::client_report::fictional_finance_combined());
+    }
+
+    /// Show a fictional native v2 QR without opening a connection.
+    #[cfg(feature = "visual-fixtures")]
+    #[doc(hidden)]
+    pub fn show_fictional_native_v2(&mut self) {
+        if let Some(server) = self.server_store.selected_url() {
+            self.native_login = crate::native_auth_v2::fictional(server.to_owned());
+            self.login.busy = true;
+        }
     }
 
     /// Display the pre-authorization waiting state without making a request.
@@ -1459,6 +1502,7 @@ impl AtlasApp {
             {
                 // A deep link supersedes an in-flight hosted login.
                 crate::browser_auth::cancel(self);
+                crate::native_auth_v2::cancel(self);
                 self.qr = Default::default();
                 self.login.pending_link = Some(link);
                 self.screen = Screen::Login;
@@ -1468,6 +1512,7 @@ impl AtlasApp {
                 && self.login.job_link.is_none()
             {
                 crate::browser_auth::cancel(self);
+                crate::native_auth_v2::cancel(self);
                 self.login.pending_link = None;
                 self.qr = Default::default();
                 self.qr.active = true;
@@ -1486,6 +1531,9 @@ impl AtlasApp {
         self.drain_tray(ctx);
         self.poll_vault();
         self.consume_deep_links();
+        self.product_images.poll(ctx);
+        screens::products::poll_product_actions(self, ctx);
+        screens::clients::poll_client_delete(self, ctx);
         // Release HTTP-loaded avatar textures queued by state changes.
         if let Some(uri) = self.avatar_evict.take() {
             ctx.forget_image(&uri);
@@ -1518,6 +1566,9 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.stock_report.poll() {
+            ctx.request_repaint();
+        }
+        if self.finance_report.poll() {
             ctx.request_repaint();
         }
         if self.payables_report.poll() {
@@ -1785,6 +1836,7 @@ impl AtlasApp {
             || self.vault_restore.is_some()
             || !self.vault_saves.is_empty()
             || !self.vault_removals.is_empty()
+            || self.native_login.active
             || self.qr.job_status.is_some()
             || self.qr.job_create.is_some()
             || self.qr.job_complete.is_some()
@@ -1796,6 +1848,7 @@ impl AtlasApp {
             || self.receivables_report.loading
             || self.payables_report.loading
             || self.stock_report.loading
+            || self.finance_report.loading
             || self.stock_locations.loading
             || self.invoice_detail.loading
             || self.business_search.loading

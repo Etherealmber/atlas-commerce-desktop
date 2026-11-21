@@ -284,6 +284,50 @@ pub(crate) fn fictional_stock() -> ClientReport {
     parse_stock(r#"<div class="sheet"><h1>Rapport stock par catégories</h1><p>Entrepôt : Tous les emplacements</p><div class="grid"><div class="stat"><div class="l">Valeur au coût</div><div class="v">3 200 MAD</div></div><div class="stat"><div class="l">Valeur à la vente</div><div class="v">5 000 MAD</div></div><div class="stat"><div class="l">Marge potentielle</div><div class="v">1 800 MAD</div></div><div class="stat"><div class="l">Alertes stock bas</div><div class="v">1</div></div></div><h2>1. Marbre</h2><table><tr><th>Réf.</th><th>Produit</th><th>Qté</th><th>Coût unit.</th><th>Prix unit.</th><th>Valeur coût</th><th>Valeur vente</th><th>Marge</th></tr><tr><td>SKU-DÉMO</td><td>Pierre Exemple</td><td>10</td><td>320</td><td>500</td><td>3 200</td><td>5 000</td><td>1 800</td></tr></table></div>"#).expect("fixture is valid")
 }
 
+/// Exact section and period keys supported by the combined finance report.
+const FINANCE_SECTIONS: &[&str] = &[
+    "balance",
+    "stock",
+    "receivables",
+    "payables",
+    "employees",
+    "aging",
+    "tva",
+];
+const FINANCE_PERIODS: &[&str] = &["month", "3m", "6m", "12m", "year"];
+
+pub(crate) async fn fetch_finance_combined(
+    api: &ApiClient,
+    section: &str,
+    period: &str,
+) -> Result<ClientReport, ApiError> {
+    if !FINANCE_SECTIONS.contains(&section) || !FINANCE_PERIODS.contains(&period) {
+        return Err(ApiError::client("Paramètres du rapport invalides."));
+    }
+    let mut url = url::Url::parse(&format!("{}/api/reports/combined", api.base_url()))
+        .map_err(|_| ApiError::client("Adresse du rapport invalide."))?;
+    url.query_pairs_mut()
+        .append_pair("sections", section)
+        .append_pair("period", period);
+    let html = fetch_html(api, url).await?;
+    parse_finance_combined(&html)
+}
+
+fn parse_finance_combined(html: &str) -> Result<ClientReport, ApiError> {
+    let doc = Html::parse_document(html);
+    let selector =
+        Selector::parse(".sheet main.report-content > section").expect("static selector");
+    if doc.select(&selector).count() != 1 {
+        return Err(ApiError::client("Format du rapport non reconnu."));
+    }
+    parse_document(html, "Rapports combinés", 0)
+}
+
+#[cfg(feature = "visual-fixtures")]
+pub(crate) fn fictional_finance_combined() -> ClientReport {
+    parse_finance_combined(r#"<div class="sheet"><h1>Rapports combinés</h1><main class="report-content"><p>Période fictive</p><section><h2>Solde &amp; mouvements</h2><div class="stat"><div class="l">Solde</div><div class="v">12 450 MAD</div></div><table><tr><th>Date</th><th>Libellé</th><th>Montant</th></tr><tr><td>2026-01-15</td><td>Vente fictive</td><td>350 MAD</td></tr></table></section></main></div>"#).expect("fixture is valid")
+}
+
 /// The server supplies the payable amounts and applies its own bill filters.
 pub(crate) async fn fetch_payables(api: &ApiClient) -> Result<ClientReport, ApiError> {
     let url = url::Url::parse(&format!("{}/api/reports/payables", api.base_url()))
@@ -389,6 +433,15 @@ async fn fetch_html(api: &ApiClient, url: url::Url) -> Result<String, ApiError> 
 mod tests {
     use super::*;
     #[test]
+    fn combined_finance_requires_the_expected_single_section() {
+        let html = r#"<div class="sheet"><h1>Rapports combinés</h1><main class="report-content"><section><h2>Solde &amp; mouvements</h2><div class="stat"><span class="l">Solde</span><span class="v">127 MAD</span></div><script>danger()</script></section></main></div>"#;
+        let report = parse_finance_combined(html).unwrap();
+        assert!(report.blocks.iter().any(|block| matches!(block, ReportBlock::Statistic { label, value } if label == "Solde" && value == "127 MAD")));
+        assert!(parse_finance_combined("<div class='sheet'><h1>Connexion</h1></div>").is_err());
+        assert!(parse_finance_combined("<div class='sheet'><h1>Rapports combinés</h1><main class='report-content'></main></div>").is_err());
+    }
+
+    #[test]
     fn parses_receivables_without_recalculating_or_accepting_other_pages() {
         let html = r#"<div class="sheet"><h1>Rapport créances clients</h1><div class="stat"><div class="l">Total à recevoir</div><div class="v">1 234 MAD</div></div><h2>Factures de vente impayées</h2><table><tr><th>N°</th><th>Reste dû</th></tr><tr><td>FA-1</td><td>1 234 MAD</td></tr></table><script>secret()</script></div>"#;
         let report = parse_document(html, "Rapport créances clients", 1).unwrap();
@@ -444,6 +497,55 @@ mod tests {
 
     fn html_response(body: &str) -> Vec<u8> {
         format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn combined_finance_fetch_uses_authenticated_header_and_allowed_query() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buf = [0; 1024];
+            while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buf[..n]);
+                assert!(request.len() <= 16 * 1024);
+            }
+            let body = "<div class='sheet'><h1>Rapports combinés</h1><main class='report-content'><section><h2>Solde</h2></section></main></div>";
+            stream.write_all(&html_response(body)).unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        let api =
+            ApiClient::new(&format!("http://{address}"), "fixture-device", "Atlas-test").unwrap();
+        api.set_token(Some("fictional-token".into()));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "balance", "month"))
+                .is_ok()
+        );
+        let request = server.join().unwrap().to_lowercase();
+        assert!(request.starts_with("get /api/reports/combined?sections=balance&period=month "));
+        assert!(request.contains("authorization: bearer fictional-token"));
+        assert!(!request.lines().next().unwrap().contains("token"));
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "unknown", "month"))
+                .is_err()
+        );
+        assert!(
+            runtime
+                .block_on(fetch_finance_combined(&api, "balance", "custom"))
+                .is_err()
+        );
     }
 
     #[test]

@@ -27,4 +27,9 @@ impl ApiClient {
     pub async fn report_link_ticket(&self) -> Result<ReportTicket, ApiError> {
         self.get_data("/api/reports/link-ticket").await
     }
+
+    /// Mint the separate ticket for non-report documents on current workers.
+    pub async fn print_link_ticket(&self) -> Result<ReportTicket, ApiError> {
+        self.get_data("/api/print/link-ticket").await
+    }
 }

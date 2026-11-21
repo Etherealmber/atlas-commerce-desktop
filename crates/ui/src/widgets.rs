@@ -85,60 +85,8 @@ pub fn icon(ui: &mut egui::Ui, which: Icon, tint: Color32, size: f32) {
     ui.add(which.image(tint, size));
 }
 
-/// A primary accent button (right-aligned in dialogs by convention).
-pub fn primary_button(
-    ui: &mut egui::Ui,
-    text: impl AsRef<str>,
-    palette: &Palette,
-    enabled: bool,
-) -> bool {
-    let button = egui::Button::new(
-        RichText::new(text.as_ref())
-            .color(palette.on_accent)
-            .strong(),
-    )
-    // Extend instead of wrapping: a starved row used to collapse the label
-    // one character per line ("Ajuster le stock" rendered vertically).
-    .wrap_mode(TextWrapMode::Extend)
-    .min_size(egui::vec2(0.0, crate::theme::PRIMARY_BUTTON_HEIGHT))
-    .fill(if enabled {
-        palette.accent
-    } else {
-        palette.surface_active
-    })
-    .corner_radius(crate::theme::RADIUS_CONTROL as f32);
-    ui.add_enabled(enabled, button).clicked()
-}
-
-/// A neutral secondary button.
-pub fn secondary_button(ui: &mut egui::Ui, text: impl AsRef<str>, palette: &Palette) -> bool {
-    let button = egui::Button::new(RichText::new(text.as_ref()).color(palette.text))
-        .wrap_mode(TextWrapMode::Extend)
-        .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
-        .fill(palette.surface)
-        .stroke(Stroke::new(1.0, palette.outline))
-        .corner_radius(crate::theme::RADIUS_CONTROL as f32);
-    ui.add(button).clicked()
-}
-
-/// A destructive button.
-pub fn danger_button(
-    ui: &mut egui::Ui,
-    text: impl AsRef<str>,
-    palette: &Palette,
-    enabled: bool,
-) -> bool {
-    let button = egui::Button::new(RichText::new(text.as_ref()).color(Color32::WHITE).strong())
-        .wrap_mode(TextWrapMode::Extend)
-        .min_size(egui::vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
-        .fill(if enabled {
-            palette.danger
-        } else {
-            palette.surface_active
-        })
-        .corner_radius(crate::theme::RADIUS_CONTROL as f32);
-    ui.add_enabled(enabled, button).clicked()
-}
+// Kept as re-exports so all screens share the centralized button system.
+pub use crate::buttons::{danger_button, primary_button, secondary_button};
 
 /// A surface card with the palette's outline.
 pub fn card(palette: &Palette) -> egui::Frame {

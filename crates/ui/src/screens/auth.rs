@@ -806,10 +806,11 @@ enum LoginTab {
     Qr,
 }
 
-/// Start the hosted login automatically, never the legacy native form. The
-/// local screen only reports progress/errors and offers an explicit fallback.
+/// Native sign-in entry point. QR pairing is opt-in; the proof-bound desktop
+/// browser flow remains an explicit fallback for server-side challenges.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
+    crate::native_auth_v2::poll(app);
     if !matches!(app.screen, Screen::Login) {
         return;
     }
@@ -821,20 +822,6 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         app.login.browser_auto_started = true;
         start_verify_link(app, link);
     }
-    if app.login.pending_link.is_none()
-        && should_start_hosted_login(
-            app.login.browser_auto_started,
-            app.login.busy,
-            app.qr.active,
-        )
-    {
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        let started = crate::browser_auth::start_embedded(app);
-        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-        let started = crate::browser_auth::start(app);
-        app.login.browser_auto_started = started;
-    }
-
     // During the required v1 handshake, show a minimal cancellable status,
     // not a second login page. The validated server page opens as soon as its
     // authorization URL is available.
@@ -867,15 +854,25 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                 crate::browser_auth::cancel(app);
             }
+            ui.add_space(8.0);
+            if !app.requires_password
+                && secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette)
+            {
+                crate::browser_auth::cancel(app);
+                start_qr_session(app);
+            }
         });
         return;
     }
 
-    // This is status and recovery chrome only; the login form remains the
-    // server's unmodified page inside its isolated browser context.
+    // Native entry screen. The external browser fallback uses the server's
+    // unmodified page, and never injects credentials or scripts.
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.vertical_centered(|ui| {
-            ui.add_space((ui.available_height() * 0.12).clamp(16.0, 72.0));
+            // Keep the native sign-in surface centered on a large window and
+            // scrollable rather than clipped when the viewport is compact.
+            let estimated_height = if app.qr.active || app.native_login.active { 610.0 } else { 390.0 };
+            ui.add_space(((ui.available_height() - estimated_height) * 0.5).max(16.0));
             let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
             card(palette).show(ui, |ui| {
                 ui.set_width((width - 34.0).max(0.0));
@@ -895,26 +892,30 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .size(13.0),
                     );
                     ui.add_space(20.0);
-                    if app.qr.active {
-                        poll_qr_status(app, ui);
-                        ui.label(
-                            RichText::new(t!(app.locale, "QR sign-in request received."))
-                                .color(palette.text)
-                                .strong(),
-                        );
-                        ui.add_space(8.0);
-                        let message = match app.qr.status.as_str() {
-                            "approved" => t!(app.locale, "Phone approved — finalizing…"),
-                            "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
-                            "denied" => t!(app.locale, "Login refused on the phone."),
-                            "expired" | "consumed" => t!(app.locale, "Code expired."),
-                            _ => t!(app.locale, "Waiting for the phone…"),
-                        };
-                        ui.label(RichText::new(message).color(palette.secondary));
-                        ui.add_space(16.0);
+                    if app.native_login.active {
+                        if let Some(url) = &app.native_login.qr_url {
+                            qr_image(ui, url, palette);
+                            ui.add_space(12.0);
+                            ui.label(RichText::new(t!(app.locale, "Scan with your signed-in phone, then compare this code on both devices:")).color(palette.secondary));
+                            if let Some(code) = &app.native_login.pairing_code {
+                                ui.label(RichText::new(code).font(crate::fonts::mono_semibold(20.0)).color(palette.text));
+                            }
+                            if let Some(server) = app.server_store.selected_url() {
+                                ui.label(RichText::new(server).color(palette.secondary).size(12.0));
+                            }
+                            ui.label(RichText::new(t!(app.locale, "Waiting for phone approval…")).color(palette.secondary));
+                        } else {
+                            ui.spinner();
+                            ui.label(RichText::new(t!(app.locale, "Preparing secure QR sign-in…")).color(palette.secondary));
+                        }
+                        ui.add_space(12.0);
+                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) { crate::native_auth_v2::cancel(app); }
+                    } else if app.qr.active {
+                        draw_qr(app, ui, palette);
+                        ui.add_space(12.0);
                         if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                             app.qr = Default::default();
-                            app.login.browser_auto_started = false;
+                            app.login.browser_auto_started = true;
                         }
                     } else {
                         if let Some(error) = &app.login.error {
@@ -925,23 +926,23 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.label(RichText::new(notice).color(palette.secondary));
                             ui.add_space(8.0);
                         }
+                        if !app.requires_password
+                            && primary_button(ui, t!(app.locale, "Sign in with secure QR v2"), palette, !app.login.busy)
+                        {
+                            crate::native_auth_v2::start(app);
+                        }
+                        ui.add_space(8.0);
+                        if !app.requires_password && !app.login.busy
+                            && secondary_button(ui, t!(app.locale, "Use legacy QR"), palette)
+                        {
+                            start_qr_session(app);
+                        }
+                        ui.add_space(8.0);
                         if app.login.busy {
                             ui.spinner();
                             ui.add_space(8.0);
                         }
-                        #[cfg(any(
-                            target_os = "windows",
-                            target_os = "linux",
-                            target_os = "macos"
-                        ))]
-                        if primary_button(
-                            ui,
-                            t!(app.locale, "Retry integrated sign-in"),
-                            palette,
-                            !app.login.busy,
-                        ) {
-                            crate::browser_auth::start_embedded(app);
-                        }
+                        ui.label(RichText::new(t!(app.locale, "Password and passkey sign-in use your browser until the server supports a secure native flow.")).color(palette.secondary).size(12.5));
                         ui.add_space(8.0);
                         ui.add_enabled_ui(!app.login.busy, |ui| {
                             if secondary_button(
@@ -958,12 +959,6 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             });
         });
     });
-}
-
-/// Do not retry automatically after cancellation or failure, and do not race
-/// an existing deep-link or QR operation.
-fn should_start_hosted_login(started: bool, busy: bool, qr_active: bool) -> bool {
-    !started && !busy && !qr_active
 }
 
 // The earlier native login implementation is retained for its existing QR,
@@ -1573,7 +1568,7 @@ fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> 
 }
 
 fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
-    let code = match qrcode::QrCode::new(url) {
+    let code = match qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::H) {
         Ok(code) => code,
         Err(_) => return,
     };
@@ -1592,6 +1587,10 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
             painter.rect_filled(module_rect, 0.0, Color32::BLACK);
         }
     }
+    // High error correction leaves room for a small, centered brand mark.
+    let badge = egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(size * 0.16));
+    painter.rect_filled(badge, 3.0, Color32::WHITE);
+    crate::branding::mark_tinted(ui, badge.shrink(3.0), Color32::BLACK);
 }
 
 /// Positions each module with the QR-standard four-module quiet zone.
@@ -1741,9 +1740,17 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
         app.qr.job_create = None;
         match result {
             Ok(session) => {
-                app.qr.token = session.token;
-                app.qr.qr_url = session.qr_url;
-                app.qr.next_poll = None;
+                let valid = app.server_store.selected_url().is_some_and(|base| {
+                    browser_approval_url(base, &session.qr_url, &session.token).is_some()
+                });
+                if valid {
+                    app.qr.token = session.token;
+                    app.qr.qr_url = session.qr_url;
+                    app.qr.next_poll = None;
+                } else {
+                    app.qr.status = "error".to_owned();
+                    app.qr.expired = true;
+                }
             }
             Err(error) => {
                 app.qr.status = "error".to_owned();
@@ -2044,7 +2051,7 @@ pub(crate) fn draw_embedded_header(
 
 #[cfg(test)]
 mod hosted_login_entry_tests {
-    use super::{should_start_hosted_login, splash_can_finish};
+    use super::splash_can_finish;
     use std::time::Duration;
 
     #[test]
@@ -2053,13 +2060,5 @@ mod hosted_login_entry_tests {
         assert!(!splash_can_finish(Duration::ZERO, true, true));
         assert!(!splash_can_finish(Duration::ZERO, false, false));
         assert!(splash_can_finish(Duration::from_millis(650), false, false));
-    }
-
-    #[test]
-    fn starts_once_and_never_races_an_existing_flow() {
-        assert!(should_start_hosted_login(false, false, false));
-        assert!(!should_start_hosted_login(true, false, false));
-        assert!(!should_start_hosted_login(false, true, false));
-        assert!(!should_start_hosted_login(false, false, true));
     }
 }

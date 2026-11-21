@@ -218,6 +218,26 @@ fn contrast(a: Color32, b: Color32) -> f64 {
     (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
+/// Choose the stronger black or white foreground for a filled control.
+#[must_use]
+pub(crate) fn contrasting_text(background: Color32) -> Color32 {
+    if contrast(background, Color32::BLACK) >= contrast(background, Color32::WHITE) {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
+}
+
+/// Keep a hover fill only when the existing label remains readable.
+#[must_use]
+pub(crate) fn readable_hover(base: Color32, hover: Color32, foreground: Color32) -> Color32 {
+    if contrast(hover, foreground) >= 4.5 {
+        hover
+    } else {
+        base
+    }
+}
+
 /// Adapt a system accent to the active surfaces and keep button text legible.
 /// Windows can return very pale or very dark colours, so use the nearest
 /// incremental shade that meets the text contrast target on both surfaces.
@@ -641,6 +661,17 @@ mod tests {
 mod system_accent_tests {
     use super::{Palette, contrast, with_system_accent};
     use egui::Color32;
+
+    #[test]
+    fn danger_and_hover_text_remain_legible_in_both_modes() {
+        for palette in [Palette::light(), Palette::dark()] {
+            let text = super::contrasting_text(palette.danger);
+            assert!(contrast(text, palette.danger) >= 4.5);
+            let hover =
+                super::readable_hover(palette.accent, palette.accent_hover, palette.on_accent);
+            assert!(contrast(hover, palette.on_accent) >= 4.5);
+        }
+    }
 
     #[test]
     fn system_colors_keep_text_contrast_in_both_modes() {

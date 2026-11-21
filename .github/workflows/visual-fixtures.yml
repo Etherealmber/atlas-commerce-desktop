@@ -18,7 +18,7 @@ jobs:
       - name: Install virtual display and GUI dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool imagemagick libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev libwebkitgtk-6.0-dev cmake
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool imagemagick zbar-tools libdbus-1-3 libgl1 libegl1 libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev libwebkitgtk-6.0-dev cmake
       - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
         with:
           key: visual-fixtures
@@ -28,8 +28,8 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients client-editor client-invoices products stock sales quotes expenses vendors employees settings delivery agent; do
-              ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings delivery agent; do
+              ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
               xwininfo -root -tree > "visual-output/$page.windows" || true
@@ -37,6 +37,31 @@ jobs:
               import -window root "visual-output/$page.png"
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = login-qr ]; then
+                # Decode the actual rendered, branded QR, not just its source data.
+                decoded=$(zbarimg --quiet --raw "visual-output/login-qr.png" 2>/dev/null || true)
+                if [ "$decoded" != "https://fixture.invalid/login/qr?t=fictional&mode=pc" ]; then
+                  echo "The branded login QR could not be decoded"; kill "$pid"; exit 1
+                fi
+              fi
+              if [ "$page" = login-v2 ]; then
+                decoded=$(zbarimg --quiet --raw "visual-output/login-v2.png" 2>/dev/null || true)
+                expected="https://stock.exemple.invalid/login/desktop-phone#request_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                if [ "$decoded" != "$expected" ]; then
+                  echo "The native v2 QR could not be decoded"; kill "$pid"; exit 1
+                fi
+              fi
+              if [ "$page" = employee-editor-narrow ]; then
+                # The backdrop must receive clicks outside the dialog even on a compact window.
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window" mousemove --window "$window" 10 100 click 1
+                sleep 1
+                import -window root visual-output/employee-editor-narrow-closed.png
+                changed=$(compare -metric AE "visual-output/employee-editor-narrow.png" visual-output/employee-editor-narrow-closed.png null: 2>&1 || true)
+                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                  echo "Employee dialog did not close from its backdrop: $changed"; kill "$pid"; exit 1
+                fi
+              fi
               if [ "$page" = palette-narrow ]; then
                 # Exercise Escape in the actual narrow window, not a mock DOM.
                 window=$(xdotool search --name "Atlas fixture" | head -n 1)
@@ -66,6 +91,25 @@ jobs:
                 xdotool mousemove 900 500 click --repeat 5 --delay 80 5
                 sleep 1
                 import -window root visual-output/client-invoices-scrolled.png
+              fi
+              if [ "$page" = client-wizard ] || [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then
+                # Click the real Next control through every non-final step in a compact window.
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window"
+                count=2
+                if [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then count=4; fi
+                for step in $(seq 1 "$count"); do
+                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1)
+                  read -r _ x y <<< "$pos"
+                  if [ -z "${x:-}" ] || [ -z "${y:-}" ]; then echo "Next button not found"; kill "$pid"; exit 1; fi
+                  xdotool mousemove --window "$window" "$x" "$y" click 1
+                  sleep 1
+                  if ! grep -q "FIXTURE_WIZARD_STEP $step" "visual-output/$page.log"; then
+                    import -window root "visual-output/$page-step-$step-failed.png"
+                    echo "Wizard $page did not advance to step $step"; kill "$pid"; exit 1
+                  fi
+                done
+                import -window root "visual-output/$page-final.png"
               fi
               if [ "$page" = client-editor ]; then
                 # The client editor now uses compact wizard steps rather than

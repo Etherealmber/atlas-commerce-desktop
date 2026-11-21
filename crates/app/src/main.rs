@@ -304,9 +304,10 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
         .with_title("Atlas Commerce")
         .with_app_id(app_id)
         // Default 1280×800 keeps the rail above its 1180 px collapse
-        // breakpoint at first launch; 1024×680 is the parity floor.
+        // breakpoint at first launch. The compact rail and wrapping content
+        // also permit a smaller desktop window without horizontal scrolling.
         .with_inner_size([1280.0, 800.0])
-        .with_min_inner_size([1024.0, 680.0])
+        .with_min_inner_size([720.0, 520.0])
         .with_decorations(!custom_titlebar)
         // Request a visible window. Eframe's native integration already
         // creates it hidden until the first rendered frame; marking the

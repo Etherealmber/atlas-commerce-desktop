@@ -1825,3 +1825,192 @@ msgstr "Étape"
 
 msgid "Showing up to 50 recent movements."
 msgstr "Affichage de 50 mouvements récents maximum."
+
+msgid "Edit product"
+msgstr "Modifier le produit"
+
+msgid "Product updated."
+msgstr "Produit mis à jour."
+
+msgid "A similar product already exists. Save again to update it anyway."
+msgstr "Un produit similaire existe déjà. Enregistrez à nouveau pour modifier quand même."
+
+msgid "Product archived."
+msgstr "Produit archivé."
+
+msgid "Product deleted."
+msgstr "Produit supprimé."
+
+msgid "Deleting…"
+msgstr "Suppression…"
+
+msgid "Label"
+msgstr "Étiquette"
+
+msgid "Delete"
+msgstr "Supprimer"
+
+msgid "Undo"
+msgstr "Annuler"
+
+msgid "Scan barcode"
+msgstr "Scanner un code-barres"
+
+msgid "Classification"
+msgstr "Classement"
+
+msgid "Price and stock"
+msgstr "Prix et stock"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Previous"
+msgstr "Précédent"
+
+msgid "Delete client"
+msgstr "Supprimer le client"
+
+msgid "Client deleted."
+msgstr "Client supprimé."
+
+msgid "This action is permanent. Confirm to continue."
+msgstr "Cette action est définitive. Confirmez pour continuer."
+
+msgid "Volume discounts"
+msgstr "Remises volume"
+
+msgid "Discounts apply at the quantity threshold when no manual promotional price is set."
+msgstr "La remise s’applique au seuil de quantité lorsqu’aucun prix promotionnel manuel n’est saisi."
+
+msgid "Tier"
+msgstr "Palier"
+
+msgid "Minimum quantity"
+msgstr "Quantité minimale"
+
+msgid "Discount (%)"
+msgstr "Remise (%)"
+
+msgid "Additional server tiers will be preserved."
+msgstr "Les paliers supplémentaires du serveur seront conservés."
+
+msgid "Discount data is unavailable; existing server values will be preserved."
+msgstr "Les remises sont indisponibles ; les valeurs du serveur seront conservées."
+
+msgid "Variants"
+msgstr "Variantes"
+
+msgid "Variant changes are saved immediately."
+msgstr "Les modifications des variantes sont enregistrées immédiatement."
+
+msgid "Confirm deactivation"
+msgstr "Confirmer la désactivation"
+
+msgid "Deactivate"
+msgstr "Désactiver"
+
+msgid "Variant label"
+msgstr "Libellé de variante"
+
+msgid "Price (optional)"
+msgstr "Prix (facultatif)"
+
+msgid "New variants start at zero stock; adjust stock after creation."
+msgstr "Les nouvelles variantes commencent à zéro ; ajustez leur stock après création."
+
+msgid "Add variant"
+msgstr "Ajouter la variante"
+
+msgid "Invalid price."
+msgstr "Prix invalide."
+
+msgid "Photos"
+msgstr "Photos"
+
+msgid "Drop a JPEG, PNG, WebP or GIF here (4 MB maximum). Images are saved immediately."
+msgstr "Déposez ici un JPEG, PNG, WebP ou GIF (4 Mo maximum). Les images sont enregistrées immédiatement."
+
+msgid "Primary image"
+msgstr "Image principale"
+
+msgid "Set as primary"
+msgstr "Définir comme principale"
+
+msgid "Confirm deletion"
+msgstr "Confirmer la suppression"
+
+msgid "Load the image list before adding a photo."
+msgstr "Chargez la liste des images avant d’ajouter une photo."
+
+msgid "A maximum of four photos can be staged."
+msgstr "Vous pouvez préparer quatre photos maximum."
+
+msgid "Drop up to four JPEG, PNG, WebP or GIF files, one at a time (4 MB each). They upload after the product is created."
+msgstr "Déposez jusqu’à quatre JPEG, PNG, WebP ou GIF, un par un (4 Mo chacun). Ils seront envoyés après la création du produit."
+
+msgid "Photo"
+msgstr "Photo"
+
+msgid "Product created, but some photos could not be added"
+msgstr "Produit créé, mais certaines photos n’ont pas pu être ajoutées"
+
+msgid "Personal"
+msgstr "Personnel"
+
+msgid "Identification"
+msgstr "Identification"
+
+msgid "Work"
+msgstr "Travail"
+
+msgid "Password and passkey sign-in use your browser until the server supports a secure native flow."
+msgstr "La connexion par mot de passe ou clé d’accès utilise votre navigateur tant que le serveur ne propose pas de parcours natif sécurisé."
+
+msgid "Finance reports"
+msgstr "Rapports financiers"
+
+msgid "Balance and movements"
+msgstr "Solde et mouvements"
+
+msgid "Employees and payroll"
+msgstr "Employés et paie"
+
+msgid "Aged balance"
+msgstr "Balance âgée"
+
+msgid "VAT summary"
+msgstr "Récapitulatif TVA"
+
+msgid "Last 3 months"
+msgstr "3 derniers mois"
+
+msgid "Last 6 months"
+msgstr "6 derniers mois"
+
+msgid "Last 12 months"
+msgstr "12 derniers mois"
+
+msgid "Current year"
+msgstr "Année en cours"
+
+msgid "Load report"
+msgstr "Charger le rapport"
+
+msgid "Period applies to balance and VAT; stock, receivables, payables, employees and aging are current server views."
+msgstr "La période concerne le solde et la TVA ; le stock, les créances, les dettes, les employés et la balance âgée reflètent la situation actuelle du serveur."
+
+msgid "Sign in with secure QR v2"
+msgstr "Connexion par QR sécurisé v2"
+
+msgid "Use legacy QR"
+msgstr "Utiliser l’ancien QR"
+
+msgid "Scan with your signed-in phone, then compare this code on both devices:"
+msgstr "Scannez avec votre téléphone connecté, puis comparez ce code sur les deux appareils :"
+
+msgid "Waiting for phone approval…"
+msgstr "En attente de l’approbation sur le téléphone…"
+
+msgid "Preparing secure QR sign-in…"
+msgstr "Préparation du QR sécurisé…"

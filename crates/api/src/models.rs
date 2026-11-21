@@ -366,6 +366,16 @@ pub struct Product {
     pub image_url: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
+    /// Worker may return a JSON string or an array, depending on deployment.
+    #[serde(default)]
+    pub bulk_discounts: Option<serde_json::Value>,
+}
+
+/// The worker's tier format, in product units and percentage points.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BulkDiscount {
+    pub min_qty: f64,
+    pub percent: f64,
 }
 
 fn default_one() -> i64 {
@@ -422,6 +432,74 @@ pub struct CreateProduct {
     pub low_stock_threshold: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bulk_discounts: Option<Vec<BulkDiscount>>,
+}
+
+/// Editable catalogue fields accepted by `PUT /api/products/:id`.
+/// Stock is deliberately absent: it is changed through adjust-stock.
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateProduct {
+    pub name: String,
+    pub sku: String,
+    pub barcode: String,
+    pub category: String,
+    pub unit: String,
+    pub price: f64,
+    pub low_stock_threshold: f64,
+    pub description: String,
+    pub force_duplicate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bulk_discounts: Option<Vec<BulkDiscount>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductImage {
+    pub id: i64,
+    pub url: String,
+    #[serde(default)]
+    pub is_primary: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AddProductImage {
+    pub data_url: String,
+    pub is_primary: bool,
+}
+
+/// Minimal projection for the product variant route; cost is intentionally
+/// omitted because the variant endpoint does not scrub it for all roles.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductVariant {
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub variant_label: Option<String>,
+    #[serde(default)]
+    pub sku: Option<String>,
+    #[serde(default)]
+    pub barcode: Option<String>,
+    #[serde(default)]
+    pub price: f64,
+    #[serde(default, rename = "stock_quantity")]
+    pub stock: f64,
+    #[serde(default = "default_one")]
+    pub track_inventory: i64,
+    #[serde(default = "default_one")]
+    pub is_active: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateVariant {
+    pub variant_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sku: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub barcode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<f64>,
+    pub stock_quantity: f64,
 }
 
 /// `in` (entrée), `out` (sortie) or `adjustment` (signed quantity).
