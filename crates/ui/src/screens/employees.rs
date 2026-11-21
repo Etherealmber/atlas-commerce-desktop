@@ -63,9 +63,9 @@ const STATUSES: [(&str, &str); 3] = [
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         page_title(ui, t!(app.locale, "Employees"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.horizontal_wrapped(|ui| {
             if primary_button(ui, t!(app.locale, "Add employee"), palette, true) {
                 app.employee_new = Some(NewEmployeeForm::default());
             }
@@ -146,7 +146,10 @@ fn toolbar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 t!(app.locale, "Name, number, role, phone or ID"),
                 width,
             );
-            if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+            let enter =
+                response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+            let search = secondary_button(ui, t!(app.locale, "Search"), palette);
+            if enter || search {
                 app.load_employees();
             }
             ui.label(RichText::new(t!(app.locale, "Status")).color(palette.secondary));
@@ -327,8 +330,8 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             &employee.role_title
                         }
                     ))
-                    .color(palette.dim)
-                    .size(12.0),
+                    .color(palette.secondary)
+                    .size(13.0),
                 );
                 if !employee.is_active() {
                     ui.label(
@@ -344,7 +347,7 @@ fn list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         employee.cycle_label()
                     ))
                     .color(palette.secondary)
-                    .size(12.0),
+                    .size(13.0),
                 );
                 if employee.pay_overdue {
                     ui.label(
@@ -617,7 +620,9 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(560.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-new-scrim")) {
+    if !app.employee_new.as_ref().is_some_and(|form| form.saving)
+        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-new-scrim"))
+    {
         app.employee_new = None;
         return;
     }
@@ -751,7 +756,7 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         let saving = form.saving;
                         widgets::dialog_actions(ui, |ui| {
                             save = primary_button(ui, t!(locale, "Save"), palette, !saving);
-                            cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                            cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
                         });
                     }
                 });
@@ -766,6 +771,8 @@ fn new_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             .is_some_and(|form| validate_new(form).is_none());
         if valid {
             app.create_employee();
+        } else if let Some(form) = app.employee_new.as_mut() {
+            form.error = validate_new(form).map(str::to_owned);
         }
     }
 }
@@ -775,7 +782,11 @@ fn validate_new(form: &NewEmployeeForm) -> Option<&'static str> {
         return Some("Indiquez le prénom ou le nom de famille.");
     }
     let salary = form.salary.trim().replace(',', ".");
-    if !salary.is_empty() && salary.parse::<f64>().is_err() {
+    if !salary.is_empty()
+        && salary
+            .parse::<f64>()
+            .map_or(true, |value| !value.is_finite() || value < 0.0)
+    {
         return Some("Chiffres uniquement pour le salaire.");
     }
     None
@@ -787,7 +798,9 @@ fn pay_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(480.0, 360.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-pay-scrim")) {
+    if !app.employee_pay.as_ref().is_some_and(|form| form.saving)
+        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-pay-scrim"))
+    {
         app.employee_pay = None;
         return;
     }
@@ -816,7 +829,7 @@ fn pay_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 let saving = form.saving;
                 widgets::dialog_actions(ui, |ui| {
                     save = primary_button(ui, t!(locale, "Confirm"), palette, !saving);
-                    cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                    cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
                 });
             }
         });
@@ -834,7 +847,9 @@ fn resign_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(480.0, 320.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-resign-scrim")) {
+    if !app.employee_resign.as_ref().is_some_and(|form| form.saving)
+        && widgets::scrim_clicked(ui, screen, rect, egui::Id::new("employee-resign-scrim"))
+    {
         app.employee_resign = None;
         return;
     }
@@ -868,7 +883,7 @@ fn resign_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 let saving = form.saving;
                 widgets::dialog_actions(ui, |ui| {
                     save = primary_button(ui, t!(locale, "Confirm"), palette, !saving);
-                    cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
+                    cancel = !saving && secondary_button(ui, t!(locale, "Cancel"), palette);
                 });
             }
         });
@@ -918,6 +933,10 @@ mod tests {
             validate_new(&form).is_some(),
             "spaces are rejected, not guessed"
         );
+        form.salary = "NaN".to_owned();
+        assert!(validate_new(&form).is_some());
+        form.salary = "-1".to_owned();
+        assert!(validate_new(&form).is_some());
         form.salary = "4500,50".to_owned();
         assert!(validate_new(&form).is_none());
     }

@@ -267,18 +267,19 @@ fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, wi
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
-                    widgets::icon(ui, Icon::Search, palette.secondary, 15.0);
+                    let search = widgets::icon_circle_button(ui, palette, Icon::Search, true)
+                        .on_hover_text(t!(app.locale, "Search"));
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut app.top_search)
                             .id(egui::Id::new("titlebar-search"))
                             .frame(egui::Frame::NONE)
                             .hint_text(t!(app.locale, "Search pages or business data…"))
-                            .desired_width(width - 42.0)
+                            .desired_width((width - 60.0).max(30.0))
                             .clip_text(true),
                     );
                     let enter = response.lost_focus()
                         && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                    if enter && !app.top_search.trim().is_empty() {
+                    if (enter || search.clicked()) && !app.top_search.trim().is_empty() {
                         let query = app.top_search.trim().to_owned();
                         if let Some(route) = search_destination(&query) {
                             app.go(route);

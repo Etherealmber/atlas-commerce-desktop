@@ -867,6 +867,11 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                 crate::browser_auth::cancel(app);
             }
+            ui.add_space(8.0);
+            if secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette) {
+                crate::browser_auth::cancel(app);
+                start_qr_session(app);
+            }
         });
         return;
     }
@@ -896,25 +901,11 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     );
                     ui.add_space(20.0);
                     if app.qr.active {
-                        poll_qr_status(app, ui);
-                        ui.label(
-                            RichText::new(t!(app.locale, "QR sign-in request received."))
-                                .color(palette.text)
-                                .strong(),
-                        );
-                        ui.add_space(8.0);
-                        let message = match app.qr.status.as_str() {
-                            "approved" => t!(app.locale, "Phone approved — finalizing…"),
-                            "claimed" => t!(app.locale, "Phone connected — confirm on the phone."),
-                            "denied" => t!(app.locale, "Login refused on the phone."),
-                            "expired" | "consumed" => t!(app.locale, "Code expired."),
-                            _ => t!(app.locale, "Waiting for the phone…"),
-                        };
-                        ui.label(RichText::new(message).color(palette.secondary));
-                        ui.add_space(16.0);
+                        draw_qr(app, ui, palette);
+                        ui.add_space(12.0);
                         if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
                             app.qr = Default::default();
-                            app.login.browser_auto_started = false;
+                            app.login.browser_auto_started = true;
                         }
                     } else {
                         if let Some(error) = &app.login.error {
@@ -925,6 +916,10 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             ui.label(RichText::new(notice).color(palette.secondary));
                             ui.add_space(8.0);
                         }
+                        if secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette) {
+                            start_qr_session(app);
+                        }
+                        ui.add_space(8.0);
                         if app.login.busy {
                             ui.spinner();
                             ui.add_space(8.0);
@@ -1573,7 +1568,7 @@ fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> 
 }
 
 fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
-    let code = match qrcode::QrCode::new(url) {
+    let code = match qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::H) {
         Ok(code) => code,
         Err(_) => return,
     };
@@ -1592,6 +1587,10 @@ fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
             painter.rect_filled(module_rect, 0.0, Color32::BLACK);
         }
     }
+    // High error correction leaves room for a small, centered brand mark.
+    let badge = egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(size * 0.16));
+    painter.rect_filled(badge, 3.0, Color32::WHITE);
+    crate::branding::mark_tinted(ui, badge.shrink(3.0), Color32::BLACK);
 }
 
 /// Positions each module with the QR-standard four-module quiet zone.
@@ -1741,9 +1740,17 @@ pub fn poll_login_jobs(app: &mut AtlasApp) {
         app.qr.job_create = None;
         match result {
             Ok(session) => {
-                app.qr.token = session.token;
-                app.qr.qr_url = session.qr_url;
-                app.qr.next_poll = None;
+                let valid = app.server_store.selected_url().is_some_and(|base| {
+                    browser_approval_url(base, &session.qr_url, &session.token).is_some()
+                });
+                if valid {
+                    app.qr.token = session.token;
+                    app.qr.qr_url = session.qr_url;
+                    app.qr.next_poll = None;
+                } else {
+                    app.qr.status = "error".to_owned();
+                    app.qr.expired = true;
+                }
             }
             Err(error) => {
                 app.qr.status = "error".to_owned();
