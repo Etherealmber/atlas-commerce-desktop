@@ -123,27 +123,20 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 }
 
-/// Render dialogs outside the page scroll area so they are not clipped by it.
-pub(super) fn draw_dialogs(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
-    if app.employee_new.is_none() && app.employee_pay.is_none() && app.employee_resign.is_none() {
-        return;
+pub(super) fn has_dialogs(app: &AtlasApp) -> bool {
+    app.employee_new.is_some() || app.employee_pay.is_some() || app.employee_resign.is_some()
+}
+
+pub(super) fn draw_dialogs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    if app.employee_new.is_some() {
+        new_dialog(app, ui, palette);
     }
-    let screen = ctx.input(|input| input.viewport_rect());
-    egui::Area::new(egui::Id::new("employee-dialog-layer"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(screen.min)
-        .show(ctx, |ui| {
-            ui.set_min_size(screen.size());
-            if app.employee_new.is_some() {
-                new_dialog(app, ui, palette);
-            }
-            if app.employee_pay.is_some() {
-                pay_dialog(app, ui, palette);
-            }
-            if app.employee_resign.is_some() {
-                resign_dialog(app, ui, palette);
-            }
-        });
+    if app.employee_pay.is_some() {
+        pay_dialog(app, ui, palette);
+    }
+    if app.employee_resign.is_some() {
+        resign_dialog(app, ui, palette);
+    }
 }
 
 fn toolbar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {

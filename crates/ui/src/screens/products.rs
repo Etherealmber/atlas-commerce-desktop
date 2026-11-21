@@ -477,7 +477,18 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     } else {
         product_list(app, ui, palette);
     }
+}
 
+pub(super) fn has_dialogs(app: &AtlasApp) -> bool {
+    app.product_editor.is_some()
+        || app.stock_dialog.is_some()
+        || app.stock_history.is_some()
+        || app.product_scanner_open
+        || app.stock_report_open
+        || app.product_label.is_some()
+}
+
+pub(super) fn draw_dialogs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.product_editor.is_some() {
         draw_editor(app, ui, palette);
     }

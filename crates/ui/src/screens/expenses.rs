@@ -218,7 +218,13 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
     });
+}
 
+pub(super) fn has_dialogs(app: &AtlasApp) -> bool {
+    app.expense_editor.is_some()
+}
+
+pub(super) fn draw_dialogs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.expense_editor.is_some() {
         draw_editor(app, ui, palette);
     }

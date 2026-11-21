@@ -203,8 +203,40 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 
     // The palette sits above the panels but below a blocking confirmation,
     // which always owns the topmost layer.
-    if matches!(app.screen, Screen::Shell(Route::Employees)) {
-        super::employees::draw_dialogs(app, ctx, palette);
+    let dialogs_open = match app.screen {
+        Screen::Shell(Route::Products) => super::products::has_dialogs(app),
+        Screen::Shell(Route::Clients) => super::clients::has_dialogs(app),
+        Screen::Shell(Route::Employees) => super::employees::has_dialogs(app),
+        Screen::Shell(Route::Vendors) => super::vendors::has_dialogs(app),
+        Screen::Shell(Route::Expenses) => super::expenses::has_dialogs(app),
+        Screen::Shell(Route::DeliveryNotes) => super::delivery_notes::has_dialogs(app),
+        _ => false,
+    };
+    if dialogs_open {
+        let screen = ctx.input(|input| input.viewport_rect());
+        egui::Area::new(egui::Id::new("page-dialog-layer"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                ui.set_min_size(screen.size());
+                match app.screen {
+                    Screen::Shell(Route::Products) => {
+                        super::products::draw_dialogs(app, ui, palette)
+                    }
+                    Screen::Shell(Route::Clients) => super::clients::draw_dialogs(app, ui, palette),
+                    Screen::Shell(Route::Employees) => {
+                        super::employees::draw_dialogs(app, ui, palette)
+                    }
+                    Screen::Shell(Route::Vendors) => super::vendors::draw_dialogs(app, ui, palette),
+                    Screen::Shell(Route::Expenses) => {
+                        super::expenses::draw_dialogs(app, ui, palette)
+                    }
+                    Screen::Shell(Route::DeliveryNotes) => {
+                        super::delivery_notes::draw_dialogs(app, ui, palette)
+                    }
+                    _ => {}
+                }
+            });
     }
     crate::shortcuts::draw_palette(app, ui, ctx, palette);
 

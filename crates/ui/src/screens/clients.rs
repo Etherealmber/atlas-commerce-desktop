@@ -369,7 +369,17 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             client_detail(app, ui, palette);
         });
     }
+}
 
+pub(super) fn has_dialogs(app: &AtlasApp) -> bool {
+    app.client_editor.is_some()
+        || app
+            .client_delete
+            .as_ref()
+            .is_some_and(|pending| pending.confirming)
+}
+
+pub(super) fn draw_dialogs(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.client_editor.is_some() {
         draw_editor(app, ui, palette);
     }
