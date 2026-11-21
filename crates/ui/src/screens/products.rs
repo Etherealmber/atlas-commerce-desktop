@@ -668,7 +668,7 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             let wide = ui.available_width() >= 1120.0;
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 let source = product.image_url.as_deref().unwrap_or("");
                 let visible = ui.is_rect_visible(egui::Rect::from_min_size(
                     ui.next_widget_position(),

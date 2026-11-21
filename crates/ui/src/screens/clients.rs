@@ -469,7 +469,7 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             // Explicit bounded columns keep long names from consuming the
             // balance column or wrapping into a one-character-wide strip.
             let width = ui.available_width();
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 icon(ui, Icon::User, palette.secondary, 18.0);
                 let wide = width >= 850.0;
                 let text_width = (width - if wide { 550.0 } else { 160.0 }).max(40.0);

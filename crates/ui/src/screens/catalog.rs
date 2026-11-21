@@ -173,7 +173,7 @@ fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     // Tabs are chrome: icon + one-line label, never a wrapped
                     // block when the window gets narrow.
                     widgets::no_wrap_scope(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             icon(
                                 ui,
                                 which,

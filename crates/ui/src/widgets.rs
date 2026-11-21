@@ -688,16 +688,17 @@ mod tests {
     #[test]
     fn status_pill_stays_compact_in_a_tall_horizontal_row() {
         let height = run_headless(|ui| {
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 pill(
                     ui,
                     "51 unités",
                     egui::Color32::DARK_GREEN,
                     egui::Color32::WHITE,
                 );
-                ui.min_rect().height()
             })
-            .inner
+            .response
+            .rect
+            .height()
         });
         assert!(height < 50.0, "pill unexpectedly filled row: {height}");
     }
