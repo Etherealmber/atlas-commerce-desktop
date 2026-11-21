@@ -182,6 +182,10 @@ impl RolePolicy {
         self.office || self.stock
     }
 
+    pub(crate) fn can_delete_products(self) -> bool {
+        self.admin
+    }
+
     pub(crate) fn can_edit_prices(self) -> bool {
         self.office
     }
@@ -442,6 +446,7 @@ pub struct AtlasApp {
     pub avatar_evict: Option<String>,
     pub avatar_texture_uri: Option<String>,
     pub avatar_job: Option<AvatarJob>,
+    pub(crate) product_images: crate::product_images::ProductImages,
     pub force_server_setup: bool,
     /// Back/forward stacks of shell routes, browser-style.
     pub nav_back: Vec<Route>,
@@ -474,6 +479,7 @@ pub struct AtlasApp {
     /// Browser-v1 tokens remain in memory until OS-vault storage is available.
     pub transient_session: bool,
     pub(crate) browser_login: crate::browser_auth::BrowserLogin,
+    pub(crate) native_login: crate::native_auth_v2::NativeLogin,
     pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
     pub(crate) vault_restore: Option<VaultRestore>,
     pub(crate) vault_saves:
@@ -504,6 +510,10 @@ pub struct AtlasApp {
     pub(crate) receivables_open: bool,
     pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
     pub(crate) payables_open: bool,
+    pub(crate) finance_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) finance_report_open: bool,
+    pub(crate) finance_report_section: String,
+    pub(crate) finance_report_period: String,
     pub(crate) stock_report: Cache<crate::client_report::ClientReport>,
     pub(crate) stock_report_open: bool,
     pub(crate) stock_report_location: Option<i64>,
@@ -575,7 +585,12 @@ pub struct AtlasApp {
 
     // ── editors / dialogs ──
     pub product_editor: Option<ProductEditor>,
+    pub(crate) product_delete: Option<crate::screens::products::ProductDelete>,
+    pub(crate) product_label: Option<crate::screens::products::ProductLabel>,
+    pub(crate) product_label_evict: Option<String>,
+    pub(crate) product_scanner_open: bool,
     pub client_editor: Option<ClientEditor>,
+    pub(crate) client_delete: Option<crate::screens::clients::ClientDelete>,
     pub vendor_editor: Option<VendorEditor>,
     pub stock_dialog: Option<StockDialog>,
     pub(crate) stock_history: Option<crate::screens::products::StockHistory>,
@@ -671,11 +686,13 @@ impl AtlasApp {
             avatar_evict: None,
             avatar_texture_uri: None,
             avatar_job: None,
+            product_images: Default::default(),
             force_server_setup: false,
             server_form: ServerSetupForm::default(),
             requires_password: false,
             transient_session: false,
             browser_login: Default::default(),
+            native_login: Default::default(),
             vault_worker,
             vault_restore: None,
             vault_saves: Vec::new(),
@@ -697,6 +714,10 @@ impl AtlasApp {
             receivables_open: false,
             payables_report: Cache::default(),
             payables_open: false,
+            finance_report: Cache::default(),
+            finance_report_open: false,
+            finance_report_section: "balance".to_owned(),
+            finance_report_period: "month".to_owned(),
             stock_report: Cache::default(),
             stock_report_open: false,
             stock_report_location: None,
@@ -772,7 +793,12 @@ impl AtlasApp {
             nav_badges: Cache::default(),
             nav_badges_retry_at: None,
             product_editor: None,
+            product_delete: None,
+            product_label: None,
+            product_label_evict: None,
+            product_scanner_open: false,
             client_editor: None,
+            client_delete: None,
             vendor_editor: None,
             category_editor: None,
             unit_editor: None,
@@ -1108,7 +1134,11 @@ impl AtlasApp {
     pub fn modal_open(&self) -> bool {
         self.confirm_dialog.is_some()
             || self.product_editor.is_some()
+            || self.product_label.is_some()
+            || self.product_scanner_open
+            || self.stock_report_open
             || self.client_editor.is_some()
+            || self.client_delete.as_ref().is_some_and(|pending| pending.confirming)
             || self.vendor_editor.is_some()
             || self.expense_editor.is_some()
             || self.delivery_note_editor.is_some()
@@ -1148,6 +1178,32 @@ impl AtlasApp {
             }
             return true;
         }
+        if self
+            .client_delete
+            .as_ref()
+            .is_some_and(|pending| pending.confirming)
+        {
+            if self
+                .client_delete
+                .as_ref()
+                .is_some_and(|pending| !pending.saving())
+            {
+                self.client_delete = None;
+            }
+            return true;
+        }
+        if let Some(label) = self.product_label.take() {
+            self.product_label_evict = Some(label.uri.clone());
+            return true;
+        }
+        if self.stock_report_open {
+            self.stock_report_open = false;
+            return true;
+        }
+        if self.product_scanner_open {
+            self.product_scanner_open = false;
+            return true;
+        }
         // The stock dialog paints above the product editor, so Escape must
         // dismiss it first when both are open and leave the editor alone.
         if self.stock_dialog.take().is_some() {
@@ -1162,6 +1218,10 @@ impl AtlasApp {
             return true;
         }
         if let Some(editor) = self.product_editor.take() {
+            if editor.is_busy() {
+                self.product_editor = Some(editor);
+                return true;
+            }
             if editor.is_dirty() {
                 self.product_editor = Some(editor);
                 self.confirm_dialog = Some(crate::dialogs::Confirm {
@@ -1264,6 +1324,7 @@ impl AtlasApp {
     }
 
     pub fn sign_out(&mut self) {
+        crate::native_auth_v2::cancel(self);
         let was_browser = self.transient_session;
         let mut vault_problem = false;
         if let Some(session) = self.session.as_ref()
@@ -1280,6 +1341,7 @@ impl AtlasApp {
         }
         self.transient_session = false;
         self.avatar_job = None;
+        self.product_images.clear();
         if let Some(uri) = self.avatar_texture_uri.take() {
             self.avatar_evict = Some(uri);
         }
@@ -1305,6 +1367,12 @@ impl AtlasApp {
         self.business_search_query.clear();
         self.business_search = Cache::default();
         self.product_editor = None;
+        self.product_delete = None;
+        self.client_delete = None;
+        self.product_scanner_open = false;
+        if let Some(label) = self.product_label.take() {
+            self.product_label_evict = Some(label.uri.clone());
+        }
         self.stock_dialog = None;
         self.stock_history = None;
         self.quick_sale = None;
@@ -1383,6 +1451,10 @@ impl AtlasApp {
         self.receivables_open = false;
         self.payables_report = Cache::default();
         self.payables_open = false;
+        self.finance_report = Cache::default();
+        self.finance_report_open = false;
+        self.finance_report_section = "balance".to_owned();
+        self.finance_report_period = "month".to_owned();
         self.stock_report = Cache::default();
         self.stock_report_open = false;
         self.stock_report_location = None;

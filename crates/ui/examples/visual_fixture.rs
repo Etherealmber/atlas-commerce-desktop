@@ -18,6 +18,7 @@ struct Fixture {
     palette: Palette,
     route: String,
     shortcut_reported: bool,
+    wizard_step: Option<usize>,
 }
 impl eframe::App for Fixture {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -34,6 +35,30 @@ impl eframe::App for Fixture {
             );
         }
         self.app.draw(ui, &ctx, &self.palette);
+        if matches!(
+            self.route.as_str(),
+            "product-wizard" | "client-wizard" | "employee-wizard"
+        ) {
+            let step = if self.route == "product-wizard" {
+                self.app.product_editor.as_ref().map(|editor| editor.step)
+            } else if self.route == "client-wizard" {
+                self.app.client_editor.as_ref().map(|editor| editor.step)
+            } else {
+                self.app.employee_new.as_ref().map(|editor| editor.step)
+            };
+            if step != self.wizard_step {
+                self.wizard_step = step;
+                // Fixed fixture markers only: never log application data.
+                match step {
+                    Some(0) => println!("FIXTURE_WIZARD_STEP 0"),
+                    Some(1) => println!("FIXTURE_WIZARD_STEP 1"),
+                    Some(2) => println!("FIXTURE_WIZARD_STEP 2"),
+                    Some(3) => println!("FIXTURE_WIZARD_STEP 3"),
+                    Some(4) => println!("FIXTURE_WIZARD_STEP 4"),
+                    _ => {}
+                }
+            }
+        }
         if self.route == "stock-shortcut"
             && !self.shortcut_reported
             && matches!(self.app.screen, Screen::Shell(Route::Products))
@@ -86,17 +111,22 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "client-editor" | "client-invoices" | "client-receivables" => Route::Clients,
-        "products" | "stock" | "stock-report" => Route::Products,
+        "clients" | "clients-narrow" | "client-editor" | "client-wizard" | "client-invoices"
+        | "client-receivables" => Route::Clients,
+        "products" | "products-narrow" | "product-wizard" | "stock" | "stock-report" => {
+            Route::Products
+        }
         "sales" | "quotes" => Route::Sales,
-        "expenses" => Route::Expenses,
+        "expenses" | "finance-report" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
-        "employees" => Route::Employees,
+        "employees" | "employee-editor" | "employee-editor-narrow" | "employee-wizard" => {
+            Route::Employees
+        }
         "settings" => Route::Settings,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
-    if route == "login" || route == "login-qr" || route == "login-wait" {
+    if route == "login" || route == "login-qr" || route == "login-wait" || route == "login-v2" {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
@@ -108,11 +138,17 @@ fn build(route: &str) -> AtlasApp {
         app.login.error = None;
         app.show_fictional_browser_wait();
     }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "login-v2" {
+        app.login.error = None;
+        app.show_fictional_native_v2();
+    }
     if route == "login-qr" {
         // Inert deep-link state: no token and no server request.
         app.login.error = None;
         app.qr.active = true;
         app.qr.status = "claimed".into();
+        app.qr.qr_url = "https://fixture.invalid/login/qr?t=fictional&mode=pc".into();
     }
     if route == "settings" {
         // Fictional update state: proves the title-bar icon and the
@@ -321,10 +357,24 @@ fn build(route: &str) -> AtlasApp {
     if route == "stock-report" {
         app.show_fictional_stock_report();
     }
+    #[cfg(feature = "visual-fixtures")]
+    if route == "finance-report" {
+        app.show_fictional_finance_report();
+    }
     if route == "client-invoices" {
         app.selected_client = Some(1);
         app.client_invoice_id = Some(1);
         app.client_invoices.data = app.invoices.data.clone();
+    }
+    if matches!(route, "employee-editor" | "employee-editor-narrow") {
+        app.employee_new = Some(atlas_ui::screens::employees::NewEmployeeForm::default());
+    }
+    if route == "employee-wizard" {
+        let form = atlas_ui::screens::employees::NewEmployeeForm {
+            first_name: "Amina".into(),
+            ..Default::default()
+        };
+        app.employee_new = Some(form);
     }
     if route == "employees" {
         app.employee_detail_id = Some(1);
@@ -370,7 +420,12 @@ fn build(route: &str) -> AtlasApp {
             &app.products.data.as_ref().expect("fixture products")[0],
         ));
     }
-    if route == "client-editor" {
+    if route == "product-wizard" {
+        let mut editor = atlas_ui::screens::products::ProductEditor::new();
+        editor.name = "Produit fictif".into();
+        app.product_editor = Some(editor);
+    }
+    if matches!(route, "client-editor" | "client-wizard") {
         app.client_editor = Some(atlas_ui::screens::clients::ClientEditor::for_client(
             &app.clients.data.as_ref().expect("fixture clients")[0],
         ));
@@ -387,6 +442,16 @@ fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
     let size = if route == "palette-narrow" {
         [640.0, 480.0]
+    } else if matches!(
+        route.as_str(),
+        "products-narrow"
+            | "clients-narrow"
+            | "employee-editor-narrow"
+            | "product-wizard"
+            | "client-wizard"
+            | "employee-wizard"
+    ) {
+        [720.0, 520.0]
     } else {
         [1280.0, 800.0]
     };
@@ -407,6 +472,7 @@ fn main() -> eframe::Result<()> {
                 palette,
                 route: route.clone(),
                 shortcut_reported: false,
+                wizard_step: None,
             }))
         }),
     )

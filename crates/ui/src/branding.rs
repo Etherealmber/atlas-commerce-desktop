@@ -119,6 +119,12 @@ pub fn mark(ui: &mut Ui, palette: &Palette, size: f32) {
     paint_tinted(ui, rect, &texture, palette.accent);
 }
 
+/// Paint the brand mark in a fixed color on a known background, such as a QR code.
+pub(crate) fn mark_tinted(ui: &Ui, rect: Rect, color: Color32) {
+    let texture = texture(ui, false);
+    paint_tinted(ui, rect, &texture, color);
+}
+
 /// The full horizontal lockup (sunburst + “Atlas”) at a given height; the
 /// width follows the mask aspect ratio. Tinted with the palette accent.
 pub fn lockup(ui: &mut Ui, palette: &Palette, height: f32) {
