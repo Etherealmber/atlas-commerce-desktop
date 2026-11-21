@@ -1,5 +1,5 @@
 //! Title bar, search, profile and notification chrome.
-use super::{TITLEBAR_HEIGHT, route_meta};
+use super::{RAIL_COLLAPSE_BELOW, TITLEBAR_HEIGHT, route_meta};
 use crate::dialogs::{Confirm, ConfirmAction};
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
