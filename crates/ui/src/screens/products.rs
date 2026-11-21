@@ -230,6 +230,10 @@ pub struct ProductEditor {
     variant_sku: String,
     variant_barcode: String,
     variant_price: String,
+    images: crate::state::Cache<Vec<atlas_api::models::ProductImage>>,
+    image_job: Option<Job<Result<(), ApiError>>>,
+    image_error: Option<String>,
+    image_confirm: Option<i64>,
     pub saving: bool,
     /// A 409 `DUPLICATE_PRODUCT` was answered; the next save forces it.
     pub force_duplicate: bool,
@@ -252,7 +256,7 @@ impl ProductEditor {
     }
 
     pub(crate) fn is_busy(&self) -> bool {
-        self.saving || self.variant_job.is_some()
+        self.saving || self.variant_job.is_some() || self.image_job.is_some()
     }
 
     #[must_use]
@@ -992,6 +996,205 @@ fn stock_pill(
     pill(ui, text, fill, tint);
 }
 
+fn load_images(app: &mut AtlasApp) {
+    let (Some(api), Some(editor)) = (app.client.clone(), app.product_editor.as_mut()) else {
+        return;
+    };
+    let Some(id) = editor.editing_id else {
+        return;
+    };
+    if editor.images.loading {
+        return;
+    }
+    editor.images.start(
+        app.runner
+            .spawn(async move { api.product_images(id).await }),
+    );
+}
+
+fn poll_images(app: &mut AtlasApp, ctx: &egui::Context) {
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    if editor.images.poll() {
+        ctx.request_repaint();
+    }
+    if let Some(result) = editor.image_job.as_ref().and_then(Job::poll) {
+        editor.image_job = None;
+        match result {
+            Ok(()) => {
+                editor.image_error = None;
+                editor.image_confirm = None;
+                load_images(app);
+                app.load_products();
+            }
+            Err(error) => editor.image_error = Some(error.message),
+        }
+        ctx.request_repaint();
+    }
+    if app
+        .product_editor
+        .as_ref()
+        .is_some_and(|editor| editor.images.loading || editor.image_job.is_some())
+    {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Read only the file explicitly dropped by the user, on a worker thread.
+/// Bound both the raw file and the encoded request; paths never enter logs.
+fn dropped_image_data(
+    path: Option<std::path::PathBuf>,
+    bytes: Option<Vec<u8>>,
+) -> Result<String, ApiError> {
+    use base64::Engine as _;
+    use std::io::Read as _;
+    const MAX: usize = 4 * 1024 * 1024;
+    let bytes = if let Some(bytes) = bytes {
+        bytes
+    } else {
+        let path = path.ok_or_else(|| ApiError::client("Fichier image indisponible."))?;
+        let file = std::fs::File::open(path)
+            .map_err(|_| ApiError::client("Impossible de lire l’image."))?;
+        let metadata = file
+            .metadata()
+            .map_err(|_| ApiError::client("Impossible de lire l’image."))?;
+        if !metadata.is_file() || metadata.len() > MAX as u64 {
+            return Err(ApiError::client(
+                "L’image doit être un fichier de 4 Mo maximum.",
+            ));
+        }
+        let mut data = Vec::new();
+        file.take((MAX + 1) as u64)
+            .read_to_end(&mut data)
+            .map_err(|_| ApiError::client("Impossible de lire l’image."))?;
+        data
+    };
+    if bytes.is_empty() || bytes.len() > MAX {
+        return Err(ApiError::client("L’image doit faire au maximum 4 Mo."));
+    }
+    let mime = match image::guess_format(&bytes).ok() {
+        Some(image::ImageFormat::Png) => "image/png",
+        Some(image::ImageFormat::Jpeg) => "image/jpeg",
+        Some(image::ImageFormat::WebP) => "image/webp",
+        Some(image::ImageFormat::Gif) => "image/gif",
+        _ => return Err(ApiError::client("Format image non pris en charge.")),
+    };
+    Ok(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+fn draw_images(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    let locale = app.locale;
+    let dropped = ui
+        .ctx()
+        .input(|input| input.raw.dropped_files.first().cloned());
+    if let Some(file) = dropped
+        && let (Some(api), Some(editor)) = (app.client.clone(), app.product_editor.as_mut())
+        && let Some(id) = editor.editing_id
+        && editor.image_job.is_none()
+    {
+        if editor.images.loading || editor.images.data.is_none() {
+            editor.image_error =
+                Some(t!(locale, "Load the image list before adding a photo.").into_owned());
+        } else if file
+            .bytes
+            .as_ref()
+            .is_some_and(|bytes| bytes.len() > 4 * 1024 * 1024)
+        {
+            editor.image_error = Some("L’image doit faire au maximum 4 Mo.".into());
+        } else {
+            let path = file.path;
+            let bytes = file.bytes.as_ref().map(|bytes| bytes.to_vec());
+            let is_primary = editor.images.data.as_ref().is_some_and(Vec::is_empty);
+            editor.image_error = None;
+            editor.image_job = Some(app.runner.spawn(async move {
+                let data_url = dropped_image_data(path, bytes)?;
+                api.add_product_image(
+                    id,
+                    &atlas_api::models::AddProductImage {
+                        data_url,
+                        is_primary,
+                    },
+                )
+                .await
+                .map(|_| ())
+            }));
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+    let Some(editor) = app.product_editor.as_mut() else {
+        return;
+    };
+    ui.label(
+        RichText::new(t!(
+            locale,
+            "Drop a JPEG, PNG, WebP or GIF here (4 MB maximum). Images are saved immediately."
+        ))
+        .color(palette.secondary),
+    );
+    if editor.images.loading {
+        super::centered_spinner(ui, palette);
+    }
+    if let Some(error) = &editor.images.error {
+        error_banner(ui, error, palette);
+    }
+    if let Some(error) = &editor.image_error {
+        error_banner(ui, error, palette);
+    }
+    let images = editor.images.data.clone().unwrap_or_default();
+    let id = editor.editing_id.unwrap_or_default();
+    for photo in &images {
+        ui.horizontal_wrapped(|ui| {
+            let texture = app
+                .client
+                .as_ref()
+                .and_then(|api| app.product_images.get(&photo.url, api, &app.runner));
+            if let Some(uri) = texture {
+                ui.add(egui::Image::new(uri).fit_to_exact_size(vec2(48.0, 48.0)));
+            } else {
+                icon(ui, Icon::Package, palette.secondary, 20.0);
+            }
+            if photo.is_primary != 0 {
+                ui.label(t!(locale, "Primary image"));
+            } else if editor.image_job.is_none()
+                && secondary_button(ui, t!(locale, "Set as primary"), palette)
+                && let Some(api) = app.client.clone()
+            {
+                let image_id = photo.id;
+                editor.image_job = Some(app.runner.spawn(async move {
+                    api.set_primary_product_image(id, image_id)
+                        .await
+                        .map(|_| ())
+                }));
+            }
+            if editor.image_confirm == Some(photo.id) {
+                if editor.image_job.is_none()
+                    && secondary_button(ui, t!(locale, "Confirm deletion"), palette)
+                    && let Some(api) = app.client.clone()
+                {
+                    let image_id = photo.id;
+                    editor.image_job = Some(
+                        app.runner
+                            .spawn(async move { api.delete_product_image(id, image_id).await }),
+                    );
+                }
+                if secondary_button(ui, t!(locale, "Cancel"), palette) {
+                    editor.image_confirm = None;
+                }
+            } else if secondary_button(ui, t!(locale, "Delete"), palette) {
+                editor.image_confirm = Some(photo.id);
+            }
+        });
+    }
+    if secondary_button(ui, t!(locale, "Refresh"), palette) {
+        load_images(app);
+    }
+}
+
 fn load_variants(app: &mut AtlasApp) {
     let (Some(api), Some(editor)) = (app.client.clone(), app.product_editor.as_mut()) else {
         return;
@@ -1191,6 +1394,7 @@ fn draw_variants(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_variants(app, ui.ctx());
+    poll_images(app, ui.ctx());
     // Poll the save job first, so a result applies this frame.
     if let Some(editor) = app.product_editor.as_mut()
         && let Some(job) = &editor.job
@@ -1305,9 +1509,9 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     let saving = app
                         .product_editor
                         .as_ref()
-                        .is_some_and(|editor| editor.saving || editor.variant_job.is_some());
+                        .is_some_and(ProductEditor::is_busy);
                     let step = app.product_editor.as_ref().map_or(0, |editor| editor.step);
-                    let total = if app.product_editor.as_ref().is_some_and(|editor| editor.editing_id.is_some()) { 5 } else { 4 };
+                    let total = if app.product_editor.as_ref().is_some_and(|editor| editor.editing_id.is_some()) { 6 } else { 4 };
                     let name_empty = app
                         .product_editor
                         .as_ref()
@@ -1321,7 +1525,8 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         1 => t!(locale, "Classification"),
                         2 => t!(locale, "Price and stock"),
                         3 => t!(locale, "Volume discounts"),
-                        _ => t!(locale, "Variants"),
+                        4 => t!(locale, "Variants"),
+                        _ => t!(locale, "Photos"),
                     };
                     ui.label(
                         RichText::new(format!(
@@ -1426,6 +1631,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         }
                     }
                     if step == 4 { draw_variants(app, ui, palette); }
+                    if step == 5 { draw_images(app, ui, palette); }
 
                     if let Some(error) = &error {
                         error_banner(ui, error, palette);
@@ -1473,6 +1679,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     editor.error = None;
                                 }
                                 if step + 1 == 4 { load_variants(app); }
+                                if step + 1 == 5 { load_images(app); }
                             } else {
                                 submit_product(app);
                             }
@@ -1874,6 +2081,17 @@ mod product_editor_tests {
         assert!(missing.parse_bulk().unwrap().is_none());
         editor.bulk_percent[0] = "101".into();
         assert!(editor.parse_bulk().is_err());
+    }
+
+    #[test]
+    fn dropped_image_checks_format_and_size_before_encoding() {
+        use super::dropped_image_data;
+        let png_header = vec![137, 80, 78, 71, 13, 10, 26, 10];
+        let data = dropped_image_data(None, Some(png_header)).unwrap();
+        assert!(data.starts_with("data:image/png;base64,"));
+        assert!(dropped_image_data(None, Some(vec![0; 32])).is_err());
+        assert!(dropped_image_data(None, Some(vec![0; 4 * 1024 * 1024 + 1])).is_err());
+        assert!(dropped_image_data(None, None).is_err());
     }
 
     #[test]

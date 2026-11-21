@@ -156,6 +156,38 @@ impl ApiClient {
         Ok(bytes)
     }
 
+    /// Images are managed through the same catalog endpoints as the web UI.
+    pub async fn product_images(&self, id: i64) -> Result<Vec<ProductImage>, ApiError> {
+        self.get_data(&format!("/api/catalog/products/{id}/images"))
+            .await
+    }
+
+    pub async fn add_product_image(
+        &self,
+        id: i64,
+        body: &AddProductImage,
+    ) -> Result<ProductImage, ApiError> {
+        self.post_data(&format!("/api/catalog/products/{id}/images"), body)
+            .await
+    }
+
+    pub async fn set_primary_product_image(
+        &self,
+        id: i64,
+        image_id: i64,
+    ) -> Result<ProductImage, ApiError> {
+        self.put_data(
+            &format!("/api/catalog/products/{id}/images/{image_id}"),
+            &serde_json::json!({"is_primary": true}),
+        )
+        .await
+    }
+
+    pub async fn delete_product_image(&self, id: i64, image_id: i64) -> Result<(), ApiError> {
+        self.delete_success(&format!("/api/catalog/products/{id}/images/{image_id}"))
+            .await
+    }
+
     /// Product variants are loaded only when the variants step is opened.
     pub async fn product_variants(&self, id: i64) -> Result<Vec<ProductVariant>, ApiError> {
         self.get_data(&format!("/api/products/{id}/variants")).await
@@ -295,6 +327,18 @@ mod tests {
         assert!(value.get("cost").is_none());
         assert!(value.get("image_url").is_none());
         assert!(value.get("bulk_discounts").is_none());
+    }
+
+    #[test]
+    fn image_upload_uses_documented_data_url_and_primary_flag() {
+        let body = AddProductImage {
+            data_url: "data:image/png;base64,AA==".into(),
+            is_primary: true,
+        };
+        let value = serde_json::to_value(body).unwrap();
+        assert_eq!(value["data_url"], "data:image/png;base64,AA==");
+        assert_eq!(value["is_primary"], true);
+        assert!(value.get("path").is_none());
     }
 
     #[test]

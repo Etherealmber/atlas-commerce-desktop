@@ -86,8 +86,9 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "client-editor" | "client-invoices" | "client-receivables" => Route::Clients,
-        "products" | "stock" | "stock-report" => Route::Products,
+        "clients" | "clients-narrow" | "client-editor" | "client-invoices"
+        | "client-receivables" => Route::Clients,
+        "products" | "products-narrow" | "stock" | "stock-report" => Route::Products,
         "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
@@ -387,6 +388,8 @@ fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
     let size = if route == "palette-narrow" {
         [640.0, 480.0]
+    } else if matches!(route.as_str(), "products-narrow" | "clients-narrow") {
+        [720.0, 520.0]
     } else {
         [1280.0, 800.0]
     };

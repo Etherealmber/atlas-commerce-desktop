@@ -453,6 +453,20 @@ pub struct UpdateProduct {
     pub bulk_discounts: Option<Vec<BulkDiscount>>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductImage {
+    pub id: i64,
+    pub url: String,
+    #[serde(default)]
+    pub is_primary: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AddProductImage {
+    pub data_url: String,
+    pub is_primary: bool,
+}
+
 /// Minimal projection for the product variant route; cost is intentionally
 /// omitted because the variant endpoint does not scrub it for all roles.
 #[derive(Debug, Clone, Deserialize)]

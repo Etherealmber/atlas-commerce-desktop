@@ -1924,3 +1924,21 @@ msgstr "Ajouter la variante"
 
 msgid "Invalid price."
 msgstr "Prix invalide."
+
+msgid "Photos"
+msgstr "Photos"
+
+msgid "Drop a JPEG, PNG, WebP or GIF here (4 MB maximum). Images are saved immediately."
+msgstr "Déposez ici un JPEG, PNG, WebP ou GIF (4 Mo maximum). Les images sont enregistrées immédiatement."
+
+msgid "Primary image"
+msgstr "Image principale"
+
+msgid "Set as primary"
+msgstr "Définir comme principale"
+
+msgid "Confirm deletion"
+msgstr "Confirmer la suppression"
+
+msgid "Load the image list before adding a photo."
+msgstr "Chargez la liste des images avant d’ajouter une photo."
