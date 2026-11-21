@@ -28,8 +28,8 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients clients-narrow client-editor client-invoices products products-narrow stock sales quotes expenses vendors employees employee-editor employee-editor-narrow settings delivery agent; do
-              ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
+            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses vendors employees employee-editor employee-editor-narrow settings delivery agent; do
+              ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
               xwininfo -root -tree > "visual-output/$page.windows" || true
@@ -84,6 +84,25 @@ jobs:
                 xdotool mousemove 900 500 click --repeat 5 --delay 80 5
                 sleep 1
                 import -window root visual-output/client-invoices-scrolled.png
+              fi
+              if [ "$page" = client-wizard ] || [ "$page" = product-wizard ]; then
+                # Click the real Next control through every non-final step in a compact window.
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window"
+                count=2
+                if [ "$page" = product-wizard ]; then count=4; fi
+                for step in $(seq 1 "$count"); do
+                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1)
+                  read -r _ x y <<< "$pos"
+                  if [ -z "${x:-}" ] || [ -z "${y:-}" ]; then echo "Next button not found"; kill "$pid"; exit 1; fi
+                  xdotool mousemove --window "$window" "$x" "$y" click 1
+                  sleep 1
+                  if ! grep -q "FIXTURE_WIZARD_STEP $step" "visual-output/$page.log"; then
+                    import -window root "visual-output/$page-step-$step-failed.png"
+                    echo "Wizard $page did not advance to step $step"; kill "$pid"; exit 1
+                  fi
+                done
+                import -window root "visual-output/$page-final.png"
               fi
               if [ "$page" = client-editor ]; then
                 # The client editor now uses compact wizard steps rather than

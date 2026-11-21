@@ -1566,10 +1566,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     widgets::overlay_at(ui, rect, |ui| {
         widgets::dialog_frame(palette).show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .max_height((rect.height() - 46.0).max(1.0))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
+            ui.set_width((rect.width() - 44.0).max(1.0));
                     ui.label(
                         RichText::new(
                             if app
@@ -1625,6 +1622,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         .color(palette.secondary),
                     );
                     ui.add_space(8.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt(("product-wizard-step", step))
+                        .max_height((rect.height() - 190.0).max(1.0))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
                     if let Some(editor) = app.product_editor.as_mut() {
                         match step {
                             0 => {
@@ -1723,6 +1725,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if let Some(error) = &error {
                         error_banner(ui, error, palette);
                     }
+                    });
 
                     ui.add_space(10.0);
                     widgets::dialog_actions(ui, |ui| {
@@ -1772,7 +1775,6 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             }
                         }
                     });
-                });
         });
     });
 }

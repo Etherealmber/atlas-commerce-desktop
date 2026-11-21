@@ -33,7 +33,18 @@ fn filled_button(ui: &mut egui::Ui, text: &str, style: FilledStyle, enabled: boo
             .wrap_mode(TextWrapMode::Extend)
             .min_size(egui::vec2(0.0, style.height))
             .corner_radius(theme::RADIUS_CONTROL as f32);
-        ui.add_enabled(enabled, button).clicked()
+        let response = ui.add_enabled(enabled, button);
+        #[cfg(feature = "visual-fixtures")]
+        if std::env::var_os("ATLAS_FIXTURE_WIZARD").is_some() && matches!(text, "Suivant" | "Next")
+        {
+            let center = response.rect.center();
+            let id = egui::Id::new("fixture-wizard-next-position");
+            if ui.ctx().data(|data| data.get_temp::<egui::Pos2>(id)) != Some(center) {
+                ui.ctx().data_mut(|data| data.insert_temp(id, center));
+                println!("FIXTURE_NEXT_POSITION {:.0} {:.0}", center.x, center.y);
+            }
+        }
+        response.clicked()
     })
     .inner
 }

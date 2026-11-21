@@ -18,6 +18,7 @@ struct Fixture {
     palette: Palette,
     route: String,
     shortcut_reported: bool,
+    wizard_step: Option<usize>,
 }
 impl eframe::App for Fixture {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -34,6 +35,19 @@ impl eframe::App for Fixture {
             );
         }
         self.app.draw(ui, &ctx, &self.palette);
+        if matches!(self.route.as_str(), "product-wizard" | "client-wizard") {
+            let step = if self.route == "product-wizard" {
+                self.app.product_editor.as_ref().map(|editor| editor.step)
+            } else {
+                self.app.client_editor.as_ref().map(|editor| editor.step)
+            };
+            if step != self.wizard_step {
+                self.wizard_step = step;
+                if let Some(step) = step {
+                    println!("FIXTURE_WIZARD_STEP {step}");
+                }
+            }
+        }
         if self.route == "stock-shortcut"
             && !self.shortcut_reported
             && matches!(self.app.screen, Screen::Shell(Route::Products))
@@ -86,9 +100,11 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "clients-narrow" | "client-editor" | "client-invoices"
+        "clients" | "clients-narrow" | "client-editor" | "client-wizard" | "client-invoices"
         | "client-receivables" => Route::Clients,
-        "products" | "products-narrow" | "stock" | "stock-report" => Route::Products,
+        "products" | "products-narrow" | "product-wizard" | "stock" | "stock-report" => {
+            Route::Products
+        }
         "sales" | "quotes" => Route::Sales,
         "expenses" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
@@ -375,7 +391,12 @@ fn build(route: &str) -> AtlasApp {
             &app.products.data.as_ref().expect("fixture products")[0],
         ));
     }
-    if route == "client-editor" {
+    if route == "product-wizard" {
+        let mut editor = atlas_ui::screens::products::ProductEditor::new();
+        editor.name = "Produit fictif".into();
+        app.product_editor = Some(editor);
+    }
+    if matches!(route, "client-editor" | "client-wizard") {
         app.client_editor = Some(atlas_ui::screens::clients::ClientEditor::for_client(
             &app.clients.data.as_ref().expect("fixture clients")[0],
         ));
@@ -394,7 +415,11 @@ fn main() -> eframe::Result<()> {
         [640.0, 480.0]
     } else if matches!(
         route.as_str(),
-        "products-narrow" | "clients-narrow" | "employee-editor-narrow"
+        "products-narrow"
+            | "clients-narrow"
+            | "employee-editor-narrow"
+            | "product-wizard"
+            | "client-wizard"
     ) {
         [720.0, 520.0]
     } else {
@@ -417,6 +442,7 @@ fn main() -> eframe::Result<()> {
                 palette,
                 route: route.clone(),
                 shortcut_reported: false,
+                wizard_step: None,
             }))
         }),
     )

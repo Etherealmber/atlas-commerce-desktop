@@ -929,7 +929,12 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(width, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim")) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("client-editor-scrim"))
+        && !app
+            .client_editor
+            .as_ref()
+            .is_some_and(|editor| editor.saving)
+    {
         app.client_editor = None;
         return;
     }
@@ -954,7 +959,11 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
             ui.add_space(10.0);
             egui::ScrollArea::vertical()
-                .max_height((rect.height() - 150.0).max(1.0))
+                .id_salt((
+                    "client-wizard-step",
+                    app.client_editor.as_ref().map_or(0, |editor| editor.step),
+                ))
+                .max_height((rect.height() - 210.0).max(1.0))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     if let Some(editor) = app.client_editor.as_mut() {
@@ -1065,14 +1074,15 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if primary_button(ui, t!(locale, "Save"), palette, !saving) {
                         submit_editor(app);
                     }
-                } else if primary_button(ui, t!(locale, "Continue"), palette, !saving)
+                } else if primary_button(ui, t!(locale, "Next"), palette, !saving)
                     && let Some(editor) = app.client_editor.as_mut()
                 {
                     editor.step += 1;
                     editor.error = None;
                 }
                 if step > 0
-                    && secondary_button(ui, t!(locale, "Back"), palette)
+                    && !saving
+                    && secondary_button(ui, t!(locale, "Previous"), palette)
                     && let Some(editor) = app.client_editor.as_mut()
                 {
                     editor.step -= 1;

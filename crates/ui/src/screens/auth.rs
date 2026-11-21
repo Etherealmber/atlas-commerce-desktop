@@ -880,7 +880,10 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     // server's unmodified page inside its isolated browser context.
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.vertical_centered(|ui| {
-            ui.add_space((ui.available_height() * 0.12).clamp(16.0, 72.0));
+            // Keep the native sign-in surface centered on a large window and
+            // scrollable rather than clipped when the viewport is compact.
+            let estimated_height = if app.qr.active { 610.0 } else { 390.0 };
+            ui.add_space(((ui.available_height() - estimated_height) * 0.5).max(16.0));
             let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
             card(palette).show(ui, |ui| {
                 ui.set_width((width - 34.0).max(0.0));
