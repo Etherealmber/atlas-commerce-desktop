@@ -218,6 +218,10 @@ pub struct ProductEditor {
     pub stock: String,
     pub threshold: String,
     pub description: String,
+    bulk_available: bool,
+    bulk_qty: [String; 2],
+    bulk_percent: [String; 2],
+    bulk_extra: Vec<atlas_api::models::BulkDiscount>,
     pub saving: bool,
     /// A 409 `DUPLICATE_PRODUCT` was answered; the next save forces it.
     pub force_duplicate: bool,
@@ -234,13 +238,27 @@ impl ProductEditor {
             price: "0".to_owned(),
             stock: "0".to_owned(),
             threshold: "5".to_owned(),
+            bulk_available: true,
             ..Self::default()
         }
     }
 
     #[must_use]
     pub fn for_product(product: &Product) -> Self {
+        let tiers = parse_bulk_from_product(product.bulk_discounts.as_ref());
+        let mut qty = [String::new(), String::new()];
+        let mut percent = [String::new(), String::new()];
+        if let Some(tiers) = tiers.as_ref() {
+            for (index, tier) in tiers.iter().take(2).enumerate() {
+                qty[index] = tier.min_qty.to_string();
+                percent[index] = tier.percent.to_string();
+            }
+        }
         Self {
+            bulk_available: tiers.is_some(),
+            bulk_qty: qty,
+            bulk_percent: percent,
+            bulk_extra: tiers.unwrap_or_default().into_iter().skip(2).collect(),
             editing_id: Some(product.id),
             name: product.name.clone(),
             sku: product.sku.clone().unwrap_or_default(),
@@ -254,6 +272,30 @@ impl ProductEditor {
             ..Self::new()
         }
     }
+}
+
+/// An absent, malformed or unexpected response is not rewritten on save.
+fn parse_bulk_from_product(
+    raw: Option<&serde_json::Value>,
+) -> Option<Vec<atlas_api::models::BulkDiscount>> {
+    let raw = raw?;
+    let value = if let Some(text) = raw.as_str() {
+        serde_json::from_str(text).ok()?
+    } else {
+        raw.clone()
+    };
+    let mut tiers: Vec<atlas_api::models::BulkDiscount> = serde_json::from_value(value).ok()?;
+    if tiers.iter().any(|tier| {
+        !tier.min_qty.is_finite()
+            || tier.min_qty <= 0.0
+            || !tier.percent.is_finite()
+            || tier.percent <= 0.0
+            || tier.percent > 100.0
+    }) {
+        return None;
+    }
+    tiers.sort_by(|a, b| a.min_qty.total_cmp(&b.min_qty));
+    Some(tiers)
 }
 
 /// The stock-adjustment dialog for one product.
@@ -1061,11 +1103,12 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     let section = match step {
                         0 => t!(locale, "Identity"),
                         1 => t!(locale, "Classification"),
-                        _ => t!(locale, "Price and stock"),
+                        2 => t!(locale, "Price and stock"),
+                        _ => t!(locale, "Volume discounts"),
                     };
                     ui.label(
                         RichText::new(format!(
-                            "{} {}/3 · {}",
+                            "{} {}/4 · {}",
                             t!(locale, "Step"),
                             step + 1,
                             section
@@ -1121,7 +1164,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     false,
                                 );
                             }
-                            _ => {
+                            2 => {
                                 labelled_field(
                                     ui,
                                     t!(locale, "Price (MAD)"),
@@ -1146,6 +1189,21 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                     false,
                                 );
                             }
+                            _ => {
+                                if editor.bulk_available {
+                                    ui.label(RichText::new(t!(locale, "Discounts apply at the quantity threshold when no manual promotional price is set.")).color(palette.secondary));
+                                    for index in 0..2 {
+                                        ui.label(RichText::new(format!("{} {}", t!(locale, "Tier"), index + 1)).strong().color(palette.text));
+                                        labelled_field(ui, t!(locale, "Minimum quantity"), &mut editor.bulk_qty[index], palette, false);
+                                        labelled_field(ui, t!(locale, "Discount (%)"), &mut editor.bulk_percent[index], palette, false);
+                                    }
+                                    if !editor.bulk_extra.is_empty() {
+                                        ui.label(RichText::new(t!(locale, "Additional server tiers will be preserved.")).color(palette.secondary));
+                                    }
+                                } else {
+                                    ui.label(RichText::new(t!(locale, "Discount data is unavailable; existing server values will be preserved.")).color(palette.secondary));
+                                }
+                            }
                         }
                     }
 
@@ -1157,7 +1215,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     widgets::dialog_actions(ui, |ui| {
                         let save = primary_button(
                             ui,
-                            if step == 2 {
+                            if step == 3 {
                                 t!(locale, "Save")
                             } else {
                                 t!(locale, "Next")
@@ -1189,7 +1247,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             }
                         }
                         if save {
-                            if step < 2 {
+                            if step < 3 {
                                 if let Some(editor) = app.product_editor.as_mut() {
                                     editor.step += 1;
                                     editor.error = None;
@@ -1218,6 +1276,8 @@ impl ProductEditor {
             || self.stock.trim() != "0"
             || self.threshold.trim() != "5"
             || !self.description.trim().is_empty()
+            || self.bulk_qty.iter().any(|v| !v.trim().is_empty())
+            || self.bulk_percent.iter().any(|v| !v.trim().is_empty())
     }
 
     fn identity(&self) -> (String, String, String) {
@@ -1226,6 +1286,39 @@ impl ProductEditor {
             self.sku.trim().to_owned(),
             self.barcode.trim().to_owned(),
         )
+    }
+
+    fn parse_bulk(&self) -> Result<Option<Vec<atlas_api::models::BulkDiscount>>, String> {
+        if !self.bulk_available {
+            return Ok(None);
+        }
+        let mut tiers = self.bulk_extra.clone();
+        for index in 0..2 {
+            let qty = self.bulk_qty[index].trim();
+            let pct = self.bulk_percent[index].trim();
+            if qty.is_empty() && pct.is_empty() {
+                continue;
+            }
+            let qty = qty
+                .replace(',', ".")
+                .parse::<f64>()
+                .map_err(|_| "Quantité minimale invalide.".to_owned())?;
+            let pct = pct
+                .replace(',', ".")
+                .parse::<f64>()
+                .map_err(|_| "Remise invalide.".to_owned())?;
+            if !qty.is_finite() || qty <= 0.0 || !pct.is_finite() || pct <= 0.0 || pct > 100.0 {
+                return Err(
+                    "La quantité doit être positive et la remise comprise entre 0 et 100 %."
+                        .to_owned(),
+                );
+            }
+            tiers.push(atlas_api::models::BulkDiscount {
+                min_qty: qty,
+                percent: pct,
+            });
+        }
+        Ok(Some(tiers))
     }
 
     fn parse(&self) -> Result<atlas_api::models::CreateProduct, String> {
@@ -1262,6 +1355,7 @@ impl ProductEditor {
                 parse_amount(&self.threshold, "Seuil de stock bas")?
             },
             description: optional(&self.description),
+            bulk_discounts: self.parse_bulk()?,
         })
     }
 }
@@ -1302,6 +1396,7 @@ fn submit_product(app: &mut AtlasApp) {
         low_stock_threshold: product.low_stock_threshold,
         description: product.description.clone().unwrap_or_default(),
         force_duplicate: force,
+        bulk_discounts: product.bulk_discounts.clone(),
     };
     let job = app.runner.spawn(async move {
         if let Some(id) = editing_id {
@@ -1516,6 +1611,41 @@ mod product_editor_tests {
         editor.editing_id = Some(42);
         editor.stock = "-12".into();
         assert_eq!(editor.parse().unwrap().stock_quantity, 0.0);
+    }
+
+    #[test]
+    fn discounts_keep_extra_tiers_and_never_overwrite_missing_data() {
+        use super::parse_bulk_from_product;
+        use atlas_api::models::Product;
+        let raw = serde_json::json!(
+            "[{\"min_qty\":50,\"percent\":10},{\"min_qty\":10,\"percent\":5},{\"min_qty\":100,\"percent\":15}]"
+        );
+        let product = Product {
+            bulk_discounts: Some(raw),
+            ..Default::default()
+        };
+        let mut editor = ProductEditor::for_product(&product);
+        assert_eq!(editor.bulk_qty[0], "10");
+        assert_eq!(editor.bulk_qty[1], "50");
+        editor.bulk_percent[0] = "6".into();
+        let tiers = editor.parse_bulk().unwrap().unwrap();
+        assert_eq!(tiers.len(), 3);
+        assert!(
+            tiers
+                .iter()
+                .any(|tier| tier.min_qty == 100.0 && tier.percent == 15.0)
+        );
+        assert!(
+            tiers
+                .iter()
+                .any(|tier| tier.min_qty == 10.0 && tier.percent == 6.0)
+        );
+        assert!(parse_bulk_from_product(None).is_none());
+        assert!(parse_bulk_from_product(Some(&serde_json::json!("invalid"))).is_none());
+        let missing = ProductEditor::for_product(&Product::default());
+        assert!(missing.parse_bulk().unwrap().is_none());
+        editor.bulk_percent[0] = "101".into();
+        assert!(editor.parse_bulk().is_err());
     }
 
     #[test]

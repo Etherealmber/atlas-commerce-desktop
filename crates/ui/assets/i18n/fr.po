@@ -1876,3 +1876,24 @@ msgstr "Client supprimé."
 
 msgid "This action is permanent. Confirm to continue."
 msgstr "Cette action est définitive. Confirmez pour continuer."
+
+msgid "Volume discounts"
+msgstr "Remises volume"
+
+msgid "Discounts apply at the quantity threshold when no manual promotional price is set."
+msgstr "La remise s’applique au seuil de quantité lorsqu’aucun prix promotionnel manuel n’est saisi."
+
+msgid "Tier"
+msgstr "Palier"
+
+msgid "Minimum quantity"
+msgstr "Quantité minimale"
+
+msgid "Discount (%)"
+msgstr "Remise (%)"
+
+msgid "Additional server tiers will be preserved."
+msgstr "Les paliers supplémentaires du serveur seront conservés."
+
+msgid "Discount data is unavailable; existing server values will be preserved."
+msgstr "Les remises sont indisponibles ; les valeurs du serveur seront conservées."

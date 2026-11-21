@@ -265,6 +265,7 @@ mod tests {
             low_stock_threshold: 2.0,
             description: String::new(),
             force_duplicate: false,
+            bulk_discounts: None,
         };
         let value = serde_json::to_value(update).unwrap();
         assert_eq!(value["name"], "Produit");
@@ -272,6 +273,7 @@ mod tests {
         assert!(value.get("stock_quantity").is_none());
         assert!(value.get("cost").is_none());
         assert!(value.get("image_url").is_none());
+        assert!(value.get("bulk_discounts").is_none());
     }
 
     #[test]
