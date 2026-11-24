@@ -26,6 +26,9 @@ impl eframe::App for Fixture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.route.starts_with("login-reference-checked-") {
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("login-remember-30"), true));
+        }
         if self.route == "alerts-popover" {
             let id = egui::Id::new("notification-popover-open");
             ctx.data_mut(|data| {
@@ -141,12 +144,35 @@ fn build(route: &str) -> AtlasApp {
     if matches!(
         route,
         "login" | "login-dark" | "login-qr" | "login-wait" | "login-v2"
-    ) {
+    ) || route.starts_with("login-reference-")
+    {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
         app.login.browser_auto_started = true;
-        app.login.error = Some("Connexion fictive indisponible.".into());
+        app.login.error = None;
+    }
+    if route.starts_with("login-reference-") {
+        app.qr.qr_url = "https://fixture.invalid/login/qr?t=fictional&mode=pc".into();
+        if route.contains("-focus-")
+            || route.contains("-checked-")
+            || route.contains("-error-")
+            || route.contains("-otp-")
+        {
+            app.login.username = "amine".into();
+        }
+        if route.contains("-error-") {
+            app.login.error = Some("Identifiant ou mot de passe incorrect.".into());
+        }
+        if route.contains("-otp-") {
+            app.login.needs_otp = true;
+            app.login.notice =
+                Some("Un code de vérification a été envoyé à a•••@afmarbre.com.".into());
+        }
+        if route.contains("-claimed-") {
+            app.qr.status = "claimed".into();
+            app.qr.account = "Amine".into();
+        }
     }
     #[cfg(feature = "visual-fixtures")]
     if route == "login-wait" {
@@ -567,7 +593,9 @@ fn build(route: &str) -> AtlasApp {
 }
 fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
-    let size = if matches!(
+    let size = if route.ends_with("1440x900") {
+        [1440.0, 900.0]
+    } else if matches!(
         route.as_str(),
         "dashboard-wide" | "products-wide" | "expenses-wide"
     ) {
@@ -597,14 +625,15 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
-            let dark = matches!(
-                route.as_str(),
-                "settings-dark"
-                    | "update-dialog-dark"
-                    | "login-dark"
-                    | "dashboard-dark"
-                    | "clients-dark"
-            );
+            let dark = route.contains("-dark-")
+                || matches!(
+                    route.as_str(),
+                    "settings-dark"
+                        | "update-dialog-dark"
+                        | "login-dark"
+                        | "dashboard-dark"
+                        | "clients-dark"
+                );
             cc.egui_ctx.set_theme(if dark {
                 egui::ThemePreference::Dark
             } else {

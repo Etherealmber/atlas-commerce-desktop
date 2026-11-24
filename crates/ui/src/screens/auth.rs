@@ -814,63 +814,12 @@ enum LoginTab {
     Qr,
 }
 
-/// Native sign-in surface. Unsupported methods remain disabled until their
-/// server and platform security contracts are implemented and verified.
+/// Native sign-in entry point.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
-    if !matches!(app.screen, Screen::Login) {
-        return;
+    if matches!(app.screen, Screen::Login) {
+        super::login_reference::draw(app, ui, palette);
     }
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.vertical_centered(|ui| {
-            ui.add_space(24.0);
-            let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
-            card(palette).show(ui, |ui| {
-                ui.set_width((width - 34.0).max(0.0));
-                ui.vertical_centered(|ui| {
-                    crate::branding::mark(ui, palette, 36.0);
-                    ui.add_space(12.0);
-                    ui.label(RichText::new("Bon retour").font(crate::fonts::bold(21.0)).color(palette.text));
-                    ui.label(RichText::new("Veuillez vous connecter pour continuer.").color(palette.secondary));
-                });
-                ui.add_space(20.0);
-                // Fictional QR samples exercise rendering only; no login flow is started.
-                #[cfg(feature = "visual-fixtures")]
-                if app.qr.active && !app.qr.qr_url.is_empty() {
-                    qr_image(ui, &app.qr.qr_url, palette);
-                }
-                #[cfg(feature = "visual-fixtures")]
-                if let Some(url) = &app.native_login.qr_url {
-                    qr_image(ui, url, palette);
-                }
-                if let Some(error) = &app.login.error {
-                    error_banner(ui, error, palette);
-                    ui.add_space(8.0);
-                }
-                ui.label(RichText::new("Identifiant").color(palette.secondary));
-                ui.add_sized([ui.available_width(), TARGET], egui::TextEdit::singleline(&mut app.login.username).hint_text("Votre identifiant"));
-                ui.add_space(8.0);
-                ui.label(RichText::new("Mot de passe").color(palette.secondary));
-                ui.horizontal(|ui| {
-                    let width = (ui.available_width() - 100.0).max(0.0);
-                    ui.add_sized([width, TARGET], egui::TextEdit::singleline(&mut app.login.password).hint_text("••••••••").password(!app.login.show_password));
-                    if secondary_button(ui, if app.login.show_password { "Masquer" } else { "Afficher" }, palette) {
-                        app.login.show_password = !app.login.show_password;
-                    }
-                });
-                ui.add_space(12.0);
-                ui.add_enabled(false, egui::Button::new("Continuer").min_size(egui::vec2(ui.available_width(), TARGET)));
-                ui.label(RichText::new("Connexion native indisponible : l’intégration sécurisée du client n’est pas encore terminée. Activez la connexion bureau depuis le site (Paramètres → Sécurité).").color(palette.secondary).size(12.0));
-                ui.add_space(12.0);
-                ui.add_enabled(false, egui::Button::new("Se connecter avec une passkey").min_size(egui::vec2(ui.available_width(), TARGET)));
-                ui.label(RichText::new("Passkey indisponible : les adaptateurs natifs et leur intégration ne sont pas encore implémentés.").color(palette.secondary).size(12.0));
-                ui.add_space(12.0);
-                ui.label(RichText::new("Connexion avec un QR").strong().color(palette.text));
-                ui.add_enabled(false, egui::Button::new("Connexion avec un QR").min_size(egui::vec2(ui.available_width(), TARGET)));
-                ui.label(RichText::new("QR indisponible : le protocole natif et la session renouvelable ne sont pas encore intégrés au client.").color(palette.secondary).size(12.0));
-            });
-        });
-    });
 }
 
 // The earlier native login implementation is retained for its existing QR,
@@ -1457,7 +1406,7 @@ fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> 
     Some(approval)
 }
 
-fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
+pub(super) fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
     let code = match qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::H) {
         Ok(code) => code,
         Err(_) => return,
