@@ -307,6 +307,9 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 draw_confirm_dialog(app, ui, palette);
             });
     }
+    if app.update.dialog_open {
+        draw_update_dialog(app, ctx, palette);
+    }
 }
 
 /// Settings is an overlay, not navigation: the active page and its draft
@@ -348,6 +351,121 @@ fn draw_settings_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palet
             if app.confirm_dialog.is_some() {
                 draw_confirm_dialog(app, ui, palette);
             }
+        });
+}
+
+/// The feed describes metadata only; the existing updater performs the actual
+/// verified GitHub handoff after the user explicitly starts installation.
+fn draw_update_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    let Some(manifest) = app.update.last_manifest.clone() else {
+        app.update.dialog_open = false;
+        return;
+    };
+    let screen = ctx.input(|input| input.viewport_rect());
+    let width = (screen.width() - 32.0).clamp(1.0, 520.0);
+    let height = (screen.height() - 32.0).clamp(1.0, 600.0);
+    let dialog = egui::Rect::from_center_size(screen.center(), vec2(width, height));
+    egui::Area::new(egui::Id::new("update-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            let _ = ui.interact(screen, egui::Id::new("update-scrim"), egui::Sense::click());
+            ui.painter()
+                .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(133));
+            widgets::overlay_at(ui, dialog, |ui| {
+                egui::Frame::NONE
+                    .fill(palette.overlay)
+                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                    .corner_radius(20.0)
+                    .shadow(crate::theme::elevation_shadow(palette))
+                    .inner_margin(egui::Margin::same(20))
+                    .show(ui, |ui| {
+                        ui.set_width((width - 40.0).max(1.0));
+                        ui.set_height((height - 40.0).max(1.0));
+                        ui.label(
+                            egui::RichText::new(t!(app.locale, "Update available"))
+                                .size(20.0)
+                                .strong()
+                                .color(palette.text),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "v{} → v{}",
+                                env!("CARGO_PKG_VERSION"),
+                                manifest.version
+                            ))
+                            .strong()
+                            .color(palette.text),
+                        );
+                        let channel = match app.settings.update_channel {
+                            atlas_core::settings::UpdateChannel::Stable => t!(app.locale, "Stable"),
+                            atlas_core::settings::UpdateChannel::Prerelease => {
+                                t!(app.locale, "Pre-release")
+                            }
+                        };
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} · {}",
+                                channel,
+                                if manifest.published_at.is_empty() {
+                                    "—"
+                                } else {
+                                    &manifest.published_at
+                                }
+                            ))
+                            .color(palette.secondary),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(
+                                "Taille et SHA-256 : disponibles lors du téléchargement GitHub.",
+                            )
+                            .color(palette.secondary)
+                            .size(12.0),
+                        );
+                        ui.add_space(8.0);
+                        if !manifest.notes.trim().is_empty() {
+                            widgets::release_notes(
+                                ui,
+                                &manifest.notes,
+                                palette,
+                                (height - 260.0).clamp(40.0, 260.0),
+                            );
+                        }
+                        if let Some((received, total)) = app.update.progress {
+                            ui.label(
+                                egui::RichText::new(&app.update.stage).color(palette.secondary),
+                            );
+                            let value = if total > 0 {
+                                (received as f32 / total as f32).clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            };
+                            ui.add(egui::ProgressBar::new(value).show_percentage());
+                        }
+                        if let Some(error) = &app.update.error {
+                            widgets::error_banner(ui, error, palette);
+                        }
+                        ui.add_space(12.0);
+                        ui.horizontal_wrapped(|ui| {
+                            if widgets::primary_button(
+                                ui,
+                                t!(app.locale, "Download and install update"),
+                                palette,
+                                app.update.progress.is_none(),
+                            ) {
+                                app.start_update_download();
+                            }
+                            ui.add_enabled_ui(app.update.mandatory.is_none(), |ui| {
+                                if widgets::secondary_button(ui, t!(app.locale, "Later"), palette) {
+                                    app.update.dialog_open = false;
+                                }
+                            });
+                        });
+                    });
+            });
         });
 }
 

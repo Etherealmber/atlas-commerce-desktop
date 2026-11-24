@@ -11,7 +11,13 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
-## Current pass (CI and update version validation)
+## Current pass (update dialog and notifications)
+
+- Added a centered shell update dialog for available GitHub manifest metadata, with explicit install, progress, optional dismissal and an in-session mandatory lock. Pre-shell mandatory updates still use the existing gate. The manifest does not provide size or checksum details, which are explicitly marked unavailable; this does not implement CDN1 or claim a verified status before the updater verifies anything.
+- The notifications popover now uses a count of loaded alerts, known Worker alert-kind icon tiles, dividers and a footer link. Navigation continues to use the existing route allowlist and role checks. Mobile-action rows still need parity.
+- Added fictional light/dark update-dialog screenshot targets and Escape checks, pending CI execution. No real Windows interaction or update install was performed.
+
+## Prior pass (CI and update version validation)
 
 - At `fe98565`, compilation failed on all CI platforms because the skeleton's `div_ceil` input was ambiguous. Added an explicit `usize` type. Addressed previously reported Clippy findings without suppressing lints; fresh CI is needed to discover any remaining findings.
 - Update decisions now use strict SemVer precedence, including prerelease ordering and ignoring build metadata; invalid versions and inconsistent minimum versions produce an explicit error instead of an up-to-date result. Added tests, not yet run under Cargo.

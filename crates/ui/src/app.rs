@@ -1547,6 +1547,7 @@ impl AtlasApp {
                 self.update.last_manifest = None;
                 self.update.ready_version = None;
                 self.update.mandatory = None;
+                self.update.dialog_open = false;
                 self.update.error = None;
                 self.leave_update_gate();
             }
@@ -1554,7 +1555,11 @@ impl AtlasApp {
                 self.update.up_to_date_at = None;
                 self.update.mandatory = Some(manifest.clone());
                 self.update.last_manifest = Some(manifest);
-                self.screen = Screen::UpdateGate;
+                if matches!(self.screen, Screen::Shell(_)) {
+                    self.update.dialog_open = true;
+                } else {
+                    self.screen = Screen::UpdateGate;
+                }
             }
             UpdateDecision::Optional { .. } => {
                 self.update.mandatory = None;
@@ -1563,6 +1568,7 @@ impl AtlasApp {
                 // Checking only fetches release metadata. A binary download is
                 // always initiated explicitly by the user, even for old settings.
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
+                self.update.dialog_open = matches!(self.screen, Screen::Shell(_));
                 self.update.last_manifest = Some(manifest);
             }
         }

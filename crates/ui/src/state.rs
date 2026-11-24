@@ -287,6 +287,8 @@ pub(crate) fn update_check_cooldown_remaining(elapsed: Duration) -> Duration {
 /// Self-update state.
 #[derive(Default)]
 pub struct UpdateState {
+    /// Optional or in-session required update dialog.
+    pub dialog_open: bool,
     /// Most recently fetched release notes, even when this build is current.
     pub release_notes: Option<UpdateManifest>,
     pub last_manifest: Option<UpdateManifest>,
@@ -1276,7 +1278,8 @@ impl AtlasApp {
     /// navigation, refresh or palette action cannot lose in-progress input.
     #[must_use]
     pub fn modal_open(&self) -> bool {
-        self.confirm_dialog.is_some()
+        self.update.dialog_open
+            || self.confirm_dialog.is_some()
             || self.settings_dialog_open
             || self.product_editor.is_some()
             || self.product_label.is_some()
@@ -1304,6 +1307,12 @@ impl AtlasApp {
     /// wizard routes through its existing discard confirmation, every other
     /// editor closes directly like its own Cancel button.
     pub fn dismiss_top_overlay(&mut self) -> bool {
+        if self.update.dialog_open {
+            if self.update.mandatory.is_none() {
+                self.update.dialog_open = false;
+            }
+            return true;
+        }
         if self.confirm_dialog.take().is_some() {
             return true;
         }

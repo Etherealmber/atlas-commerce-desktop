@@ -411,6 +411,28 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
 }
 
 /// Fetch alerts only when opened, never as a background fan-out.
+/// Map only known Worker alert kinds; unknown kinds remain neutral.
+fn notification_tile(kind: &str, palette: &Palette) -> (Icon, egui::Color32, egui::Color32) {
+    match kind {
+        "rupture" | "stock_bas" | "lot_expire" | "lot_bientot" => (
+            Icon::Boxes,
+            palette.finance_warning,
+            palette.finance_warning_soft,
+        ),
+        "demande_produit" => (
+            Icon::Package,
+            palette.finance_info,
+            palette.finance_info_soft,
+        ),
+        "facture_echue" => (
+            Icon::Receipt,
+            palette.finance_danger,
+            palette.finance_danger_soft,
+        ),
+        _ => (Icon::Bell, palette.secondary, palette.surface_hover),
+    }
+}
+
 fn draw_notifications_popover(
     app: &mut AtlasApp,
     ctx: &egui::Context,
@@ -427,12 +449,24 @@ fn draw_notifications_popover(
                 .inner_margin(egui::Margin::same(14))
                 .show(ui, |ui| {
                     ui.set_width(292.0);
-                    ui.label(
-                        RichText::new(t!(app.locale, "Notifications"))
-                            .color(palette.text)
-                            .strong()
-                            .size(15.0),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(t!(app.locale, "Notifications"))
+                                .color(palette.text)
+                                .strong()
+                                .size(15.0),
+                        );
+                        if let Some(alerts) = &app.alerts.data {
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                widgets::pill(
+                                    ui,
+                                    alerts.len().to_string(),
+                                    palette.surface_hover,
+                                    palette.secondary,
+                                );
+                            });
+                        }
+                    });
                     ui.separator();
                     if app.alerts.loading && app.alerts.data.is_none() {
                         super::super::centered_spinner(ui, palette);
@@ -460,22 +494,40 @@ fn draw_notifications_popover(
                                     .filter(|target| {
                                         app.role_policy().allows_route(target.route())
                                     });
-                                let tint = match alert.severity.as_deref() {
-                                    Some("high") => palette.finance_danger,
-                                    Some("medium") => palette.finance_warning,
-                                    _ => palette.finance_info,
-                                };
-                                let row = ui.horizontal(|ui| {
+                                let (tile_icon, tint, fill) =
+                                    notification_tile(&alert.kind, palette);
+                                let row = ui.horizontal_centered(|ui| {
                                     ui.set_min_width(ui.available_width());
-                                    let (dot, _) =
-                                        ui.allocate_exact_size(vec2(14.0, 24.0), Sense::hover());
-                                    ui.painter().circle_filled(dot.center(), 3.5, tint);
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(&alert.label).color(palette.text),
-                                        )
-                                        .wrap(),
+                                    ui.set_min_height(48.0);
+                                    let (tile, _) =
+                                        ui.allocate_exact_size(vec2(32.0, 32.0), Sense::hover());
+                                    ui.painter().rect_filled(tile, 9.0, fill);
+                                    ui.put(tile.shrink(7.0), tile_icon.image(tint, 18.0));
+                                    let label_width = (ui.available_width() - 24.0).max(1.0);
+                                    ui.allocate_ui_with_layout(
+                                        vec2(label_width, 32.0),
+                                        Layout::top_down(Align::Min),
+                                        |ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(&alert.label)
+                                                        .color(palette.text)
+                                                        .size(13.0),
+                                                )
+                                                .wrap(),
+                                            );
+                                            if let Some(count) = alert.count {
+                                                ui.label(
+                                                    RichText::new(count.to_string())
+                                                        .color(palette.secondary)
+                                                        .size(11.0),
+                                                );
+                                            }
+                                        },
                                     );
+                                    if destination.is_some() {
+                                        widgets::icon(ui, Icon::ChevronRight, palette.dim, 16.0);
+                                    }
                                 });
                                 let response = row.response.interact(Sense::click());
                                 let clicked = response.clicked();
@@ -492,10 +544,22 @@ fn draw_notifications_popover(
                             }
                         }
                     }
-                    if secondary_button(ui, t!(app.locale, "View all"), palette) {
-                        ctx.data_mut(|data| data.insert_temp(id, false));
-                        app.go(Route::Notifications);
-                    }
+                    ui.vertical_centered(|ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(t!(app.locale, "View all"))
+                                        .color(palette.text)
+                                        .strong(),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            ctx.data_mut(|data| data.insert_temp(id, false));
+                            app.go(Route::Notifications);
+                        }
+                    });
                 });
         });
     if ctx.input(|input| input.pointer.any_pressed())

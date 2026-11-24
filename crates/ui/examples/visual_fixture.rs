@@ -180,6 +180,16 @@ fn build(route: &str) -> AtlasApp {
         app.update.release_notes = Some(manifest);
         app.update.ready_version = Some("0.2.0".into());
     }
+    if matches!(route, "update-dialog" | "update-dialog-dark") {
+        app.update.last_manifest = Some(atlas_core::update_feed::UpdateManifest {
+            version: "9.1.0".into(),
+            mandatory: false,
+            minimum_version: None,
+            notes: "## Nouveautés\n- Exemple fictif hors ligne.".into(),
+            published_at: "2026-01-15T10:00:00Z".into(),
+        });
+        app.update.dialog_open = true;
+    }
     app.nav_badges.data = Some(atlas_api::models::NavBadges {
         invoices_unpaid: 3,
         bills_unpaid: 2,
@@ -584,7 +594,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
-            let dark = route == "settings-dark";
+            let dark = matches!(route.as_str(), "settings-dark" | "update-dialog-dark");
             cc.egui_ctx.set_theme(if dark {
                 egui::ThemePreference::Dark
             } else {

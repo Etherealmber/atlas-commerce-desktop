@@ -2633,3 +2633,9 @@ msgstr "Sorties"
 
 msgid "Net cash flow"
 msgstr "Flux net"
+
+msgid "Later"
+msgstr "Plus tard"
+
+msgid "Size and SHA-256 are not provided by this manifest."
+msgstr "Taille et SHA-256 non indiqués par ce manifeste."

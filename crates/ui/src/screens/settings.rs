@@ -1779,7 +1779,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 ui.add_space(10.0);
                 if app.update.ready_version.is_some() {
                     if primary_button(ui, t!(app.locale, "Restart and install"), palette, true) {
-                        app.start_update_download();
+                        app.update.dialog_open = true;
                     }
                 } else if app.update.last_manifest.is_some() && app.update.progress.is_none() {
                     if primary_button(
@@ -1788,7 +1788,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         palette,
                         true,
                     ) {
-                        app.start_update_download();
+                        app.update.dialog_open = true;
                     }
                 } else {
                     let remaining = app
