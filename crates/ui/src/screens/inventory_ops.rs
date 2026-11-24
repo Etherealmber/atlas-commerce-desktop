@@ -195,8 +195,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         let valid = selected.is_some()
             && quantity.is_some()
             && app.inventory_form.note.chars().count() <= 200;
-        if primary_button(ui, t!(app.locale, "Record count"), palette, ready && valid) {
-            if let (Some(product), Some(quantity)) = (selected, quantity) {
+        if primary_button(ui, t!(app.locale, "Record count"), palette, ready && valid)
+            && let (Some(product), Some(quantity)) = (selected, quantity)
+        {
                 app.confirm_dialog = Some(Confirm {
                     title: t!(app.locale, "Confirm physical count?").into_owned(),
                     body: format!(
@@ -215,7 +216,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         note: app.inventory_form.note.clone(),
                     },
                 });
-            }
         }
     });
 }

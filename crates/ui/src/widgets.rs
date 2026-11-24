@@ -43,7 +43,7 @@ pub fn draw_page_skeleton(
             .request_repaint_after(std::time::Duration::from_millis(80));
     }
     let width = ui.available_width().max(0.0);
-    let metrics = match variant {
+    let metrics: usize = match variant {
         PageSkeleton::Dashboard
         | PageSkeleton::Kpis4List
         | PageSkeleton::CashShifts

@@ -11,7 +11,13 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
-## Current pass (web palette)
+## Current pass (CI and update version validation)
+
+- At `fe98565`, compilation failed on all CI platforms because the skeleton's `div_ceil` input was ambiguous. Added an explicit `usize` type. Addressed previously reported Clippy findings without suppressing lints; fresh CI is needed to discover any remaining findings.
+- Update decisions now use strict SemVer precedence, including prerelease ordering and ignoring build metadata; invalid versions and inconsistent minimum versions produce an explicit error instead of an up-to-date result. Added tests, not yet run under Cargo.
+- The earlier visual fixture failed during the Xvfb rendering step; the available check annotations do not identify the failing assertion. Screenshots and interactive Windows tests remain unverified.
+
+## Prior pass (web palette)
 
 - Updated central dark and light palette tokens to the requested zinc/slate values and removed the Settings modal's heavy dark shadow. Settings already uses a centered scrim, close control and Escape handling; full web parity remains incomplete.
 - CI at `7839f55`: platform tests, vulnerability scan and Windows installer passed; quality (Clippy) and offline screenshots failed. Some Clippy findings have been addressed locally, but multiple collapsible-if findings remain. No visual or interactive Windows verification has been performed for this pass.

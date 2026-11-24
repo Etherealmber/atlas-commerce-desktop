@@ -1888,33 +1888,33 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     |ui| segmented(ui, palette, &options, Some(app.settings.update_channel)),
                 )
                 .inner;
-            if let Some(channel) = selection {
-                if app.settings.update_channel != channel {
-                    app.settings.update_channel = channel;
-                    app.update.last_manifest = None;
-                    app.update.release_notes = None;
-                    app.update.up_to_date_at = None;
-                    app.update.ready_version = None;
-                    app.save_settings();
-                    let remaining = app
-                        .update
-                        .last_check_started
-                        .map_or(std::time::Duration::ZERO, |(at, _)| {
-                            crate::state::update_check_cooldown_remaining(at.elapsed())
-                        });
-                    if remaining.is_zero() {
-                        app.check_for_updates(false);
-                    } else {
-                        app.update.error = Some(
-                            t!(
-                                app.locale,
-                                "Update checks are temporarily limited. Try again in one minute."
-                            )
-                            .into_owned(),
-                        );
-                        if app.settings.update_check_on_start {
-                            app.update.next_check_at = Some(std::time::Instant::now() + remaining);
-                        }
+            if let Some(channel) = selection
+                && app.settings.update_channel != channel
+            {
+                app.settings.update_channel = channel;
+                app.update.last_manifest = None;
+                app.update.release_notes = None;
+                app.update.up_to_date_at = None;
+                app.update.ready_version = None;
+                app.save_settings();
+                let remaining = app
+                    .update
+                    .last_check_started
+                    .map_or(std::time::Duration::ZERO, |(at, _)| {
+                        crate::state::update_check_cooldown_remaining(at.elapsed())
+                    });
+                if remaining.is_zero() {
+                    app.check_for_updates(false);
+                } else {
+                    app.update.error = Some(
+                        t!(
+                            app.locale,
+                            "Update checks are temporarily limited. Try again in one minute."
+                        )
+                        .into_owned(),
+                    );
+                    if app.settings.update_check_on_start {
+                        app.update.next_check_at = Some(std::time::Instant::now() + remaining);
                     }
                 }
             }
@@ -1928,23 +1928,22 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         .last_manifest
         .as_ref()
         .or(app.update.release_notes.as_ref())
+        && !manifest.notes.trim().is_empty()
     {
-        if !manifest.notes.trim().is_empty() {
-            ui.add_space(18.0);
-            section_header(
-                ui,
-                palette,
-                format!(
-                    "{} · v{}",
-                    t!(app.locale, "Release notes"),
-                    manifest.version
-                ),
-            );
-            card(palette).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                widgets::release_notes(ui, &manifest.notes, palette, 300.0);
-            });
-        }
+        ui.add_space(18.0);
+        section_header(
+            ui,
+            palette,
+            format!(
+                "{} · v{}",
+                t!(app.locale, "Release notes"),
+                manifest.version
+            ),
+        );
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            widgets::release_notes(ui, &manifest.notes, palette, 300.0);
+        });
     }
 
     ui.add_space(18.0);

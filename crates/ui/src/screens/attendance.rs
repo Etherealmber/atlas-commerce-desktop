@@ -124,10 +124,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     if primary_button(ui, t!(app.locale, "Check-in"), palette, ready) {
                         selected = Some((row.employee_id, false));
                     }
-                } else if row.check_in.is_some() && row.check_out.is_none() {
-                    if primary_button(ui, t!(app.locale, "Check-out"), palette, ready) {
-                        selected = Some((row.employee_id, true));
-                    }
+                } else if row.check_in.is_some()
+                    && row.check_out.is_none()
+                    && primary_button(ui, t!(app.locale, "Check-out"), palette, ready)
+                {
+                    selected = Some((row.employee_id, true));
                 }
             });
             ui.separator();

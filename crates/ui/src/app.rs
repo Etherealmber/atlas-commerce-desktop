@@ -1534,6 +1534,12 @@ impl AtlasApp {
         }
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
+            UpdateDecision::InvalidVersion => {
+                self.update.up_to_date_at = None;
+                self.update.last_manifest = None;
+                self.update.error =
+                    Some("Le manifeste de mise à jour contient une version invalide.".to_owned());
+            }
             UpdateDecision::UpToDate => {
                 // Surface an explicit status in the About card instead of
                 // silently swallowing the answer.
@@ -1750,18 +1756,18 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.mobile_action_write.poll() {
-            if self.mobile_action_write.last_error.is_none() {
-                if let Some(updated) = self.mobile_action_write.data.take() {
-                    if let Some(rows) = &mut self.mobile_actions.data {
-                        if let Some(row) = rows.iter_mut().find(|row| row.id == updated.id) {
-                            *row = updated.clone();
-                        }
-                    }
-                    self.actions_form.uncertain_id = None;
-                    self.actions_form.reason.clear();
-                    self.mobile_action_detail.data = Some(updated);
-                    self.notice(t!(self.locale, "Request updated.").into_owned());
+            if self.mobile_action_write.last_error.is_none()
+                && let Some(updated) = self.mobile_action_write.data.take()
+            {
+                if let Some(rows) = &mut self.mobile_actions.data
+                    && let Some(row) = rows.iter_mut().find(|row| row.id == updated.id)
+                {
+                    *row = updated.clone();
                 }
+                self.actions_form.uncertain_id = None;
+                self.actions_form.reason.clear();
+                self.mobile_action_detail.data = Some(updated);
+                self.notice(t!(self.locale, "Request updated.").into_owned());
             }
             ctx.request_repaint();
         }
@@ -1772,20 +1778,20 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.cash_shift_action.poll() {
-            if self.cash_shift_action.last_error.is_none() {
-                if let Some(action) = self.cash_shift_action.data.take() {
-                    let id = match action {
-                        crate::screens::cash_shifts::CashShiftAction::Opened(id) => id,
-                        crate::screens::cash_shifts::CashShiftAction::Movement(id) => id,
-                        crate::screens::cash_shifts::CashShiftAction::Closed(id) => id,
-                    };
-                    self.cash_shift_form.amount.clear();
-                    self.cash_shift_form.counted.clear();
-                    self.cash_shift_form.reference.clear();
-                    self.cash_shift_form.label.clear();
-                    self.load_cash_shifts();
-                    self.load_cash_shift_detail(id);
-                }
+            if self.cash_shift_action.last_error.is_none()
+                && let Some(action) = self.cash_shift_action.data.take()
+            {
+                let id = match action {
+                    crate::screens::cash_shifts::CashShiftAction::Opened(id) => id,
+                    crate::screens::cash_shifts::CashShiftAction::Movement(id) => id,
+                    crate::screens::cash_shifts::CashShiftAction::Closed(id) => id,
+                };
+                self.cash_shift_form.amount.clear();
+                self.cash_shift_form.counted.clear();
+                self.cash_shift_form.reference.clear();
+                self.cash_shift_form.label.clear();
+                self.load_cash_shifts();
+                self.load_cash_shift_detail(id);
             }
             ctx.request_repaint();
         }
@@ -1799,14 +1805,13 @@ impl AtlasApp {
                 Some(crate::screens::inventory_ops::InventoryAction::LocationCreated(location))
                     if self.inventory_action.last_error.is_none() =>
                 {
-                    if let Some(data) = &mut self.inventory_ops.data {
-                        if !data
+                    if let Some(data) = &mut self.inventory_ops.data
+                        && !data
                             .locations
                             .iter()
                             .any(|existing| existing.id == location.id)
-                        {
-                            data.locations.push(location);
-                        }
+                    {
+                        data.locations.push(location);
                     }
                     self.inventory_form.location_code.clear();
                     self.inventory_form.location_name.clear();

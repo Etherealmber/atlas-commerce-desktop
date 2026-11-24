@@ -210,20 +210,20 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             && !app.cash_shift_form.till.trim().is_empty()
             && app.cash_shift_form.till.chars().count() <= 64
             && app.cash_shift_form.notes.chars().count() <= 500;
-        if primary_button(ui, t!(app.locale, "Open shift"), palette, ready && valid) {
-            if let Some(opening) = value {
-                app.confirm_dialog = Some(Confirm {
-                    title: t!(app.locale, "Open this cash shift?").into_owned(),
-                    body: format!("{} · {opening:.2} MAD", app.cash_shift_form.till.trim()),
-                    confirm_label: t!(app.locale, "Open shift").into_owned(),
-                    danger: false,
-                    action: ConfirmAction::OpenCashShift {
-                        till: app.cash_shift_form.till.clone(),
-                        opening,
-                        notes: app.cash_shift_form.notes.clone(),
-                    },
-                });
-            }
+        if primary_button(ui, t!(app.locale, "Open shift"), palette, ready && valid)
+            && let Some(opening) = value
+        {
+            app.confirm_dialog = Some(Confirm {
+                title: t!(app.locale, "Open this cash shift?").into_owned(),
+                body: format!("{} · {opening:.2} MAD", app.cash_shift_form.till.trim()),
+                confirm_label: t!(app.locale, "Open shift").into_owned(),
+                danger: false,
+                action: ConfirmAction::OpenCashShift {
+                    till: app.cash_shift_form.till.clone(),
+                    opening,
+                    notes: app.cash_shift_form.notes.clone(),
+                },
+            });
         }
     });
     ui.add_space(12.0);
@@ -402,37 +402,36 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             t!(app.locale, "Record movement"),
             palette,
             detail_ready && valid,
-        ) {
-            if let Some(amount) = amount {
-                let direction = if app.cash_shift_form.direction {
-                    "in"
-                } else {
-                    "out"
-                };
-                let method = METHODS[app.cash_shift_form.method];
-                app.confirm_dialog = Some(Confirm {
-                    title: t!(app.locale, "Record this movement?").into_owned(),
-                    body: format!(
-                        "{} · {} · {amount:.2} MAD",
-                        if direction == "in" {
-                            t!(app.locale, "Cash in")
-                        } else {
-                            t!(app.locale, "Cash out")
-                        },
-                        names[app.cash_shift_form.method]
-                    ),
-                    confirm_label: t!(app.locale, "Record movement").into_owned(),
-                    danger: direction == "out",
-                    action: ConfirmAction::CashShiftMovement {
-                        id: detail.shift.id,
-                        direction,
-                        method,
-                        amount,
-                        label: app.cash_shift_form.label.clone(),
-                        reference: app.cash_shift_form.reference.clone(),
+        ) && let Some(amount) = amount
+        {
+            let direction = if app.cash_shift_form.direction {
+                "in"
+            } else {
+                "out"
+            };
+            let method = METHODS[app.cash_shift_form.method];
+            app.confirm_dialog = Some(Confirm {
+                title: t!(app.locale, "Record this movement?").into_owned(),
+                body: format!(
+                    "{} · {} · {amount:.2} MAD",
+                    if direction == "in" {
+                        t!(app.locale, "Cash in")
+                    } else {
+                        t!(app.locale, "Cash out")
                     },
-                });
-            }
+                    names[app.cash_shift_form.method]
+                ),
+                confirm_label: t!(app.locale, "Record movement").into_owned(),
+                danger: direction == "out",
+                action: ConfirmAction::CashShiftMovement {
+                    id: detail.shift.id,
+                    direction,
+                    method,
+                    amount,
+                    label: app.cash_shift_form.label.clone(),
+                    reference: app.cash_shift_form.reference.clone(),
+                },
+            });
         }
     });
     if app.role_policy().can_close_cash_shift() {
@@ -444,10 +443,10 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             labelled_field(ui, t!(app.locale, "Counted cash (MAD)"), &mut app.cash_shift_form.counted, palette, false);
             labelled_field(ui, t!(app.locale, "Closing notes"), &mut app.cash_shift_form.notes, palette, false);
             let amount = parse_amount(&app.cash_shift_form.counted, true);
-            if primary_button(ui, t!(app.locale, "Close shift"), palette, detail_ready && amount.is_some() && app.cash_shift_form.notes.chars().count() <= 1000) {
-                if let Some(amount) = amount {
+            if primary_button(ui, t!(app.locale, "Close shift"), palette, detail_ready && amount.is_some() && app.cash_shift_form.notes.chars().count() <= 1000)
+                && let Some(amount) = amount
+            {
                     app.confirm_dialog = Some(Confirm { title: t!(app.locale, "Close this cash shift?").into_owned(), body: format!("{} : {:.2} MAD · {} : {amount:.2} MAD. {}", t!(app.locale, "Expected cash"), detail.summary.expected_cash, t!(app.locale, "Counted cash"), t!(app.locale, "The server recalculates the expected amount at closing. Stop other movements before closing; concurrent changes may not be included.")), confirm_label: t!(app.locale, "Close shift").into_owned(), danger: true, action: ConfirmAction::CloseCashShift { id: detail.shift.id, amount, notes: app.cash_shift_form.notes.clone() } });
-                }
             }
         });
     }
