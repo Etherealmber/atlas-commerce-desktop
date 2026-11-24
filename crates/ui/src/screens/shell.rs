@@ -79,7 +79,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
         .frame(egui::Frame::NONE.inner_margin(egui::Margin::same(12)))
         .show(ui, |ui| {
             egui::Frame::NONE
-                .fill(palette.panel)
+                .fill(if palette.dark {
+                    egui::Color32::from_rgb(0x14, 0x14, 0x17)
+                } else {
+                    palette.panel
+                })
                 .stroke(egui::Stroke::new(1.0, palette.outline))
                 .corner_radius(20.0)
                 .shadow(crate::theme::elevation_shadow(palette))

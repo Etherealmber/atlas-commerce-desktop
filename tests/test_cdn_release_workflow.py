@@ -32,12 +32,21 @@ class DesktopUploadWorkflowTests(unittest.TestCase):
             (work / 'bin').mkdir()
             curl = work / 'bin' / 'curl'
             curl.write_text('''#!/usr/bin/env python3
-import json, os, sys
+import hashlib, json, os, sys
 args = sys.argv[1:]
 assert os.environ['DESKTOP_RELEASE_TOKEN'] not in ' '.join(args)
 config = args[args.index('--config') + 1]
 assert os.environ['DESKTOP_RELEASE_TOKEN'] in open(config).read()
 with open(os.environ['CALL_LOG'], 'a') as f: f.write(json.dumps(args) + '\\n')
+assets = []
+with open(os.environ['CALL_LOG']) as f:
+    for line in f:
+        call = json.loads(line)
+        path = call[call.index('--data-binary') + 1][1:]
+        data = open(path, 'rb').read()
+        assets.append({'filename': os.path.basename(path), 'sizeBytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
+with open(args[args.index('--output') + 1], 'w') as f:
+    json.dump({'success': True, 'manifest': {'version': os.environ['RELEASE_VERSION'], 'assets': assets}}, f)
 ''')
             curl.chmod(0o755)
             env = dict(os.environ, PATH=f"{work / 'bin'}:{os.environ['PATH']}",
@@ -50,6 +59,8 @@ with open(os.environ['CALL_LOG'], 'a') as f: f.write(json.dumps(args) + '\\n')
             for args, filename in zip(calls, names):
                 self.assertIn('@dist/' + filename, args)
                 self.assertIn('https://api.afmarbre.com/api/admin/desktop-release', args)
+                self.assertIn('--retry-all-errors', args)
+                self.assertEqual(args[args.index('--retry') + 1], '3')
                 self.assertTrue(any(item.startswith('X-Release-Sha256: ') and len(item.split(': ', 1)[1]) == 64 for item in args))
             self.assertIn('X-Release-Platform: windows', calls[0])
             self.assertIn('X-Release-Platform: macos', calls[1])

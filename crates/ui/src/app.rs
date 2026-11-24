@@ -1561,6 +1561,16 @@ impl AtlasApp {
                 self.update.error = None;
                 self.leave_update_gate();
             }
+            UpdateDecision::Mandatory { .. } if self.update.desktop_release.is_some() => {
+                // CDN installation is not implemented yet: never trap the user
+                // behind an update that this build cannot install.
+                self.update.mandatory = None;
+                self.leave_update_gate();
+                self.update.up_to_date_at = None;
+                self.update.last_manifest = Some(manifest);
+                self.update.dialog_open = false;
+                self.update.error = Some("Mise à jour obligatoire détectée, mais son installation CDN n'est pas encore disponible. L'application reste accessible.".to_owned());
+            }
             UpdateDecision::Mandatory { .. } => {
                 self.update.up_to_date_at = None;
                 self.update.mandatory = Some(manifest.clone());

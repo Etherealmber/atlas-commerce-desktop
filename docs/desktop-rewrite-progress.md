@@ -11,6 +11,17 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
+## Follow-up — CI, screenshots and mandatory-update safety
+
+Phase 1 remains approximately 40–50% written, not end-to-end verified; overall rewrite remains approximately 35–40%. These estimates do not imply working CDN installation.
+
+- Merged current `main` into the PR branch, and enabled the reqwest 0.13 `query` feature (the fastframe updater alias is unchanged). [CI run for 14aad6c](https://github.com/Etherealmber/atlas-commerce-desktop/actions/runs/45463464534), [visual run and artifact page](https://github.com/Etherealmber/atlas-commerce-desktop/actions/runs/45463464618): in progress at time of writing; these runs predate the follow-up changes. Artifact availability is not yet confirmed.
+- Screenshots are uploaded even after prior failure, review notices are best-effort, and the six required screenshots are checked after upload. Existing image assertions remain unchanged.
+- An unavailable mandatory CDN install now shows a non-blocking error instead of trapping the user. 204/404 and empty Worker responses try direct CDN; added mock tests for that transition and invalid metadata. Full Worker→CDN→GitHub integration, secure staging and verified OS-specific handoff, progress and cancellation remain unfinished; CDN installation stays disabled. Interactive Windows installation has not been tested.
+- CDN release upload retries and checks the last Worker response for all six matching filenames, hashes and sizes. The Worker publishes and purges sequentially, so a failure can expose an incomplete feed; retries after an ambiguous timeout can overlap a still-running request. A truly atomic publish requires a Worker-side staged/commit protocol. This workflow change was tested with a mock only; no release or real upload was made.
+- Dark palette updates cover canvas, sidebar, cards, hairlines, inputs, hover and dashboard blue/amber series/grid. Table headers, all charts and screenshot parity still need review against PR #221; no parity claim is made.
+- Local Python unittest: 10 passed. Rust compiler/cargo are unavailable locally; fresh CI and cross-platform runtime checks remain required.
+
 ## Current pass — CDN discovery in progress
 
 - Added Worker-first and direct-CDN discovery on supported Desktop OS/CPU pairs, bounded metadata reads, no redirect following, strict parsing and explicit error handling. GitHub remains the fallback for absent/unreachable Desktop sources. No GitHub ETag or credentials are sent to CDN1/Worker.

@@ -585,11 +585,26 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
             bottom
         };
         let scale = if negative { height / 2.0 } else { height };
+        let grid = if palette.dark {
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+        } else {
+            palette.outline
+        };
+        let first_color = if palette.dark {
+            egui::Color32::from_rgb(0x3b, 0x82, 0xf6)
+        } else {
+            palette.finance_info
+        };
+        let second_color = if palette.dark {
+            egui::Color32::from_rgb(0xf5, 0x9e, 0x0b)
+        } else {
+            palette.finance_warning
+        };
         for index in 0..=4 {
             let y = rect.top() + height * index as f32 / 4.0;
             ui.painter().line_segment(
                 [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-                egui::Stroke::new(1.0, palette.outline),
+                egui::Stroke::new(1.0, grid),
             );
         }
         let slot = width / points.len() as f32;
@@ -598,8 +613,8 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
         for (index, point) in points.iter().enumerate() {
             let center = rect.left() + slot * (index as f32 + 0.5);
             for (value, offset, color) in [
-                (first(point), -bar_width, palette.finance_info),
-                (second(point), 0.0, palette.finance_warning),
+                (first(point), -bar_width, first_color),
+                (second(point), 0.0, second_color),
             ] {
                 if let Some(value) = value.filter(|v| v.is_finite()) {
                     let h = (value.abs() / max * f64::from(scale)) as f32;
@@ -646,7 +661,7 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
         let first_available = points.iter().any(|p| first(p).is_some_and(f64::is_finite));
         let second_available = points.iter().any(|p| second(p).is_some_and(f64::is_finite));
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("●").color(palette.finance_info));
+            ui.label(RichText::new("●").color(first_color));
             ui.label(
                 RichText::new(chart.first_label.as_ref())
                     .color(palette.secondary)
@@ -656,7 +671,7 @@ fn chart_card(ui: &mut egui::Ui, palette: &Palette, points: &[MonthlyPoint], cha
                 ui.label(RichText::new("—").color(palette.secondary));
             }
             if !chart.second_label.as_ref().is_empty() {
-                ui.label(RichText::new("●").color(palette.finance_warning));
+                ui.label(RichText::new("●").color(second_color));
                 ui.label(
                     RichText::new(chart.second_label.as_ref())
                         .color(palette.secondary)

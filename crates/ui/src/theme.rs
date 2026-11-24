@@ -62,9 +62,9 @@ impl Palette {
             window: hex(0x12, 0x12, 0x15),
             panel: hex(0x18, 0x18, 0x1b),
             surface: hex(0x18, 0x18, 0x1b),
-            surface_hover: hex(0x20, 0x20, 0x24),
-            surface_active: hex(0x27, 0x27, 0x2b),
-            outline: hex(0x27, 0x27, 0x2d),
+            surface_hover: hex(0x29, 0x29, 0x2f),
+            surface_active: hex(0x29, 0x29, 0x2f),
+            outline: Color32::from_rgba_unmultiplied(255, 255, 255, 22),
             text: hex(0xf4, 0xf4, 0xf6),
             secondary: hex(0xa1, 0xa1, 0xaa),
             dim: hex(0x71, 0x71, 0x7a),
@@ -404,7 +404,11 @@ fn apply_to_style(style: &mut Style, palette: &Palette, reduced_motion: bool) {
 
     visuals.panel_fill = palette.window;
     visuals.window_fill = palette.overlay;
-    visuals.extreme_bg_color = palette.surface;
+    visuals.extreme_bg_color = if palette.dark {
+        hex(0x20, 0x20, 0x24)
+    } else {
+        palette.surface
+    };
     visuals.faint_bg_color = palette.surface;
     visuals.code_bg_color = palette.surface;
     visuals.override_text_color = Some(palette.text);
@@ -616,12 +620,15 @@ mod tests {
         assert_eq!(dark.panel, hex(0x18, 0x18, 0x1b));
         assert_eq!(dark.surface, hex(0x18, 0x18, 0x1b));
         assert_eq!(dark.overlay, hex(0x18, 0x18, 0x1b));
-        assert_eq!(dark.surface_hover, hex(0x20, 0x20, 0x24));
-        assert_eq!(dark.surface_active, hex(0x27, 0x27, 0x2b));
+        assert_eq!(dark.surface_hover, hex(0x29, 0x29, 0x2f));
+        assert_eq!(dark.surface_active, hex(0x29, 0x29, 0x2f));
         assert_eq!(dark.accent, hex(0xfa, 0xfa, 0xfa));
         assert_eq!(dark.accent_hover, hex(0xe4, 0xe4, 0xe7));
         assert_eq!(dark.on_accent, dark.window);
-        assert_eq!(dark.outline, hex(0x27, 0x27, 0x2d));
+        assert_eq!(
+            dark.outline,
+            Color32::from_rgba_unmultiplied(255, 255, 255, 22)
+        );
         assert_eq!(dark.copper, hex(0xea, 0xb3, 0x7d));
         assert_eq!(light.copper, hex(0xb8, 0x73, 0x33));
         assert_eq!(dark.text, hex(0xf4, 0xf4, 0xf6));

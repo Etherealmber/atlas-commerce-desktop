@@ -191,6 +191,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Review login fallback screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -200,6 +202,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review login waiting screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login-wait.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -209,6 +213,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review dashboard screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/dashboard.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -218,6 +224,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review stock report screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/stock-report.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -227,6 +235,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review narrow command palette
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/palette-narrow.png -crop 640x480+0+0 -resize 480x360 -quality 25 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -236,6 +246,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review payables screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/vendor-payables.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -245,6 +257,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review receivables screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-receivables.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -254,6 +268,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review quote list screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/quotes.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -263,6 +279,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review client invoice screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-invoices-scrolled.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -272,6 +290,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review clients screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/clients.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -281,6 +301,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review products screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/products.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -290,6 +312,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review vendors screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/vendors.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -299,6 +323,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review stock screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/stock.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -308,6 +334,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review agent screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/agent.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -317,6 +345,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review closed agent screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/agent-closed.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -326,6 +356,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review sales screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/sales.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -335,6 +367,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review expenses screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/expenses.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -344,6 +378,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review employees screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/employees.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -353,6 +389,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review QR status screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login-qr.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -362,6 +400,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review settings screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/settings.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -371,6 +411,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review delivery screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/delivery.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -380,6 +422,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review client-editor screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-editor.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -389,11 +433,24 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Publish offline screenshots
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: offline-desktop-screenshots
           path: visual-output/*.png
+          if-no-files-found: warn
           retention-days: 14
+      - name: Verify required screenshots exist
+        if: always()
+        run: |
+          missing=0
+          for page in settings settings-dark update-dialog update-dialog-dark delivery client-editor; do
+            if [ ! -s "visual-output/$page.png" ]; then
+              echo "::error::Missing required screenshot: $page.png"
+              missing=1
+            fi
+          done
+          exit "$missing"
       - name: Exercise the isolated WebKitGTK window
         run: |
           # Ubuntu's runner restricts unprivileged namespaces via AppArmor,

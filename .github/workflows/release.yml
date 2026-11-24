@@ -790,7 +790,7 @@ jobs:
           make_latest: 'true'
       # Publish only after the GitHub release is public. This endpoint replaces
       # the existing Desktop feed; do not call it for artifact-only builds or
-      # retry a request whose outcome is unknown.
+      # retries cannot make this non-atomic Worker publication atomic.
       - name: Publish Desktop artifacts to CDN1
         if: needs.prepare.outputs.repo == github.repository
         env:
@@ -812,7 +812,8 @@ jobs:
           notes=$(python3 -c 'import base64; print(base64.b64encode(open("IN_APP_NOTE.txt", encoding="utf-8").read()[:4000].encode()).decode())')
           # Keep the credential out of curl command-line arguments.
           config=$(mktemp)
-          trap 'rm -f "$config"' EXIT
+          response=$(mktemp)
+          trap 'rm -f "$config" "$response"' EXIT
           chmod 600 "$config"
           python3 -c 'import os,sys; t=os.environ["DESKTOP_RELEASE_TOKEN"]; assert all(32 <= ord(c) < 127 for c in t); t=t.replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34)); open(sys.argv[1], "w").write("header = "+chr(34)+"Authorization: Bearer "+t+chr(34)+"\n")' "$config"
           upload() {
@@ -821,7 +822,7 @@ jobs:
             size=$(wc -c < "$file" | tr -d ' ')
             sha256=$(sha256sum "$file" | cut -d ' ' -f 1)
             github_url="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/${filename}"
-            curl --fail-with-body --silent --show-error --max-time 900 --config "$config" \
+            curl --fail-with-body --silent --show-error --max-time 900 --retry 3 --retry-all-errors --retry-delay 5 --output "$response" --config "$config" \
               --request POST --data-binary "@$file" \
               --header "Content-Type: $mime" \
               --header "Content-Length: $size" \
@@ -837,14 +838,30 @@ jobs:
               --header "X-Release-Notes-B64: $notes" \
               https://api.afmarbre.com/api/admin/desktop-release
           }
-          # Sequential uploads: the Worker combines artifacts for one version.
-          # Do not retry automatically when a response is lost.
+          # Sequential retries remain non-atomic: a timed-out Worker request may
+          # still be processing when retried. Verify the final returned manifest.
           upload "$windows" windows universal installer application/vnd.microsoft.portable-executable
           upload "$macos" macos universal installer application/x-apple-diskimage
           upload "$linux_x86" linux x86_64 appimage application/octet-stream
           upload "$linux_x86.zsync" linux x86_64 zsync application/octet-stream
           upload "$linux_arm" linux arm64 appimage application/octet-stream
           upload "$linux_arm.zsync" linux arm64 zsync application/octet-stream
+          python3 - "$response" "$RELEASE_VERSION" "$windows" "$macos" "$linux_x86" "$linux_x86.zsync" "$linux_arm" "$linux_arm.zsync" <<'PYCODE'
+          import hashlib, json, os, sys
+          response, version, *paths = sys.argv[1:]
+          with open(response, encoding="utf-8") as stream:
+              payload = json.load(stream)
+          manifest = payload.get("manifest") or {}
+          if not payload.get("success") or manifest.get("version") != version:
+              raise SystemExit("::error::Réponse CDN invalide ou version incorrecte")
+          assets = {entry.get("filename"): entry for entry in manifest.get("assets", [])}
+          for path in paths:
+              with open(path, "rb") as stream:
+                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
+              entry = assets.get(os.path.basename(path), {})
+              if entry.get("sha256") != digest or entry.get("sizeBytes") != os.path.getsize(path):
+                  raise SystemExit(f"::error::Artefact CDN absent ou incohérent : {path}")
+          PYCODE
 
       - name: Job summary
         if: always()

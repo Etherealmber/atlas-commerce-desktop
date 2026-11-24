@@ -162,7 +162,7 @@ async fn desktop_source(
     prerelease: bool,
     os: &str,
     arch: &str,
-    direct: bool,
+    _direct: bool,
 ) -> Result<Option<atlas_core::desktop_update::DesktopRelease>, DesktopFetchError> {
     let mut request = client
         .get(url)
@@ -178,7 +178,7 @@ async fn desktop_source(
     if status.is_server_error() {
         return Err(DesktopFetchError::Unavailable);
     }
-    if direct && status == reqwest::StatusCode::NOT_FOUND {
+    if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::NO_CONTENT {
         return Ok(None);
     }
     if !status.is_success() {
@@ -246,32 +246,8 @@ pub async fn fetch_manifest(
         ("version", env!("CARGO_PKG_VERSION")),
         ("channel", channel),
     ];
-    let mut unreachable = false;
-    let found = match desktop_source(
-        &client,
-        WORKER_URL,
-        Some(&params),
-        prerelease,
-        os,
-        arch,
-        false,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(DesktopFetchError::Invalid(error)) => return Err(error),
-        Err(DesktopFetchError::Unavailable) => {
-            unreachable = true;
-            match desktop_source(&client, CDN_URL, None, prerelease, os, arch, true).await {
-                Ok(result) => {
-                    unreachable = false;
-                    result
-                }
-                Err(DesktopFetchError::Invalid(error)) => return Err(error),
-                Err(DesktopFetchError::Unavailable) => None,
-            }
-        }
-    };
+    let (found, unreachable) =
+        discover_desktop(&client, WORKER_URL, CDN_URL, &params, prerelease, os, arch).await?;
     if let Some(release) = found {
         let mut cache = cache;
         cache.last_checked_unix = now_unix();
@@ -295,6 +271,39 @@ pub async fn fetch_manifest(
         return Err("Le service Desktop est injoignable ; impossible de confirmer que cette version est à jour.".into());
     }
     Ok(github)
+}
+
+async fn discover_desktop(
+    client: &reqwest::Client,
+    worker_url: &str,
+    cdn_url: &str,
+    params: &[(&str, &str)],
+    prerelease: bool,
+    os: &str,
+    arch: &str,
+) -> Result<(Option<atlas_core::desktop_update::DesktopRelease>, bool), String> {
+    match desktop_source(
+        client,
+        worker_url,
+        Some(params),
+        prerelease,
+        os,
+        arch,
+        false,
+    )
+    .await
+    {
+        Ok(Some(release)) => Ok((Some(release), false)),
+        Err(DesktopFetchError::Invalid(error)) => Err(error),
+        worker_result => {
+            let worker_unreachable = matches!(worker_result, Err(DesktopFetchError::Unavailable));
+            match desktop_source(client, cdn_url, None, prerelease, os, arch, true).await {
+                Ok(result) => Ok((result, false)),
+                Err(DesktopFetchError::Invalid(error)) => Err(error),
+                Err(DesktopFetchError::Unavailable) => Ok((None, worker_unreachable)),
+            }
+        }
+    }
 }
 
 /// Fetches the newest release's `update.json`, if a published release exists.
@@ -651,6 +660,51 @@ mod tests {
             desktop_source(&client, &url, None, false, "linux", "arm64", true).await,
             Err(DesktopFetchError::Invalid(_))
         ));
+        job.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn worker_falls_back_to_cdn_without_forwarding_headers() {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        for status in ["204 No Content", "404 Not Found", "503 Service Unavailable"] {
+            let (worker, first) = mock_http(status, "");
+            let (cdn, second) = mock_http("200 OK", r#"{"hasRelease":false}"#);
+            let (release, unavailable) = discover_desktop(
+                &client,
+                &worker,
+                &cdn,
+                &[("arch", "arm64")],
+                false,
+                "linux",
+                "arm64",
+            )
+            .await
+            .unwrap();
+            assert!(release.is_none());
+            assert!(!unavailable);
+            first.join().unwrap();
+            let request = second.join().unwrap().to_lowercase();
+            assert!(!request.contains("if-none-match"));
+            assert!(!request.contains("authorization:"));
+        }
+        let (worker, job) = mock_http("200 OK", "not json");
+        assert!(
+            discover_desktop(
+                &client,
+                &worker,
+                "http://127.0.0.1:1",
+                &[],
+                false,
+                "linux",
+                "arm64"
+            )
+            .await
+            .is_err()
+        );
         job.join().unwrap();
     }
 
