@@ -11,6 +11,10 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
+## CI snapshot at `6619f94`
+
+GitHub Actions passed quality (fmt, Clippy, docs), tests on Ubuntu, macOS and Windows, offline desktop screenshots, Linux packaging inputs and WebView package checks, Windows universal installer, and vulnerability scan. The screenshot failure was fixed without removing the assertions. Python: 10 local tests passed, including the mocked upload. The release workflow was not run and no CDN upload or real installer test was performed. These green checks do **not** establish Phase 1 completion: discovery, UI metadata wiring and verified installation are still absent.
+
 ## Phase 1 — multi-OS pass, still incomplete
 
 - Worker PR #218 merged as `6082c6d`; this establishes the repository contract, not proof of a particular live deployment. Added multi-OS API/latest.json parsing with strict platform and architecture checks, plus a bounded streaming SHA-256/size verifier. These components are not yet connected to network discovery or installation.
