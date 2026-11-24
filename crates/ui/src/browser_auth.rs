@@ -68,22 +68,8 @@ impl BrowserOpen {
     }
 }
 
-fn launch_browser(url: Url, cancelled: Arc<AtomicBool>) -> std::io::Result<BrowserOpen> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::Builder::new()
-        .name("atlas-browser-launch".to_owned())
-        .spawn(move || {
-            // Never log the URL: its fragment contains the one-time request.
-            // Once the OS launcher is invoked it cannot be recalled, but an
-            // already-cancelled flow must not start it on a delayed thread.
-            if !cancelled.load(Ordering::Relaxed) {
-                let _ = tx.send(open::that_detached(url.as_str()));
-            }
-        })?;
-    Ok(BrowserOpen {
-        started: Instant::now(),
-        result: rx,
-    })
+fn launch_browser(_url: Url, _cancelled: Arc<AtomicBool>) -> std::io::Result<BrowserOpen> {
+    Err(std::io::Error::other("Connexion externe désactivée"))
 }
 
 fn start_browser_open(app: &mut AtlasApp, url: Url) -> bool {
@@ -610,16 +596,8 @@ pub(crate) fn cancel(app: &mut AtlasApp) {
     }
 }
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-pub(crate) fn embedded_active(app: &AtlasApp) -> bool {
-    app.browser_login.active
-        && app.browser_login.embedded
-        && matches!(app.screen, Screen::Login)
-        && app.browser_login.server.as_deref() == app.server_store.selected_url()
-        && !app
-            .browser_login
-            .cancel
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+pub(crate) fn embedded_active(_app: &AtlasApp) -> bool {
+    false
 }
 
 pub(crate) fn poll(app: &mut AtlasApp) {
