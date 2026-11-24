@@ -125,7 +125,7 @@ fn input(
         edit_rect,
         egui::TextEdit::singleline(value)
             .id(id)
-            .frame(false)
+            .frame(egui::Frame::NONE)
             .font(crate::fonts::regular(14.0))
             .text_color(WHITE)
             .hint_text(hint)
@@ -391,7 +391,7 @@ pub(super) fn draw(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
                             28.0,
                             28.0,
                         ),
-                        egui::Button::image(icon.image(MUTED, 20.0)).frame(egui::Frame::NONE),
+                        egui::Button::image(icon.image(MUTED, 20.0)).frame(false),
                     )
                     .on_hover_text(if app.login.show_password {
                         "Masquer"
