@@ -340,6 +340,40 @@ pub fn card(palette: &Palette) -> egui::Frame {
         .inner_margin(egui::Margin::same(16))
 }
 
+/// Consistent update metadata for the dialog and Settings. Checksums are
+/// metadata only: displaying one does not imply the binary has been verified.
+pub fn update_metadata(
+    ui: &mut egui::Ui,
+    release: Option<&atlas_core::desktop_update::DesktopRelease>,
+    palette: &Palette,
+    locale: crate::i18n::Locale,
+) {
+    if let Some(release) = release {
+        ui.label(
+            RichText::new(format!(
+                "CDN1 · {}",
+                atlas_core::desktop_update::format_installer_size(release.size_bytes)
+            ))
+            .color(palette.secondary),
+        );
+        let short: String = release.sha256.chars().take(16).collect();
+        ui.label(RichText::new(format!("SHA-256 : {short}…")).color(palette.secondary))
+            .on_hover_text(&release.sha256);
+        ui.label(
+            RichText::new(crate::t!(locale, "CDN installation is not available yet."))
+                .color(palette.warning),
+        );
+    } else {
+        ui.label(
+            RichText::new(crate::t!(
+                locale,
+                "GitHub · Size and SHA-256 are not provided by this manifest."
+            ))
+            .color(palette.secondary),
+        );
+    }
+}
+
 /// A floating menu card with a crisp border rather than a blurred halo.
 pub fn pop_card(palette: &Palette) -> egui::Frame {
     card(palette)

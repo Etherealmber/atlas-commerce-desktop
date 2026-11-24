@@ -11,6 +11,13 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
+## Current pass — CDN discovery in progress
+
+- Added Worker-first and direct-CDN discovery on supported Desktop OS/CPU pairs, bounded metadata reads, no redirect following, strict parsing and explicit error handling. GitHub remains the fallback for absent/unreachable Desktop sources. No GitHub ETag or credentials are sent to CDN1/Worker.
+- Threaded CDN metadata into update state, the update dialog and Settings, with size, checksum tooltip and source. CDN installation is deliberately disabled with an explicit error; the existing GitHub installer cannot safely install the CDN artifact. Private staging, verified handoff, progress/cancellation and OS-specific replacement still need implementation and tests. A mandatory CDN manifest can block the app while this remains incomplete.
+- Added mock local HTTP tests for request isolation, 503 and malformed metadata; full fallback and staging/handoff integration tests remain outstanding. New Rust changes were formatted but have not yet been compiled locally. Local Python unittest: 10 passed; pytest: 10 passed and 2 subtests.
+- Previous `d0847da` CI: all checks passed except macOS test, whose runner could not be acquired due to GitHub hosted-runner capacity. Fresh CI is required for this pass; the PR remains unready to merge.
+
 ## CI snapshot at `6619f94`
 
 GitHub Actions passed quality (fmt, Clippy, docs), tests on Ubuntu, macOS and Windows, offline desktop screenshots, Linux packaging inputs and WebView package checks, Windows universal installer, and vulnerability scan. The screenshot failure was fixed without removing the assertions. Python: 10 local tests passed, including the mocked upload. The release workflow was not run and no CDN upload or real installer test was performed. These green checks do **not** establish Phase 1 completion: discovery, UI metadata wiring and verified installation are still absent.

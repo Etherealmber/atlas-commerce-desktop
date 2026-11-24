@@ -2639,3 +2639,9 @@ msgstr "Plus tard"
 
 msgid "Size and SHA-256 are not provided by this manifest."
 msgstr "Taille et SHA-256 non indiqués par ce manifeste."
+
+msgid "CDN installation is not available yet."
+msgstr "L’installation CDN n’est pas encore disponible."
+
+msgid "GitHub · Size and SHA-256 are not provided by this manifest."
+msgstr "GitHub · Taille et SHA-256 non indiqués par ce manifeste."

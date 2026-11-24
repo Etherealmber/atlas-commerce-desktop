@@ -1,9 +1,5 @@
-//! Self-update, fed exclusively by this repository's GitHub Releases.
-//!
-//! - [`fetch_manifest`] reads the `update.json` release asset and powers the
-//!   mandatory-update gate. No CDN is ever contacted.
-//! - [`build_updater`] hands the rest (checksum verification, helper install
-//!   with rollback, AppImage replacement) to `fastframe-update`.
+//! Update discovery and GitHub installation support. CDN manifests are
+//! validated independently of GitHub's cache and never imply installation.
 
 use atlas_core::update_feed::{MANIFEST_ASSET, UpdateManifest};
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig, Updater};
@@ -82,6 +78,7 @@ impl UpdateCache {
 
 /// Answer of one check, with the cache to persist.
 pub struct UpdateCheck {
+    pub desktop_release: Option<atlas_core::desktop_update::DesktopRelease>,
     pub manifest: Option<UpdateManifest>,
     pub cache: UpdateCache,
     /// GitHub answered `304 Not Modified`: nothing changed since last time.
@@ -134,6 +131,172 @@ struct Asset {
     browser_download_url: String,
 }
 
+const WORKER_URL: &str = "https://api.afmarbre.com/api/app/desktop-update";
+const CDN_URL: &str = "https://cdn1.afmarbre.com/app-updates/desktop/latest.json";
+const MAX_DESKTOP_MANIFEST: usize = 128 * 1024;
+
+fn desktop_target(os: &str, cpu: &str) -> Option<(&'static str, &'static str)> {
+    let arch = match cpu {
+        "x86_64" => "x86_64",
+        "aarch64" => "arm64",
+        _ => return None,
+    };
+    match os {
+        "windows" => Some(("windows", "universal")),
+        "macos" => Some(("macos", "universal")),
+        "linux" => Some(("linux", arch)),
+        _ => None,
+    }
+}
+
+#[derive(Debug)]
+enum DesktopFetchError {
+    Unavailable,
+    Invalid(String),
+}
+
+async fn desktop_source(
+    client: &reqwest::Client,
+    url: &str,
+    params: Option<&[(&str, &str)]>,
+    prerelease: bool,
+    os: &str,
+    arch: &str,
+    direct: bool,
+) -> Result<Option<atlas_core::desktop_update::DesktopRelease>, DesktopFetchError> {
+    let mut request = client
+        .get(url)
+        .header(reqwest::header::CACHE_CONTROL, "no-cache");
+    if let Some(params) = params {
+        request = request.query(params);
+    }
+    let mut response = request
+        .send()
+        .await
+        .map_err(|_| DesktopFetchError::Unavailable)?;
+    let status = response.status();
+    if status.is_server_error() {
+        return Err(DesktopFetchError::Unavailable);
+    }
+    if direct && status == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    if !status.is_success() {
+        return Err(DesktopFetchError::Invalid(format!(
+            "Flux Desktop : HTTP {status}"
+        )));
+    }
+    if response
+        .content_length()
+        .is_some_and(|n| n > MAX_DESKTOP_MANIFEST as u64)
+    {
+        return Err(DesktopFetchError::Invalid(
+            "Manifeste Desktop trop volumineux".into(),
+        ));
+    }
+    let mut data = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| DesktopFetchError::Unavailable)?
+    {
+        if chunk.len() > MAX_DESKTOP_MANIFEST.saturating_sub(data.len()) {
+            return Err(DesktopFetchError::Invalid(
+                "Manifeste Desktop trop volumineux".into(),
+            ));
+        }
+        data.extend_from_slice(&chunk);
+    }
+    atlas_core::desktop_update::parse_desktop_release(
+        &data,
+        env!("CARGO_PKG_VERSION"),
+        prerelease,
+        os,
+        arch,
+    )
+    .map_err(|error| DesktopFetchError::Invalid(format!("Manifeste Desktop invalide : {error}")))
+}
+
+/// Discover Desktop metadata without credentials. Network failures can fall
+/// back, but cannot be presented as proof that the application is current.
+///
+/// # Errors
+/// Invalid metadata, HTTP errors, and unavailable sources are reported explicitly.
+pub async fn fetch_manifest(
+    prerelease: bool,
+    cache: UpdateCache,
+    cache_path: std::path::PathBuf,
+) -> Result<UpdateCheck, String> {
+    let Some((os, arch)) = desktop_target(std::env::consts::OS, std::env::consts::ARCH) else {
+        return fetch_github_manifest(prerelease, cache, cache_path).await;
+    };
+    let client = reqwest::Client::builder()
+        .user_agent(concat!(
+            "atlas-commerce-desktop/",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|_| "Client de mise à jour indisponible".to_owned())?;
+    let channel = if prerelease { "prerelease" } else { "stable" };
+    let params = [
+        ("platform", os),
+        ("arch", arch),
+        ("version", env!("CARGO_PKG_VERSION")),
+        ("channel", channel),
+    ];
+    let mut unreachable = false;
+    let found = match desktop_source(
+        &client,
+        WORKER_URL,
+        Some(&params),
+        prerelease,
+        os,
+        arch,
+        false,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(DesktopFetchError::Invalid(error)) => return Err(error),
+        Err(DesktopFetchError::Unavailable) => {
+            unreachable = true;
+            match desktop_source(&client, CDN_URL, None, prerelease, os, arch, true).await {
+                Ok(result) => {
+                    unreachable = false;
+                    result
+                }
+                Err(DesktopFetchError::Invalid(error)) => return Err(error),
+                Err(DesktopFetchError::Unavailable) => None,
+            }
+        }
+    };
+    if let Some(release) = found {
+        let mut cache = cache;
+        cache.last_checked_unix = now_unix();
+        return Ok(UpdateCheck {
+            manifest: Some(release.manifest.clone()),
+            desktop_release: Some(release),
+            cache,
+            not_modified: false,
+        });
+    }
+    let github = fetch_github_manifest(prerelease, cache, cache_path).await?;
+    if unreachable
+        && github.manifest.as_ref().is_none_or(|m| {
+            !matches!(
+                m.decision_for(env!("CARGO_PKG_VERSION")),
+                atlas_core::update_feed::UpdateDecision::Optional { .. }
+                    | atlas_core::update_feed::UpdateDecision::Mandatory { .. }
+            )
+        })
+    {
+        return Err("Le service Desktop est injoignable ; impossible de confirmer que cette version est à jour.".into());
+    }
+    Ok(github)
+}
+
 /// Fetches the newest release's `update.json`, if a published release exists.
 ///
 /// Sends `If-None-Match` when a previous ETag is known, records GitHub's
@@ -141,7 +304,7 @@ struct Asset {
 ///
 /// # Errors
 /// Network or parse failures, as French messages.
-pub async fn fetch_manifest(
+async fn fetch_github_manifest(
     prerelease: bool,
     mut cache: UpdateCache,
     cache_path: std::path::PathBuf,
@@ -181,6 +344,7 @@ pub async fn fetch_manifest(
         cache.last_checked_unix = now;
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(UpdateCheck {
+                desktop_release: None,
                 manifest: cache.manifest_prerelease.clone(),
                 cache,
                 not_modified: true,
@@ -220,6 +384,7 @@ pub async fn fetch_manifest(
         cache.last_checked_unix = now;
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(UpdateCheck {
+                desktop_release: None,
                 manifest: cache.manifest_stable.clone(),
                 cache,
                 not_modified: true,
@@ -227,6 +392,7 @@ pub async fn fetch_manifest(
         }
         if response.status().as_u16() == 404 {
             return Ok(UpdateCheck {
+                desktop_release: None,
                 manifest: None,
                 cache,
                 not_modified: false,
@@ -255,6 +421,7 @@ pub async fn fetch_manifest(
             cache.etag = None;
         }
         return Ok(UpdateCheck {
+            desktop_release: None,
             manifest: None,
             cache,
             not_modified: false,
@@ -271,6 +438,7 @@ pub async fn fetch_manifest(
             cache.etag = None;
         }
         return Ok(UpdateCheck {
+            desktop_release: None,
             manifest: None,
             cache,
             not_modified: false,
@@ -291,6 +459,7 @@ pub async fn fetch_manifest(
             cache.etag = None;
         }
         return Ok(UpdateCheck {
+            desktop_release: None,
             manifest: None,
             cache,
             not_modified: false,
@@ -310,6 +479,7 @@ pub async fn fetch_manifest(
         cache.manifest_stable = Some(manifest.clone());
     }
     Ok(UpdateCheck {
+        desktop_release: None,
         manifest: Some(manifest),
         cache,
         not_modified: false,
@@ -413,6 +583,76 @@ pub fn blocking_check() -> anyhow::Result<Option<fastframe_update::Release>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn target_maps_cpu_and_rejects_unsupported() {
+        assert_eq!(desktop_target("linux", "aarch64"), Some(("linux", "arm64")));
+        assert_eq!(
+            desktop_target("macos", "aarch64"),
+            Some(("macos", "universal"))
+        );
+        assert_eq!(
+            desktop_target("windows", "x86_64"),
+            Some(("windows", "universal"))
+        );
+        assert_eq!(desktop_target("linux", "riscv64"), None);
+    }
+
+    fn mock_http(status: &str, body: &str) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let status = status.to_owned();
+        let body = body.to_owned();
+        let job = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut bytes = [0; 4096];
+            let len = socket.read(&mut bytes).unwrap();
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).unwrap();
+            String::from_utf8_lossy(&bytes[..len]).into_owned()
+        });
+        (format!("http://{address}/manifest"), job)
+    }
+
+    #[tokio::test]
+    async fn desktop_requests_handle_empty_failure_and_invalid_without_etags() {
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let (url, job) = mock_http("200 OK", r#"{"hasRelease":false}"#);
+        assert!(
+            desktop_source(
+                &client,
+                &url,
+                Some(&[("arch", "arm64")]),
+                false,
+                "linux",
+                "arm64",
+                false
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        let request = job.join().unwrap().to_lowercase();
+        assert!(request.contains("arch=arm64"));
+        assert!(!request.contains("if-none-match"));
+        assert!(!request.contains("authorization:"));
+        let (url, job) = mock_http("503 Service Unavailable", "");
+        assert!(matches!(
+            desktop_source(&client, &url, None, false, "linux", "arm64", false).await,
+            Err(DesktopFetchError::Unavailable)
+        ));
+        job.join().unwrap();
+        let (url, job) = mock_http("200 OK", "not json");
+        assert!(matches!(
+            desktop_source(&client, &url, None, false, "linux", "arm64", true).await,
+            Err(DesktopFetchError::Invalid(_))
+        ));
+        job.join().unwrap();
+    }
 
     #[test]
     fn inno_updates_keep_setup_and_checksums_not_msi() {

@@ -1815,6 +1815,17 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     );
                 }
             });
+            if let Some(manifest) = &app.update.last_manifest {
+                if !manifest.published_at.is_empty() {
+                    ui.label(RichText::new(&manifest.published_at).color(palette.secondary));
+                }
+                widgets::update_metadata(
+                    ui,
+                    app.update.desktop_release.as_ref(),
+                    palette,
+                    app.locale,
+                );
+            }
             if let Some((received, total)) = app.update.progress {
                 ui.add_space(8.0);
                 let progress = if total > 0 {
@@ -1893,6 +1904,7 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             {
                 app.settings.update_channel = channel;
                 app.update.last_manifest = None;
+                app.update.desktop_release = None;
                 app.update.release_notes = None;
                 app.update.up_to_date_at = None;
                 app.update.ready_version = None;

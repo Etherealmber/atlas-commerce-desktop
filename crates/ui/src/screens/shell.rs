@@ -418,12 +418,11 @@ fn draw_update_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette
                             .color(palette.secondary),
                         );
                         ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(
-                                "Taille et SHA-256 : disponibles lors du téléchargement GitHub.",
-                            )
-                            .color(palette.secondary)
-                            .size(12.0),
+                        widgets::update_metadata(
+                            ui,
+                            app.update.desktop_release.as_ref(),
+                            palette,
+                            app.locale,
                         );
                         ui.add_space(8.0);
                         if !manifest.notes.trim().is_empty() {

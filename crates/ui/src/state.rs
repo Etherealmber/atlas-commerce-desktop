@@ -292,6 +292,8 @@ pub struct UpdateState {
     /// Most recently fetched release notes, even when this build is current.
     pub release_notes: Option<UpdateManifest>,
     pub last_manifest: Option<UpdateManifest>,
+    /// Metadata from the currently selected CDN1 release, if any.
+    pub desktop_release: Option<atlas_core::desktop_update::DesktopRelease>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
     pub last_check_started: Option<(Instant, bool)>,

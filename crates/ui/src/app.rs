@@ -1283,6 +1283,7 @@ impl AtlasApp {
         self.update.last_check_started = Some((Instant::now(), prerelease));
         self.update.checking = true;
         self.update.error = None;
+        self.update.up_to_date_at = None;
         let cache = self.update.cache.clone();
         let cache_path = self.paths.update_state_file();
         let job = self.runner.spawn(async move {
@@ -1345,6 +1346,13 @@ impl AtlasApp {
     }
 
     fn begin_update_download(&mut self, auto: bool) {
+        if self.update.desktop_release.is_some() {
+            self.update.error = Some(
+                "Installation CDN1 non disponible : transfert vérifié non encore intégré."
+                    .to_owned(),
+            );
+            return;
+        }
         if self.update.progress.is_some() {
             return;
         }
@@ -1444,6 +1452,7 @@ impl AtlasApp {
             match result {
                 Ok(checked) => {
                     let not_modified = checked.not_modified;
+                    self.update.desktop_release = checked.desktop_release;
                     self.update.cache = checked.cache;
                     self.save_update_cache();
                     if let Some(manifest) = checked.manifest {
@@ -1462,6 +1471,7 @@ impl AtlasApp {
                     }
                 }
                 Err(error) => {
+                    self.update.up_to_date_at = None;
                     // Record failure as a check too, to avoid retrying every
                     // frame offline; preserve any quota reset learned by HTTP.
                     self.update.cache =
