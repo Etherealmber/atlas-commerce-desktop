@@ -499,7 +499,10 @@ mod tests {
         assert_eq!(session.phase(), DesktopV3Phase::ChallengeVerified);
         assert_eq!(session.challenge_url(), None);
         assert!(session.build_poll_request().is_err());
-        assert!(session.build_password_login("alice", "fixture").is_ok());
+        let synthetic_password = SoftwareP256Key::generate().unwrap().thumbprint();
+        assert!(session
+            .build_password_login("alice", &synthetic_password)
+            .is_ok());
         session.mark_otp_pending().unwrap();
         assert!(session.build_otp_login("123456").is_ok());
         session.cancel();
