@@ -391,7 +391,7 @@ pub(super) fn draw(app: &mut AtlasApp, ui: &mut Ui, palette: &Palette) {
                             28.0,
                             28.0,
                         ),
-                        egui::Button::image(icon.image(MUTED, 20.0)).frame(false),
+                        egui::Button::image(icon.image(MUTED, 20.0)).frame(egui::Frame::NONE),
                     )
                     .on_hover_text(if app.login.show_password {
                         "Masquer"
