@@ -359,6 +359,7 @@ impl DesktopV3AuthSession {
             state: self.pkce.state().to_string(),
             code_verifier: self.pkce.code_verifier().to_string(),
             otp: otp.trim().to_string(),
+            remember_me: None,
         })
     }
 
@@ -447,6 +448,7 @@ mod tests {
             version: 3,
             enabled: true,
             reason: None,
+            session: None,
             methods: CapabilitiesV3Methods {
                 password_otp: PasswordOtpMethodV3 {
                     available: true,

@@ -214,6 +214,11 @@ fn rejects_bearer_token_type_for_v3_sessions() {
         session_id: "c".repeat(64),
         device_thumbprint: key.thumbprint(),
         attestation: None,
+        remember_me: None,
+        session_kind: None,
+        refresh_expires_at: None,
+        session_ttl_seconds: None,
+        method: None,
     };
     assert!(authorization_header_for_token(&bad_tokens).is_err());
 }

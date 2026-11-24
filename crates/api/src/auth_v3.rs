@@ -412,9 +412,24 @@ impl V3Transport {
         key: &dyn DeviceKeyAdapter,
         otp: &str,
     ) -> Result<SessionTokensV3, V3TransportError> {
-        let body = session
+        self.otp_with_remember(session, key, otp, false).await
+    }
+
+    /// Exchange an OTP, explicitly requesting a remembered session only when
+    /// the user opted in. Persist only if the server grants it in its reply.
+    pub async fn otp_with_remember(
+        &self,
+        session: &mut DesktopV3AuthSession,
+        key: &dyn DeviceKeyAdapter,
+        otp: &str,
+        remember: bool,
+    ) -> Result<SessionTokensV3, V3TransportError> {
+        let mut body = session
             .build_otp_login(otp)
             .map_err(|_| V3TransportError::Protocol)?;
+        if remember {
+            body.remember_me = Some(true);
+        }
         if body.origin != self.origin.as_str() {
             return Err(V3TransportError::Protocol);
         }

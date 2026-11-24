@@ -16,6 +16,25 @@ pub struct CapabilitiesV3Response {
     pub enabled: bool,
     pub reason: Option<String>,
     pub methods: CapabilitiesV3Methods,
+    #[serde(default)]
+    pub session: Option<SessionCapabilitiesV3>,
+}
+
+/// Server policy for opt-in remembered sessions. Missing on older servers.
+#[derive(Clone, Debug, Deserialize)]
+pub struct SessionCapabilitiesV3 {
+    pub remember_me: RememberCapabilityV3,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct RememberCapabilityV3 {
+    pub available: bool,
+    #[serde(default)]
+    pub max_ttl_seconds: Option<u64>,
+    #[serde(default)]
+    pub methods: Vec<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -178,6 +197,8 @@ pub struct OtpLoginRequestV3 {
     pub state: String,
     pub code_verifier: String,
     pub otp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remember_me: Option<bool>,
 }
 
 impl Zeroize for OtpLoginRequestV3 {
@@ -209,6 +230,16 @@ pub struct SessionTokensV3 {
     pub session_id: String,
     pub device_thumbprint: String,
     pub attestation: Option<String>,
+    #[serde(default)]
+    pub remember_me: Option<bool>,
+    #[serde(default)]
+    pub session_kind: Option<String>,
+    #[serde(default)]
+    pub refresh_expires_at: Option<String>,
+    #[serde(default)]
+    pub session_ttl_seconds: Option<u64>,
+    #[serde(default)]
+    pub method: Option<String>,
 }
 
 impl Zeroize for SessionTokensV3 {
@@ -306,4 +337,59 @@ impl std::fmt::Debug for LogoutRequestV3 {
 #[derive(Clone, Debug, Deserialize)]
 pub struct LogoutResponseV3 {
     pub status: String,
+}
+
+#[cfg(test)]
+mod remember_contract_tests {
+    use super::*;
+
+    #[test]
+    fn remember_policy_and_server_grant_are_decoded() {
+        let policy: SessionCapabilitiesV3 = serde_json::from_str(
+            r#"{"remember_me":{"available":true,"max_ttl_seconds":604800,"methods":["password_otp","qr","passkey"]}}"#,
+        )
+        .unwrap();
+        assert!(policy.remember_me.available);
+        assert_eq!(policy.remember_me.max_ttl_seconds, Some(604800));
+        assert!(policy.remember_me.methods.contains(&"qr".to_owned()));
+        let disabled: SessionCapabilitiesV3 = serde_json::from_str(
+            r#"{"remember_me":{"available":false,"reason":"POLICY_DISABLED"}}"#,
+        )
+        .unwrap();
+        assert!(!disabled.remember_me.available);
+        assert_eq!(
+            disabled.remember_me.reason.as_deref(),
+            Some("POLICY_DISABLED")
+        );
+        let tokens: SessionTokensV3 = serde_json::from_value(serde_json::json!({
+            "token_type":"DPoP", "access_token":"secret", "refresh_token":"secret",
+            "access_expires_at":"a", "session_expires_at":"b", "origin":"https://example.com",
+            "username":"alice", "role":"user", "session_id":"id", "device_thumbprint":"key",
+            "remember_me":false, "session_kind":"standard", "refresh_expires_at":"b",
+            "session_ttl_seconds":43200, "method":"password_otp"
+        }))
+        .unwrap();
+        assert_eq!(tokens.remember_me, Some(false));
+        assert_eq!(tokens.session_kind.as_deref(), Some("standard"));
+        assert_eq!(tokens.session_ttl_seconds, Some(43200));
+        assert!(!format!("{tokens:?}").contains("secret"));
+    }
+
+    #[test]
+    fn remember_is_only_sent_when_explicitly_requested() {
+        let mut otp = OtpLoginRequestV3 {
+            origin: "https://example.com".into(),
+            request_id: "id".into(),
+            state: "state".into(),
+            code_verifier: "verifier".into(),
+            otp: "123456".into(),
+            remember_me: None,
+        };
+        assert!(serde_json::to_value(&otp)
+            .unwrap()
+            .get("remember_me")
+            .is_none());
+        otp.remember_me = Some(true);
+        assert_eq!(serde_json::to_value(&otp).unwrap()["remember_me"], true);
+    }
 }
