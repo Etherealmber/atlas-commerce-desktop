@@ -20,6 +20,7 @@ const MAX_POLL_INTERVAL_SECS: u64 = 60;
 pub enum ChallengePresentation {
     TurnstileWebview,
     SystemBrowser,
+    Native,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,7 +93,6 @@ impl DesktopV3AuthSession {
     ) -> Result<Self> {
         if capabilities.version != 3
             || !capabilities.enabled
-            || !capabilities.methods.password_otp.available
             || !capabilities.methods.device_proof.available
             || capabilities
                 .methods
@@ -101,12 +101,24 @@ impl DesktopV3AuthSession {
         {
             return Err(AuthCoreError::NotReady);
         }
-        if !capabilities
-            .methods
-            .password_otp
-            .challenge_modes
-            .contains(&presentation)
-        {
+        let allowed = if presentation == ChallengePresentation::Native {
+            (capabilities.methods.password_otp.available
+                && capabilities
+                    .methods
+                    .password_otp
+                    .challenge_modes
+                    .contains(&presentation))
+                || capabilities.methods.qr.available
+                || capabilities.methods.passkey.available
+        } else {
+            capabilities.methods.password_otp.available
+                && capabilities
+                    .methods
+                    .password_otp
+                    .challenge_modes
+                    .contains(&presentation)
+        };
+        if !allowed {
             return Err(AuthCoreError::SilentFallbackForbidden);
         }
         let clean = device_label.trim();
@@ -184,18 +196,33 @@ impl DesktopV3AuthSession {
             return Err(AuthCoreError::ResponseMismatch);
         }
         validate_pairing_code(&resp.pairing_code)?;
-        let expected_path = match self.presentation {
-            ChallengePresentation::TurnstileWebview => "/login/desktop-v3-challenge",
-            ChallengePresentation::SystemBrowser => "/login/desktop-v3-browser",
+        let phase = match self.presentation {
+            ChallengePresentation::Native => {
+                if resp.status.as_deref() != Some("verified") || resp.challenge_url.is_some() {
+                    return Err(AuthCoreError::ResponseMismatch);
+                }
+                DesktopV3Phase::ChallengeVerified
+            }
+            presentation => {
+                let expected_path = match presentation {
+                    ChallengePresentation::TurnstileWebview => "/login/desktop-v3-challenge",
+                    ChallengePresentation::SystemBrowser => "/login/desktop-v3-browser",
+                    ChallengePresentation::Native => unreachable!(),
+                };
+                let url = resp
+                    .challenge_url
+                    .as_deref()
+                    .ok_or(AuthCoreError::ResponseMismatch)?;
+                self.origin
+                    .validate_challenge_url(url, expected_path, &resp.request_id)?;
+                DesktopV3Phase::AwaitingChallenge
+            }
         };
-        self.origin
-            .validate_challenge_url(&resp.challenge_url, expected_path, &resp.request_id)?;
-
         self.request_id = Some(resp.request_id.clone());
         self.pairing_code = Some(resp.pairing_code.clone());
-        self.challenge_url = Some(resp.challenge_url.clone());
+        self.challenge_url = resp.challenge_url.clone();
         self.device_thumbprint = Some(resp.device_thumbprint.clone());
-        self.phase = DesktopV3Phase::AwaitingChallenge;
+        self.phase = phase;
         Ok(())
     }
 
@@ -432,6 +459,8 @@ mod tests {
                     dpop_required: true,
                     verified_mailbox_required: true,
                 },
+                qr: SimpleCapabilityV3 { available: false },
+                passkey: SimpleCapabilityV3 { available: false },
                 mailbox_enrollment: SimpleCapabilityV3 { available: true },
                 recovery: SimpleCapabilityV3 { available: true },
                 device_proof: DeviceProofCapabilityV3 {
@@ -440,6 +469,56 @@ mod tests {
                 },
             },
         }
+    }
+
+    #[test]
+    fn native_transaction_matches_worker_and_never_accepts_hosted_url() {
+        let mut caps = ready_caps();
+        caps.methods
+            .password_otp
+            .challenge_modes
+            .push(ChallengePresentation::Native);
+        let origin = ServerOrigin::parse("https://stock.afmarbre.com").unwrap();
+        let key = SoftwareP256Key::generate().unwrap();
+        let make_session = || {
+            DesktopV3AuthSession::new(
+                origin.clone(),
+                ChallengePresentation::Native,
+                "Poste",
+                &caps,
+            )
+            .unwrap()
+        };
+        let mut session = make_session();
+        let request = serde_json::to_value(session.create_request_body().unwrap()).unwrap();
+        assert_eq!(request["presentation"], "native");
+        assert_eq!(request["code_challenge_method"], "S256");
+        let response = serde_json::json!({"version": 3, "request_id": "a".repeat(64), "origin": origin.as_str(), "presentation": "native", "status": "verified", "pairing_code": "ABCDE-12345", "device_thumbprint": key.thumbprint(), "expires_in": 300, "interval": 5});
+        let created: CreateRequestV3Response = serde_json::from_value(response.clone()).unwrap();
+        session.apply_created(&created, &key).unwrap();
+        assert_eq!(session.phase(), DesktopV3Phase::ChallengeVerified);
+        assert_eq!(session.challenge_url(), None);
+        assert!(session.build_poll_request().is_err());
+        assert!(session.build_password_login("alice", "fixture").is_ok());
+        session.mark_otp_pending().unwrap();
+        assert!(session.build_otp_login("123456").is_ok());
+        session.cancel();
+        assert!(session.build_otp_login("123456").is_err());
+        for (field, value) in [
+            ("status", serde_json::json!("pending")),
+            ("challenge_url", serde_json::json!("https://evil.invalid/")),
+            ("device_thumbprint", serde_json::json!("wrong")),
+        ] {
+            let mut bad = response.clone();
+            bad[field] = value;
+            let bad = serde_json::from_value::<CreateRequestV3Response>(bad).unwrap();
+            assert!(make_session().apply_created(&bad, &key).is_err(), "{field}");
+        }
+        caps.methods.password_otp.challenge_modes.clear();
+        assert!(
+            DesktopV3AuthSession::new(origin, ChallengePresentation::Native, "Poste", &caps)
+                .is_err()
+        );
     }
 
     #[test]
@@ -466,10 +545,11 @@ mod tests {
             request_id: req_id.clone(),
             origin: origin.as_str().to_string(),
             presentation: ChallengePresentation::TurnstileWebview,
-            challenge_url: format!(
+            challenge_url: Some(format!(
                 "https://stock.afmarbre.com/login/desktop-v3-challenge#request_id={}",
                 req_id
-            ),
+            )),
+            status: None,
             pairing_code: "ABCDE-12345".to_string(),
             device_thumbprint: key.thumbprint(),
             expires_in: 300,
@@ -512,7 +592,8 @@ mod tests {
             request_id: req_id.clone(),
             origin: origin.as_str().to_string(),
             presentation: ChallengePresentation::TurnstileWebview,
-            challenge_url: challenge_url.clone(),
+            challenge_url: Some(challenge_url.clone()),
+            status: None,
             pairing_code: "ABCDE-12345".to_string(),
             device_thumbprint: key.thumbprint(),
             expires_in,

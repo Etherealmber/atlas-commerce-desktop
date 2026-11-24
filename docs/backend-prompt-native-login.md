@@ -1,3 +1,9 @@
+# BACKEND PROMPT FOR atlas-commerce — historique
+
+**Supersédé :** la PR `Etherealmber/atlas-commerce#222`, tête `e225d891a2ec5aad68fe6d65a6407a90804a0b52`, décrit désormais les contrats natifs mot de passe/OTP, QR et passkey dans `docs/desktop-native-login-api.md` et les teste dans `worker/__tests__/desktop-native-v3-native-login.test.ts`. Elle était encore ouverte lors de cet audit ; aucun déploiement ou activation de `DESKTOP_NATIVE_V3_NATIVE_LOGIN` n'a été vérifié. Ne pas demander à nouveau les endpoints déjà fournis ci-dessous. Le texte suivant est conservé comme contexte historique et ne décrit pas l'état de cette PR.
+
+---
+
 # BACKEND PROMPT FOR atlas-commerce
 
 Référence auditée : `Etherealmber/atlas-commerce` commit `81e60df300a9940a6de9cdfe6a6a951a989c9157`, `worker/routes/desktopNativeV3.ts` et `worker/routes/authRoutes.ts`. Vérifier le déploiement réel avant toute activation ; ne pas modifier les écrans web ni déployer sans autorisation.

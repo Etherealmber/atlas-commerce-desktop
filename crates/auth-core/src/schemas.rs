@@ -24,6 +24,10 @@ pub struct CapabilitiesV3Methods {
     pub mailbox_enrollment: SimpleCapabilityV3,
     pub recovery: SimpleCapabilityV3,
     pub device_proof: DeviceProofCapabilityV3,
+    #[serde(default)]
+    pub qr: SimpleCapabilityV3,
+    #[serde(default)]
+    pub passkey: SimpleCapabilityV3,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -41,7 +45,7 @@ pub struct PasswordOtpMethodV3 {
     pub verified_mailbox_required: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct SimpleCapabilityV3 {
     pub available: bool,
 }
@@ -88,7 +92,10 @@ pub struct CreateRequestV3Response {
     pub request_id: String,
     pub origin: String,
     pub presentation: ChallengePresentation,
-    pub challenge_url: String,
+    #[serde(default)]
+    pub challenge_url: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
     pub pairing_code: String,
     pub device_thumbprint: String,
     pub expires_in: u64,

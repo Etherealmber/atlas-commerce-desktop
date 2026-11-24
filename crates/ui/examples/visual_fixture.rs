@@ -119,8 +119,8 @@ fn build(route: &str) -> AtlasApp {
         None,
     );
     app.screen = Screen::Shell(match route {
-        "clients" | "clients-narrow" | "client-editor" | "client-wizard" | "client-invoices"
-        | "client-receivables" => Route::Clients,
+        "clients" | "clients-dark" | "clients-narrow" | "client-editor" | "client-wizard"
+        | "client-invoices" | "client-receivables" => Route::Clients,
         "products" | "products-wide" | "products-narrow" | "product-wizard" | "stock"
         | "stock-report" => Route::Products,
         "sales" | "quotes" => Route::Sales,
@@ -138,7 +138,10 @@ fn build(route: &str) -> AtlasApp {
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
-    if route == "login" || route == "login-qr" || route == "login-wait" || route == "login-v2" {
+    if matches!(
+        route,
+        "login" | "login-dark" | "login-qr" | "login-wait" | "login-v2"
+    ) {
         // Error/retry state only: never start a network login in the fixture.
         app.screen = Screen::Login;
         app.session = None;
@@ -594,7 +597,14 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
-            let dark = matches!(route.as_str(), "settings-dark" | "update-dialog-dark");
+            let dark = matches!(
+                route.as_str(),
+                "settings-dark"
+                    | "update-dialog-dark"
+                    | "login-dark"
+                    | "dashboard-dark"
+                    | "clients-dark"
+            );
             cc.egui_ctx.set_theme(if dark {
                 egui::ThemePreference::Dark
             } else {

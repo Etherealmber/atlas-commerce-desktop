@@ -860,14 +860,14 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 });
                 ui.add_space(12.0);
                 ui.add_enabled(false, egui::Button::new("Continuer").min_size(egui::vec2(ui.available_width(), TARGET)));
-                ui.label(RichText::new("Connexion native indisponible : le serveur exige une vérification anti-abus interactive et le protocole natif sans navigateur n’est pas encore disponible.").color(palette.secondary).size(12.0));
+                ui.label(RichText::new("Connexion native indisponible : l’intégration sécurisée du client n’est pas encore terminée. Activez la connexion bureau depuis le site (Paramètres → Sécurité).").color(palette.secondary).size(12.0));
                 ui.add_space(12.0);
                 ui.add_enabled(false, egui::Button::new("Se connecter avec une passkey").min_size(egui::vec2(ui.available_width(), TARGET)));
                 ui.label(RichText::new("Passkey indisponible : les adaptateurs natifs et leur intégration ne sont pas encore implémentés.").color(palette.secondary).size(12.0));
                 ui.add_space(12.0);
                 ui.label(RichText::new("Connexion avec un QR").strong().color(palette.text));
                 ui.add_enabled(false, egui::Button::new("Connexion avec un QR").min_size(egui::vec2(ui.available_width(), TARGET)));
-                ui.label(RichText::new("QR indisponible : la liaison cryptographique au poste et la session renouvelable ne sont pas encore vérifiées.").color(palette.secondary).size(12.0));
+                ui.label(RichText::new("QR indisponible : le protocole natif et la session renouvelable ne sont pas encore intégrés au client.").color(palette.secondary).size(12.0));
             });
         });
     });

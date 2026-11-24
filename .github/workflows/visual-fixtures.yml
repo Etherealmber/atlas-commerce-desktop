@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard alerts-popover attendance attendance-disabled inventory-ops cash-shifts payroll mobile-actions stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings settings-narrow settings-dark update-dialog update-dialog-dark delivery agent; do
+            for page in dashboard dashboard-dark alerts-popover attendance attendance-disabled inventory-ops cash-shifts payroll mobile-actions stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-dark login-wait login-qr login-v2 clients clients-dark clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings settings-narrow settings-dark update-dialog update-dialog-dark delivery agent; do
               echo "Rendering fixture: $page"
               ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
@@ -444,7 +444,7 @@ jobs:
         if: always()
         run: |
           missing=0
-          for page in settings settings-dark update-dialog update-dialog-dark delivery client-editor; do
+          for page in login login-dark dashboard dashboard-dark clients clients-dark settings settings-dark update-dialog update-dialog-dark delivery client-editor; do
             if [ ! -s "visual-output/$page.png" ]; then
               echo "::error::Missing required screenshot: $page.png"
               missing=1

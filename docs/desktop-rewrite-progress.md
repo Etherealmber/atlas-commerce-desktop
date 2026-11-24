@@ -11,6 +11,13 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
+## Native login follow-up — Worker PR #222
+
+- Contract audited at web PR #222 head `e225d891a2ec5aad68fe6d65a6407a90804a0b52` (open at audit); production deployment and feature flags not verified. Native request response has `status: verified`, no `challenge_url`, and is bound to the DPoP key and IP.
+- Auth core now understands the native presentation and validates that response without opening a browser. Capability parsing includes QR/passkey availability. This is not an integrated login: password/OTP, QR, passkey controls remain disabled. The keychain-backed device key, v3 token persistence/refresh, protected ERP client, native authenticators, rate limits, cancellation, mock HTTP flows and interactive testing remain outstanding. Legacy hosted code remains in the tree, although its launcher and WebView activation are disabled.
+- Updated selected light/dark tokens and added offline dark login/dashboard/clients fixture routes; these are not side-by-side comparisons with web screenshots and do not demonstrate full parity. The required login-state and avatar-menu screenshots are not implemented.
+- Python unittest: 13 passed. Cargo is absent locally. Rust tests and screenshot assertions for this change require fresh CI; no claims of a functional login or verified visual parity.
+
 ## Follow-up — CI, screenshots and mandatory-update safety
 
 Phase 1 remains approximately 40–50% written, not end-to-end verified; overall rewrite remains approximately 35–40%. These estimates do not imply working CDN installation.

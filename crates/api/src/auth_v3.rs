@@ -45,7 +45,9 @@ fn validate_capabilities(capabilities: &CapabilitiesV3Response) -> Result<(), V3
         return Err(V3TransportError::InvalidResponse);
     }
     if !capabilities.enabled
-        || !capabilities.methods.password_otp.available
+        || !(capabilities.methods.password_otp.available
+            || capabilities.methods.qr.available
+            || capabilities.methods.passkey.available)
         || !capabilities.methods.device_proof.available
     {
         return Err(V3TransportError::Unavailable);

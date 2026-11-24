@@ -64,11 +64,11 @@ impl Palette {
             surface: hex(0x18, 0x18, 0x1b),
             surface_hover: hex(0x29, 0x29, 0x2f),
             surface_active: hex(0x29, 0x29, 0x2f),
-            outline: Color32::from_rgba_unmultiplied(255, 255, 255, 22),
+            outline: Color32::from_rgba_unmultiplied(255, 255, 255, 20),
             text: hex(0xf4, 0xf4, 0xf6),
             secondary: hex(0xa1, 0xa1, 0xaa),
             dim: hex(0x71, 0x71, 0x7a),
-            accent: hex(0xfa, 0xfa, 0xfa),
+            accent: hex(0xe2, 0xe4, 0xec),
             accent_hover: hex(0xe4, 0xe4, 0xe7),
             on_accent: hex(0x12, 0x12, 0x15),
             copper: hex(0xea, 0xb3, 0x7d),
@@ -99,18 +99,18 @@ impl Palette {
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xf8, 0xfa, 0xfc),
+            window: hex(0xf4, 0xf5, 0xf7),
             panel: hex(0xff, 0xff, 0xff),
             surface: hex(0xff, 0xff, 0xff),
             surface_hover: hex(0xf1, 0xf5, 0xf9),
             surface_active: hex(0xe2, 0xe8, 0xf0),
-            outline: hex(0xe2, 0xe8, 0xf0),
+            outline: hex(0xe8, 0xea, 0xef),
             text: hex(0x0f, 0x17, 0x2a),
             secondary: hex(0x64, 0x74, 0x8b),
             dim: hex(0x94, 0xa3, 0xb8),
-            accent: hex(0x0f, 0x17, 0x2a),
+            accent: hex(0x0a, 0x0a, 0x0a),
             accent_hover: hex(0x1e, 0x29, 0x3b),
-            on_accent: hex(0xff, 0xff, 0xff),
+            on_accent: hex(0xfa, 0xfa, 0xfa),
             copper: hex(0xb8, 0x73, 0x33),
             copper_soft: Color32::from_rgba_unmultiplied(184, 115, 51, 26),
             copper_border: Color32::from_rgba_unmultiplied(184, 115, 51, 56),
@@ -622,12 +622,12 @@ mod tests {
         assert_eq!(dark.overlay, hex(0x18, 0x18, 0x1b));
         assert_eq!(dark.surface_hover, hex(0x29, 0x29, 0x2f));
         assert_eq!(dark.surface_active, hex(0x29, 0x29, 0x2f));
-        assert_eq!(dark.accent, hex(0xfa, 0xfa, 0xfa));
+        assert_eq!(dark.accent, hex(0xe2, 0xe4, 0xec));
         assert_eq!(dark.accent_hover, hex(0xe4, 0xe4, 0xe7));
         assert_eq!(dark.on_accent, dark.window);
         assert_eq!(
             dark.outline,
-            Color32::from_rgba_unmultiplied(255, 255, 255, 22)
+            Color32::from_rgba_unmultiplied(255, 255, 255, 20)
         );
         assert_eq!(dark.copper, hex(0xea, 0xb3, 0x7d));
         assert_eq!(light.copper, hex(0xb8, 0x73, 0x33));
@@ -635,10 +635,10 @@ mod tests {
         assert_eq!(dark.secondary, hex(0xa1, 0xa1, 0xaa));
         // Dark mode has no shadow at all (--ac-shadow: none).
         assert_eq!(dark.shadow, Color32::TRANSPARENT);
-        assert_eq!(light.window, hex(0xf8, 0xfa, 0xfc));
+        assert_eq!(light.window, hex(0xf4, 0xf5, 0xf7));
         assert_eq!(light.surface, hex(0xff, 0xff, 0xff));
         assert_eq!(light.panel, hex(0xff, 0xff, 0xff));
-        assert_eq!(light.accent, hex(0x0f, 0x17, 0x2a));
+        assert_eq!(light.accent, hex(0x0a, 0x0a, 0x0a));
         for color in [
             light.window,
             light.panel,
@@ -650,7 +650,7 @@ mod tests {
         }
         assert_eq!(light.text, hex(0x0f, 0x17, 0x2a));
         assert_eq!(light.secondary, hex(0x64, 0x74, 0x8b));
-        assert_eq!(light.outline, hex(0xe2, 0xe8, 0xf0));
+        assert_eq!(light.outline, hex(0xe8, 0xea, 0xef));
         assert_eq!(
             light.shadow,
             Color32::from_rgba_unmultiplied(15, 23, 42, 10)
