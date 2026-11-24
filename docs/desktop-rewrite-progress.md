@@ -11,7 +11,14 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
-## Phase 1 — in progress, not yet verified
+## Phase 1 — multi-OS pass, still incomplete
+
+- Worker PR #218 merged as `6082c6d`; this establishes the repository contract, not proof of a particular live deployment. Added multi-OS API/latest.json parsing with strict platform and architecture checks, plus a bounded streaming SHA-256/size verifier. These components are not yet connected to network discovery or installation.
+- Updated the optional post-release upload to require all six artifacts before any request and send them sequentially with the platform/arch/kind headers. An offline mocked-curl test verifies the six requests and token isolation from arguments. No release/upload has been performed; the Worker replaces previous-version files on the first new-version upload, so a later failure can leave an incomplete feed.
+- Screenshot failure root cause: ImageMagick emitted `1.02398e+06` for the valid pixel difference, while the workflow only accepted integer syntax. The assertions now accept scientific notation without lowering thresholds. Fresh CI is required.
+- Phase 1 rough implementation estimate: **35–45% written, not verified end-to-end**. CDN network selection/fallback, metadata display, secure staging/handoff and all-green CI are still missing.
+
+## Previous Phase 1 pass — in progress, not yet verified
 
 - Corrected the dark primary color and unused import. The previous screenshot failure is still under investigation; the workflow now preserves failure artifacts and reports the page rather than exiting silently if a wizard marker is missing. No visual assertion has been removed.
 - Inspected Worker PR #217 head `060d3f8`: GitHub reports the PR **open**, so deployment status is not established by repository state. Implemented a standalone bounded metadata parser and tests for explicit absence, platform, SHA-256, URL, size and minimum-version handling. The parser is **not yet wired** to the updater; CDN discovery, fallback, display and verified installation are unfinished.
