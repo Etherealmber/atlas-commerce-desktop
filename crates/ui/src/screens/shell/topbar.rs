@@ -4,7 +4,6 @@ use crate::dialogs::{Confirm, ConfirmAction};
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
 use crate::theme::Palette;
-use crate::widgets::secondary_button;
 use crate::{t, widgets};
 use egui::{Align, Layout, RichText, Sense, Vec2, vec2};
 

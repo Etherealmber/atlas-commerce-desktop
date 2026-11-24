@@ -29,6 +29,7 @@ jobs:
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
             for page in dashboard alerts-popover attendance attendance-disabled inventory-ops cash-shifts payroll mobile-actions stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings settings-narrow settings-dark update-dialog update-dialog-dark delivery agent; do
+              echo "Rendering fixture: $page"
               ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
@@ -119,7 +120,7 @@ jobs:
                 count=2
                 if [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then count=4; fi
                 for step in $(seq 1 "$count"); do
-                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1)
+                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1 || true)
                   read -r _ x y <<< "$pos"
                   if [ -z "${x:-}" ] || [ -z "${y:-}" ]; then echo "Next button not found"; kill "$pid"; exit 1; fi
                   xdotool mousemove --window "$window" "$x" "$y" click 1
@@ -180,6 +181,14 @@ jobs:
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
+      - name: Upload fixture diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-fixture-failure-diagnostics
+          path: visual-output/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Review login fallback screenshot
         run: |
           convert visual-output/login.png -resize 640x400 -quality 30 /tmp/review.jpg
