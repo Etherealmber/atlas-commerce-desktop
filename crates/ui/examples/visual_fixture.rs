@@ -26,6 +26,14 @@ impl eframe::App for Fixture {
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if self.route == "alerts-popover" {
+            let id = egui::Id::new("notification-popover-open");
+            ctx.data_mut(|data| {
+                if data.get_temp::<bool>(id).is_none() {
+                    data.insert_temp(id, true);
+                }
+            });
+        }
         if self.route == "stock-shortcut" && ctx.input(|input| input.key_pressed(egui::Key::K)) {
             println!(
                 "FIXTURE_KEY mods={:?} events={:?} focus={:?}",
@@ -113,16 +121,20 @@ fn build(route: &str) -> AtlasApp {
     app.screen = Screen::Shell(match route {
         "clients" | "clients-narrow" | "client-editor" | "client-wizard" | "client-invoices"
         | "client-receivables" => Route::Clients,
-        "products" | "products-narrow" | "product-wizard" | "stock" | "stock-report" => {
-            Route::Products
-        }
+        "products" | "products-wide" | "products-narrow" | "product-wizard" | "stock"
+        | "stock-report" => Route::Products,
         "sales" | "quotes" => Route::Sales,
-        "expenses" | "finance-report" => Route::Expenses,
+        "expenses" | "expenses-wide" | "finance-report" => Route::Expenses,
         "vendors" | "vendor-payables" => Route::Vendors,
         "employees" | "employee-editor" | "employee-editor-narrow" | "employee-wizard" => {
             Route::Employees
         }
-        "settings" => Route::Settings,
+        "attendance" | "attendance-disabled" => Route::Attendance,
+        "inventory-ops" => Route::InventoryOps,
+        "cash-shifts" => Route::CashShifts,
+        "payroll" => Route::Payroll,
+        "mobile-actions" => Route::Actions,
+        "settings" | "settings-narrow" | "settings-dark" => Route::Dashboard,
         "delivery" => Route::DeliveryNotes,
         _ => Route::Dashboard,
     });
@@ -150,7 +162,11 @@ fn build(route: &str) -> AtlasApp {
         app.qr.status = "claimed".into();
         app.qr.qr_url = "https://fixture.invalid/login/qr?t=fictional&mode=pc".into();
     }
-    if route == "settings" {
+    if matches!(route, "settings" | "settings-narrow" | "settings-dark") {
+        app.settings_dialog_open = true;
+        app.settings.observe_version("0.2.0", 1_700_000_000);
+        app.settings
+            .observe_version(env!("CARGO_PKG_VERSION"), 1_710_000_000);
         // Fictional update state: proves the title-bar icon and the
         // "restart to install" banner without contacting GitHub.
         let manifest = atlas_core::update_feed::UpdateManifest {
@@ -164,9 +180,71 @@ fn build(route: &str) -> AtlasApp {
         app.update.release_notes = Some(manifest);
         app.update.ready_version = Some("0.2.0".into());
     }
+    app.nav_badges.data = Some(atlas_api::models::NavBadges {
+        invoices_unpaid: 3,
+        bills_unpaid: 2,
+        bills_receive: 4,
+        products_low: 1,
+        actions_pending: 2,
+        quotes_open: 1,
+        vr_open: 1,
+        employees_pay_due: 1,
+    });
+    app.alerts.data = Some(vec![
+        atlas_api::models::Alert {
+            kind: "stock_bas".into(),
+            label: "Produit fictif : stock bas".into(),
+            severity: Some("medium".into()),
+            href: Some("/products".into()),
+            count: None,
+        },
+        atlas_api::models::Alert {
+            kind: "facture_echue".into(),
+            label: "Facture fictive échue".into(),
+            severity: Some("high".into()),
+            href: Some("/invoices/1".into()),
+            count: None,
+        },
+    ]);
+    app.attendance.data = Some(atlas_api::attendance::AttendanceDay {
+        date: "2026-10-22".into(),
+        summary: atlas_api::attendance::AttendanceSummary {
+            present: 1,
+            absent: 1,
+            late: 0,
+            excused: 0,
+            total: 2,
+        },
+        rows: vec![
+            atlas_api::attendance::AttendanceRow {
+                employee_id: 1,
+                name: "Employé fictif".into(),
+                role_title: "Magasin".into(),
+                check_in: Some("08:45".into()),
+                check_out: None,
+                status: "present".into(),
+                note: String::new(),
+            },
+            atlas_api::attendance::AttendanceRow {
+                employee_id: 2,
+                name: "Collaboratrice fictive".into(),
+                role_title: "Ventes".into(),
+                check_in: None,
+                check_out: None,
+                status: "absent".into(),
+                note: String::new(),
+            },
+        ],
+    });
     app.dashboard.data = Some(Dashboard {
         currency: Some("MAD".into()),
-        current_balance: 42000.0,
+        current_balance: Some(42000.0),
+        sales_received: Some(53000.0),
+        other_income_total: Some(1000.0),
+        owner_contrib_total: Some(2000.0),
+        purchases_paid: Some(6000.0),
+        expenses_total: Some(5000.0),
+        owner_draw_total: Some(3000.0),
         stock_value: 17500.0,
         product_count: 2,
         expense_categories: Some(vec![
@@ -218,6 +296,30 @@ fn build(route: &str) -> AtlasApp {
             ..Product::default()
         },
     ]);
+    app.cash_shifts.data = Some(vec![atlas_api::cash_shifts::CashShift {
+        id: 1,
+        till_id: "CAISSE-1".into(),
+        operator: "demo".into(),
+        opened_at: "2026-10-22T08:00:00Z".into(),
+        closed_at: None,
+        opening_float: 1000.0,
+        counted_amount: None,
+        expected_amount: None,
+        variance: None,
+        status: "open".into(),
+        notes: String::new(),
+    }]);
+    app.inventory_ops.data = Some(atlas_api::inventory_ops::InventoryOverview {
+        locations: vec![atlas_api::inventory_ops::StockLocation {
+            id: 1,
+            code: "MAG".into(),
+            name: "Magasin fictif".into(),
+            is_default: 1,
+            total_units: Some(28.0),
+            sku_count: Some(2),
+        }],
+        products: app.products.data.clone().unwrap_or_default(),
+    });
     app.clients.data = Some(vec![
         Client {
             id: 1,
@@ -361,6 +463,16 @@ fn build(route: &str) -> AtlasApp {
     if route == "finance-report" {
         app.show_fictional_finance_report();
     }
+    if route == "attendance-disabled" {
+        app.attendance.data = None;
+        let error = atlas_api::ApiError {
+            status: 403,
+            code: Some("ATTENDANCE_DISABLED".into()),
+            message: "Module présence désactivé (fiction).".into(),
+        };
+        app.attendance.error = Some(error.message.clone());
+        app.attendance.last_error = Some(error);
+    }
     if route == "client-invoices" {
         app.selected_client = Some(1);
         app.client_invoice_id = Some(1);
@@ -414,6 +526,8 @@ fn build(route: &str) -> AtlasApp {
         status: "confirmed".into(),
         ..DeliveryNote::default()
     }]);
+    app.payroll_runs.data = Some(vec![serde_json::from_value(serde_json::json!({"id":1,"period_month":"2026-01","status":"draft","run_kind":"regular","corrects_run_id":null,"total_gross":12000.0,"total_cnss_emp":537.6,"total_amo_emp":271.2,"total_igr":600.0,"total_net":10591.2,"total_employer_cost":14000.0})).expect("fixture payroll")]);
+    app.mobile_actions.data = Some(vec![serde_json::from_str::<atlas_api::mobile_actions::MobileAction>(r#"{"id":12,"type":"stock_check","title":"Contrôle fictif","status":"pending","detail":"Vérifier le stock","created_at":"2026-01-15"}"#).expect("fixture mobile action")]);
     app.expenses.data = Some(vec![serde_json::from_str::<Expense>(r#"{"id":1,"description":"Transport fictif","amount":125,"expense_date":"2026-01-15","entry_type":"expense"}"#).expect("fixture expense")]);
     if route == "stock" {
         app.stock_dialog = Some(atlas_ui::screens::products::StockDialog::new(
@@ -440,11 +554,17 @@ fn build(route: &str) -> AtlasApp {
 }
 fn main() -> eframe::Result<()> {
     let route = std::env::args().nth(1).unwrap_or_else(|| "clients".into());
-    let size = if route == "palette-narrow" {
+    let size = if matches!(
+        route.as_str(),
+        "dashboard-wide" | "products-wide" | "expenses-wide"
+    ) {
+        [1760.0, 850.0]
+    } else if route == "palette-narrow" {
         [640.0, 480.0]
     } else if matches!(
         route.as_str(),
         "products-narrow"
+            | "settings-narrow"
             | "clients-narrow"
             | "employee-editor-narrow"
             | "product-wizard"
@@ -464,8 +584,17 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             theme::install_fonts_and_icons(&cc.egui_ctx);
-            cc.egui_ctx.set_theme(egui::ThemePreference::Light);
-            let palette = Palette::light();
+            let dark = route == "settings-dark";
+            cc.egui_ctx.set_theme(if dark {
+                egui::ThemePreference::Dark
+            } else {
+                egui::ThemePreference::Light
+            });
+            let palette = if dark {
+                Palette::dark()
+            } else {
+                Palette::light()
+            };
             theme::apply(&cc.egui_ctx, &palette, true);
             Ok(Box::new(Fixture {
                 app: build(&route),

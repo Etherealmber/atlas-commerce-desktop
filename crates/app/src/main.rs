@@ -143,7 +143,15 @@ fn main() -> eframe::Result<()> {
     diagnostics::log_environment();
 
     // 4. Persisted state. No password is ever read here — only the token.
-    let settings = Settings::load(&paths.settings_file());
+    let mut settings = Settings::load(&paths.settings_file());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs());
+    if settings.observe_version(env!("CARGO_PKG_VERSION"), now)
+        && let Err(error) = settings.save(&paths.settings_file())
+    {
+        log::warn!("unable to save version history: {error}");
+    }
     let locale = atlas_ui::i18n::Locale::from_tag(&settings.language);
     let mut servers = ServerStore::load(&paths.servers_file());
     // The Windows installer writes `server.json` beside the executable. It is

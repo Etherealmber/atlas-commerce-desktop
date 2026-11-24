@@ -280,7 +280,7 @@ pub struct Dashboard {
     #[serde(default)]
     pub currency: Option<String>,
     #[serde(rename = "currentBalance", default)]
-    pub current_balance: f64,
+    pub current_balance: Option<f64>,
     #[serde(rename = "startingBalance", default)]
     pub starting_balance: f64,
     #[serde(rename = "stockValue", default)]
@@ -290,13 +290,19 @@ pub struct Dashboard {
     #[serde(rename = "lowStockCount", default)]
     pub low_stock_count: i64,
     #[serde(rename = "salesReceived", default)]
-    pub sales_received: f64,
+    pub sales_received: Option<f64>,
     #[serde(rename = "expensesTotal", default)]
-    pub expenses_total: f64,
+    pub expenses_total: Option<f64>,
+    #[serde(rename = "otherIncomeTotal", default)]
+    pub other_income_total: Option<f64>,
+    #[serde(rename = "ownerDrawTotal", default)]
+    pub owner_draw_total: Option<f64>,
+    #[serde(rename = "ownerContribTotal", default)]
+    pub owner_contrib_total: Option<f64>,
     #[serde(rename = "refundsTotal", default)]
     pub refunds_total: f64,
     #[serde(rename = "purchasesPaid", default)]
-    pub purchases_paid: f64,
+    pub purchases_paid: Option<f64>,
     #[serde(rename = "unpaidSales", default)]
     pub unpaid_sales: UnpaidSummary,
     #[serde(rename = "unpaidPurchases", default)]
@@ -639,6 +645,7 @@ pub struct AgentChat {
     pub timezone: String,
     pub thread_id: String,
     pub source: String,
+    pub response_language: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -649,6 +656,45 @@ pub struct AgentReply {
     pub model: Option<String>,
     #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub proposals: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub tool_trace: Vec<AgentToolTrace>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AgentToolTrace {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub ok: bool,
+}
+
+/// A conversation stored by the web client's per-user thread endpoint.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AgentThreadSummary {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AgentThread {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub messages: Vec<AgentThreadMessage>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AgentThreadMessage {
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

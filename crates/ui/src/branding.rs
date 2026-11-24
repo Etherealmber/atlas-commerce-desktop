@@ -4,8 +4,7 @@
 //! reduced to raw 8-bit coverage masks under `assets/branding/`: each file is
 //! a little-endian `u32` width, a little-endian `u32` height, then one
 //! coverage byte per pixel. A mask carries no colour, so the same texture is
-//! tinted with the active palette token (`Palette::accent`, near-black in
-//! light mode and paper white in dark mode) through mesh vertex colours.
+//! tinted near-black in light mode and paper white in dark mode through mesh vertex colours.
 //!
 //! Keeping the artwork as coverage masks avoids a runtime image decoder: the
 //! masks are embedded with `include_bytes!` and uploaded to the GPU once per
@@ -111,12 +110,20 @@ fn paint_tinted(ui: &Ui, rect: Rect, texture: &TextureHandle, tint: Color32) {
     ui.painter().add(Shape::Mesh(mesh.into()));
 }
 
+fn brand_color(palette: &Palette) -> Color32 {
+    if palette.dark {
+        Color32::from_rgb(250, 250, 250)
+    } else {
+        Color32::from_rgb(10, 10, 10)
+    }
+}
+
 /// The square sunburst symbol, `size` pixels wide, in the palette accent
 /// (paper white in dark mode, near-black in light mode).
 pub fn mark(ui: &mut Ui, palette: &Palette, size: f32) {
     let texture = texture(ui, false);
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
-    paint_tinted(ui, rect, &texture, palette.accent);
+    paint_tinted(ui, rect, &texture, brand_color(palette));
 }
 
 /// Paint the brand mark in a fixed color on a known background, such as a QR code.
@@ -126,13 +133,13 @@ pub(crate) fn mark_tinted(ui: &Ui, rect: Rect, color: Color32) {
 }
 
 /// The full horizontal lockup (sunburst + “Atlas”) at a given height; the
-/// width follows the mask aspect ratio. Tinted with the palette accent.
+/// width follows the mask aspect ratio. Tinted for the active theme.
 pub fn lockup(ui: &mut Ui, palette: &Palette, height: f32) {
     let texture = texture(ui, true);
     let [tex_w, tex_h] = texture.size();
     let width = height * tex_w as f32 / tex_h as f32;
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
-    paint_tinted(ui, rect, &texture, palette.accent);
+    paint_tinted(ui, rect, &texture, brand_color(palette));
 }
 
 #[cfg(test)]
@@ -141,6 +148,17 @@ mod tests {
 
     fn opaque_pixels(image: &ColorImage) -> usize {
         image.pixels.iter().filter(|pixel| pixel.a() > 200).count()
+    }
+
+    #[test]
+    fn brand_color_follows_mode_not_system_accent() {
+        assert_eq!(
+            brand_color(&Palette::dark()),
+            Color32::from_rgb(250, 250, 250)
+        );
+        let mut light = Palette::light();
+        light.accent = Color32::BLUE;
+        assert_eq!(brand_color(&light), Color32::from_rgb(10, 10, 10));
     }
 
     #[test]

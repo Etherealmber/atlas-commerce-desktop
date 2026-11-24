@@ -12,140 +12,340 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         Screen::Shell(route) => Some(route),
         _ => None,
     };
+    // Leave the native macOS traffic lights unobstructed in the top-left.
+    #[cfg(target_os = "macos")]
+    if fastframe_titlebar::enabled() {
+        ui.add_space(super::TITLEBAR_HEIGHT);
+    }
     ui.add_space(8.0);
-    ui.vertical_centered(|ui| {
+    let brand = ui.vertical_centered(|ui| {
         if collapsed {
             crate::branding::mark(ui, palette, 24.0);
         } else {
             crate::branding::lockup(ui, palette, 26.0);
+            let stock = app
+                .session
+                .as_ref()
+                .is_some_and(|session| session.role.eq_ignore_ascii_case("stock"));
             ui.label(
-                RichText::new(t!(app.locale, "Stock & invoicing"))
-                    .color(palette.secondary)
-                    .size(10.0),
+                RichText::new(if stock {
+                    t!(app.locale, "Stock · warehouse keeper")
+                } else {
+                    t!(app.locale, "Stock & invoicing")
+                })
+                .color(palette.secondary)
+                .size(10.0),
             );
         }
     });
+    if ui
+        .interact(
+            brand.response.rect,
+            egui::Id::new("sidebar-brand-toggle"),
+            Sense::click(),
+        )
+        .double_clicked()
+    {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(egui::Id::new("rail-collapsed"), !collapsed));
+    }
     ui.add_space(8.0);
     ui.separator();
-    // Only implemented destinations are actionable. The remaining entries
-    // are visible but explicitly unavailable; they never issue API requests.
-    type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str, bool)]);
-    let groups: [RailGroup<'_>; 6] = [
+    // Navigation counters are shared with the bell. Cache them across rows
+    // and rate-limit retries, including after a failed request.
+    if app.role_policy().allows_route(Route::Notifications)
+        && app.client.is_some()
+        && !app.nav_badges.loading
+        && app
+            .nav_badges
+            .stale_for(std::time::Duration::from_secs(300))
+    {
+        app.load_nav_badges();
+    }
+    type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str)]);
+    let groups: [RailGroup<'_>; 8] = [
         (
             t!(app.locale, "Overview"),
-            &[(Route::Dashboard, "Dashboard", true)],
+            &[(Route::Dashboard, "Dashboard")],
         ),
         (
             t!(app.locale, "Catalog"),
-            &[(Route::Products, "Products and stock", true)],
+            &[
+                (Route::Products, "Products and stock"),
+                (Route::Products, "Scan barcode"),
+                (Route::Catalog, "Catalog"),
+            ],
         ),
         (
             t!(app.locale, "Customer relations"),
-            &[(Route::Clients, "Clients", true)],
+            &[(Route::Clients, "Clients")],
         ),
         (
             t!(app.locale, "Team"),
             &[
-                (Route::Employees, "Employees", true),
-                (Route::Employees, "Attendance", false),
-                (Route::Sales, "Quotes", true),
-                (Route::Sales, "Quick sale", true),
-                (Route::Sales, "Sales invoices", true),
-                (Route::Sales, "Reimbursements", true),
-                (Route::Sales, "Receipts", true),
+                (Route::Employees, "Employees"),
+                (Route::Attendance, "Attendance"),
+                (Route::Payroll, "Payroll CNSS / AMO"),
+            ],
+        ),
+        (
+            t!(app.locale, "Sales"),
+            &[
+                (Route::Sales, "Quotes"),
+                (Route::Sales, "Quick sale"),
+                (Route::Sales, "Sales invoices"),
+                (Route::Sales, "Reimbursements"),
+                (Route::Sales, "Receipts"),
             ],
         ),
         (
             t!(app.locale, "Purchases"),
             &[
-                (Route::Vendors, "Vendors", true),
-                (Route::Expenses, "Purchase invoices", true),
+                (Route::Vendors, "Vendors"),
+                (Route::Expenses, "Purchase invoices"),
             ],
         ),
         (
             t!(app.locale, "Finance"),
             &[
-                (Route::Expenses, "Balance and income", false),
-                (Route::Expenses, "Reports and closing", false),
-                (Route::Products, "Stock operations", false),
-                (Route::Expenses, "Expenses", true),
-                (Route::DeliveryNotes, "Delivery notes", true),
+                (Route::Expenses, "Balance and income"),
+                (Route::Expenses, "Reports and closing"),
+                (Route::CashShifts, "Cash shifts"),
+                (Route::DeliveryNotes, "Delivery notes"),
+            ],
+        ),
+        (
+            t!(app.locale, "Operations and actions"),
+            &[
+                (Route::InventoryOps, "Stock operations"),
+                (Route::Actions, "Mobile actions"),
+                (Route::Notifications, "Notifications"),
             ],
         ),
     ];
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for (heading, entries) in groups {
-            if !entries
-                .iter()
-                .any(|(route, _, _)| app.role_policy().allows_route(*route))
-            {
-                continue;
-            }
-            if !collapsed {
-                ui.add_space(8.0);
-                ui.label(
-                    RichText::new(heading.to_uppercase())
-                        .color(palette.dim)
-                        .size(10.5),
-                );
-            }
-            for &(route, source, implemented) in entries {
-                if !app.role_policy().allows_route(route) {
-                    continue;
-                }
-                let (which, _) = route_meta(app.locale, route);
-                let label = crate::i18n::gettext(app.locale, source);
-                let selected = active == Some(route)
-                    && match (route, source) {
-                        (Route::Sales, "Quotes") => app.quotes_open,
-                        (Route::Sales, "Receipts") => app.receipts_open,
-                        (Route::Sales, "Reimbursements") => app.refunds_open,
-                        (Route::Sales, "Sales invoices") => {
-                            !app.quotes_open && !app.receipts_open && !app.refunds_open
+    // Keep the settings entry reachable even when the route list is long.
+    let navigation_height = (ui.available_height() - 54.0).max(0.0);
+    egui::ScrollArea::vertical()
+        .max_height(navigation_height)
+        .show(ui, |ui| {
+            if collapsed && app.role_policy().allows_route(Route::Notifications) {
+                let mut target = None;
+                if let Some(badges) = &app.nav_badges.data {
+                    for (index, (label, count, danger)) in [
+                        (
+                            t!(app.locale, "Unpaid invoices"),
+                            badges.invoices_unpaid,
+                            true,
+                        ),
+                        (t!(app.locale, "Low stock"), badges.products_low, false),
+                        (
+                            t!(app.locale, "Mobile actions"),
+                            badges.actions_pending,
+                            false,
+                        ),
+                        (t!(app.locale, "Open quick sales"), badges.vr_open, false),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        if count <= 0 {
+                            continue;
                         }
-                        (Route::Sales, _) => false,
-                        (Route::Expenses, "Purchase invoices") => app.bills_open,
-                        (Route::Expenses, "Expenses") => !app.bills_open,
-                        _ => true,
-                    };
-                if implemented {
-                    let response = rail_row(ui, palette, which, &label, selected, collapsed);
-                    if response.clicked() {
-                        app.go(route);
-                        match (route, source) {
-                            (Route::Sales, _) => {
-                                app.quotes_open = source == "Quotes";
-                                app.receipts_open = source == "Receipts";
-                                app.refunds_open = source == "Reimbursements";
-                                if app.receipts_open
-                                    && app.receipts.data.is_none()
-                                    && !app.receipts.loading
-                                {
-                                    app.load_receipts();
-                                }
-                            }
-                            (Route::Expenses, _) => {
-                                app.bills_open = source == "Purchase invoices";
-                                if app.bills_open && app.bills.data.is_none() && !app.bills.loading
-                                {
-                                    app.load_bills();
-                                }
-                            }
-                            _ => {}
+                        let (rect, response) = ui.allocate_exact_size(
+                            vec2(ui.available_width().max(0.0), 24.0),
+                            Sense::click(),
+                        );
+                        let tint = if danger {
+                            palette.finance_danger
+                        } else {
+                            palette.finance_warning
+                        };
+                        ui.painter().rect_filled(
+                            rect.shrink2(vec2(2.0, 2.0)),
+                            255.0,
+                            palette.surface_hover,
+                        );
+                        ui.painter().circle_filled(
+                            egui::pos2(rect.left() + 8.0, rect.center().y),
+                            3.0,
+                            tint,
+                        );
+                        let value = if count > 99 {
+                            "99+".to_owned()
+                        } else {
+                            count.to_string()
+                        };
+                        ui.painter().text(
+                            egui::pos2(rect.center().x + 3.0, rect.center().y),
+                            egui::Align2::CENTER_CENTER,
+                            value,
+                            egui::FontId::proportional(11.0),
+                            palette.text,
+                        );
+                        if response.on_hover_text(label).clicked() {
+                            target = Some(index);
                         }
                     }
-                } else {
-                    let unavailable =
-                        format!("{} · {}", label, t!(app.locale, "Not available yet"));
-                    ui.add_enabled_ui(false, |ui| {
-                        rail_row(ui, palette, which, &unavailable, false, collapsed)
-                    })
-                    .inner
-                    .on_hover_text(t!(app.locale, "Not available yet"));
+                }
+                if let Some(index) = target {
+                    match index {
+                        0 => super::super::notifications::open_alert(
+                            app,
+                            super::super::notifications::AlertDestination::Invoices(None),
+                        ),
+                        1 => super::super::notifications::open_alert(
+                            app,
+                            super::super::notifications::AlertDestination::Products,
+                        ),
+                        2 => app.go(Route::Actions),
+                        // The quick-sale list is not available here yet; do not
+                        // redirect users to the unrelated creation form.
+                        _ => app.notice(
+                            t!(app.locale, "This list is not available in desktop yet.")
+                                .into_owned(),
+                        ),
+                    }
                 }
             }
-        }
-    });
+            for (heading, entries) in groups {
+                if !entries
+                    .iter()
+                    .any(|(route, _)| app.role_policy().allows_route(*route))
+                {
+                    continue;
+                }
+                if !collapsed {
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new(heading.to_uppercase())
+                            .color(palette.dim)
+                            .size(10.5),
+                    );
+                }
+                for &(route, source) in entries {
+                    if !app.role_policy().allows_route(route)
+                        || (source == "Reports and closing"
+                            && !app.role_policy().can_view_reports())
+                    {
+                        continue;
+                    }
+                    let (default_icon, _) = route_meta(app.locale, route);
+                    let which = entry_icon(source, default_icon);
+                    let badge = app
+                        .nav_badges
+                        .data
+                        .as_ref()
+                        .and_then(|badges| entry_count(source, badges));
+                    let label = crate::i18n::gettext(app.locale, source);
+                    let selected = active == Some(route)
+                        && match (route, source) {
+                            (Route::Products, "Scan barcode") => app.product_scanner_open,
+                            (Route::Products, "Products and stock") => !app.product_scanner_open,
+                            (Route::Sales, "Quotes") => app.quotes_open,
+                            (Route::Sales, "Quick sale") => app.quick_sale_open,
+                            (Route::Sales, "Receipts") => app.receipts_open,
+                            (Route::Sales, "Reimbursements") => app.refunds_open,
+                            (Route::Sales, "Sales invoices") => {
+                                !app.quotes_open
+                                    && !app.receipts_open
+                                    && !app.refunds_open
+                                    && !app.quick_sale_open
+                            }
+                            (Route::Sales, _) => false,
+                            (Route::Expenses, "Purchase invoices") => app.bills_open,
+                            (Route::Expenses, "Balance and income") => {
+                                !app.bills_open && !app.finance_report_open
+                            }
+                            (Route::Expenses, "Reports and closing") => app.finance_report_open,
+                            _ => true,
+                        };
+                    {
+                        let response =
+                            rail_row(ui, palette, which, &label, selected, collapsed, badge);
+                        if response.clicked() {
+                            app.go(route);
+                            match (route, source) {
+                                (Route::Products, "Scan barcode") => {
+                                    app.product_scanner_open = true;
+                                }
+                                (Route::Products, "Products and stock") => {
+                                    app.product_scanner_open = false;
+                                }
+                                (Route::Sales, _) => {
+                                    app.invoice_detail_id = None;
+                                    app.invoice_detail = Default::default();
+                                    app.quotes_open = source == "Quotes";
+                                    app.quick_sale_open = source == "Quick sale";
+                                    app.receipts_open = source == "Receipts";
+                                    app.refunds_open = source == "Reimbursements";
+                                    if app.receipts_open
+                                        && app.receipts.data.is_none()
+                                        && !app.receipts.loading
+                                    {
+                                        app.load_receipts();
+                                    }
+                                }
+                                (Route::Expenses, _) => {
+                                    app.bills_open = source == "Purchase invoices";
+                                    app.finance_report_open = source == "Reports and closing"
+                                        && app.role_policy().can_view_reports();
+                                    if app.bills_open
+                                        && app.bills.data.is_none()
+                                        && !app.bills.loading
+                                    {
+                                        app.load_bills();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    ui.add_space(4.0);
+    ui.separator();
+    let settings = t!(app.locale, "Settings");
+    if rail_row(
+        ui,
+        palette,
+        Icon::Settings,
+        &settings,
+        app.settings_dialog_open,
+        collapsed,
+        None,
+    )
+    .clicked()
+    {
+        app.go(Route::Settings);
+    }
+}
+
+fn entry_icon(source: &str, fallback: Icon) -> Icon {
+    match source {
+        "Scan barcode" => Icon::QrCode,
+        "Quotes" => Icon::SquarePen,
+        "Quick sale" => Icon::TrendingUp,
+        "Sales invoices" | "Purchase invoices" => Icon::Receipt,
+        "Reimbursements" => Icon::Wallet,
+        "Receipts" => Icon::CircleCheck,
+        "Reports and closing" => Icon::Dashboard,
+        _ => fallback,
+    }
+}
+
+fn entry_count(source: &str, badges: &atlas_api::models::NavBadges) -> Option<i64> {
+    let count = match source {
+        "Products and stock" => badges.products_low,
+        "Quotes" => badges.quotes_open,
+        "Quick sale" => badges.vr_open,
+        "Sales invoices" => badges.invoices_unpaid,
+        "Purchase invoices" => badges.bills_unpaid.max(badges.bills_receive),
+        "Employees" => badges.employees_pay_due,
+        "Mobile actions" => badges.actions_pending,
+        _ => 0,
+    };
+    (count > 0).then_some(count)
 }
 
 fn rail_row(
@@ -155,6 +355,7 @@ fn rail_row(
     label: &str,
     is_active: bool,
     collapsed: bool,
+    badge: Option<i64>,
 ) -> egui::Response {
     // Web sidebar items are 40 px rows; the desktop parity floor is 44 px
     // touch targets.
@@ -167,21 +368,15 @@ fn rail_row(
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     let hovered = ui.rect_contains_pointer(rect);
     if is_active {
-        ui.painter().rect_filled(rect, 4.0, palette.surface_active);
-        // The accent stripe belongs to the labelled rail only; the 72 px
-        // collapsed strip communicates selection through tint + surface.
-        if !collapsed {
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(rect.left() + 2.0, rect.center().y - 10.0),
-                    vec2(3.0, 20.0),
-                ),
-                2.0,
-                palette.accent,
-            );
-        }
+        ui.painter().rect_filled(rect, 12.0, palette.surface_active);
+        ui.painter().rect_stroke(
+            rect,
+            12.0,
+            egui::Stroke::new(1.0, palette.outline),
+            egui::StrokeKind::Inside,
+        );
     } else if hovered {
-        ui.painter().rect_filled(rect, 4.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 12.0, palette.surface_hover);
     }
     let tint = if is_active {
         palette.accent
@@ -197,6 +392,14 @@ fn rail_row(
             |ui| icon(ui, which, tint, 19.0),
         );
     } else {
+        let badge_text = badge.map(|count| {
+            if count > 99 {
+                "99+".to_owned()
+            } else {
+                count.to_string()
+            }
+        });
+        let badge_width = if badge_text.is_some() { 34.0 } else { 0.0 };
         widgets::overlay_at(
             ui,
             egui::Rect::from_center_size(
@@ -209,7 +412,7 @@ fn rail_row(
             ui,
             egui::Rect::from_min_size(
                 egui::pos2(rect.left() + 44.0, rect.top()),
-                vec2(rect.width() - 52.0, rect.height()),
+                vec2((rect.width() - 52.0 - badge_width).max(1.0), rect.height()),
             ),
             |ui| {
                 // Rail entries are one-line chrome labels, even at narrow widths.
@@ -220,19 +423,37 @@ fn rail_row(
                         } else {
                             crate::fonts::medium(13.0)
                         };
-                        ui.label(
-                            RichText::new(label)
-                                .color(if is_active {
-                                    palette.text
-                                } else {
-                                    palette.secondary
-                                })
-                                .font(font),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(label)
+                                    .color(if is_active {
+                                        palette.text
+                                    } else {
+                                        palette.secondary
+                                    })
+                                    .font(font),
+                            )
+                            .truncate(),
                         );
                     });
                 });
             },
         );
+        if let Some(text) = badge_text {
+            let badge_rect = egui::Rect::from_center_size(
+                egui::pos2(rect.right() - 18.0, rect.center().y),
+                vec2(30.0, 20.0),
+            );
+            ui.painter()
+                .rect_filled(badge_rect, 255.0, palette.finance_warning_soft);
+            ui.painter().text(
+                badge_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                text,
+                egui::FontId::proportional(10.5),
+                palette.finance_warning,
+            );
+        }
     }
     // Last interaction wins for overlapping rectangles, so registering the
     // row click after the overlay widgets keeps the label text clickable.
@@ -241,5 +462,24 @@ fn rail_row(
         response.on_hover_text(label)
     } else {
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::entry_count;
+    use atlas_api::models::NavBadges;
+
+    #[test]
+    fn purchase_badge_uses_maximum_not_sum_and_hides_zero() {
+        let badges = NavBadges {
+            bills_unpaid: 3,
+            bills_receive: 7,
+            products_low: -1,
+            ..NavBadges::default()
+        };
+        assert_eq!(entry_count("Purchase invoices", &badges), Some(7));
+        assert_eq!(entry_count("Products and stock", &badges), None);
+        assert_eq!(entry_count("unknown", &badges), None);
     }
 }

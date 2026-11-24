@@ -7,9 +7,7 @@ use egui::RichText;
 use crate::icons::Icon;
 use crate::state::AtlasApp;
 use crate::theme::Palette;
-use crate::widgets::{
-    card, empty_state, error_banner, icon, page_title, pill, primary_button, secondary_button,
-};
+use crate::widgets::{card, empty_state, error_banner, icon, page_title, pill, secondary_button};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -17,7 +15,12 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         page_title(ui, t!(app.locale, "Notifications"), palette);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "Refresh"), palette, !app.alerts.loading) {
+            if crate::buttons::primary_refresh_button(
+                ui,
+                t!(app.locale, "Refresh"),
+                palette,
+                !app.alerts.loading,
+            ) {
                 app.load_alerts();
             }
             if secondary_button(ui, t!(app.locale, "Open settings"), palette) {
@@ -64,7 +67,11 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         };
         // The worker sends a web `href` (/products, /invoices/…); map the
         // known prefixes onto desktop routes so an alert is one click away.
-        let route = alert.href.as_deref().and_then(alert_route);
+        let destination = alert
+            .href
+            .as_deref()
+            .and_then(alert_destination)
+            .filter(|destination| app.role_policy().allows_route(destination.route()));
         let inner = card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {
@@ -108,19 +115,13 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         // `on_hover_cursor` consumes the response, so capture the click
         // state before handing it over.
         let clicked = response.clicked();
-        if route.is_some() {
+        if destination.is_some() {
             response.on_hover_cursor(egui::CursorIcon::PointingHand);
         }
-        if let Some(route) = route
+        if let Some(destination) = destination
             && clicked
         {
-            app.go(route);
-            if route == crate::state::Route::Sales && app.invoices.data.is_none() {
-                app.load_invoices();
-            }
-            if route == crate::state::Route::Products && app.products.data.is_none() {
-                app.load_products();
-            }
+            open_alert(app, destination);
         }
         ui.add_space(8.0);
     }
@@ -137,14 +138,89 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 }
 
-/// Maps a worker alert `href` prefix to a desktop route, when known.
-fn alert_route(href: &str) -> Option<crate::state::Route> {
-    use crate::state::Route;
-    if href.starts_with("/products") {
-        Some(Route::Products)
-    } else if href.starts_with("/invoices") {
-        Some(Route::Sales)
-    } else {
-        None
+/// Only routes emitted by the Worker alerts feed are recognized. A server
+/// supplied href never becomes an external navigation or a filesystem path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AlertDestination {
+    Products,
+    Invoices(Option<i64>),
+}
+
+impl AlertDestination {
+    pub(super) fn route(self) -> crate::state::Route {
+        match self {
+            Self::Products => crate::state::Route::Products,
+            Self::Invoices(_) => crate::state::Route::Sales,
+        }
+    }
+}
+
+pub(super) fn alert_destination(href: &str) -> Option<AlertDestination> {
+    let path = href.split(['?', '#']).next()?;
+    match path {
+        "/products" | "/products/" => Some(AlertDestination::Products),
+        "/invoices" | "/invoices/" => Some(AlertDestination::Invoices(None)),
+        _ => {
+            let raw = path.strip_prefix("/invoices/")?;
+            if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
+                return None;
+            }
+            let id = raw.parse::<i64>().ok().filter(|id| *id > 0)?;
+            Some(AlertDestination::Invoices(Some(id)))
+        }
+    }
+}
+
+pub(super) fn open_alert(app: &mut AtlasApp, destination: AlertDestination) {
+    let route = destination.route();
+    if !app.role_policy().allows_route(route) {
+        return;
+    }
+    match destination {
+        AlertDestination::Products => app.stock_history = None,
+        AlertDestination::Invoices(_) => {
+            app.quotes_open = false;
+            app.quick_sale_open = false;
+            app.receipts_open = false;
+            app.refunds_open = false;
+            app.invoice_detail_id = None;
+            app.invoice_detail = Default::default();
+        }
+    }
+    app.go(route);
+    if let AlertDestination::Invoices(Some(id)) = destination {
+        app.open_invoice_detail(id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AlertDestination, alert_destination};
+
+    #[test]
+    fn parses_only_known_internal_alert_links() {
+        assert_eq!(
+            alert_destination("/products"),
+            Some(AlertDestination::Products)
+        );
+        assert_eq!(
+            alert_destination("/invoices/42?source=alerts"),
+            Some(AlertDestination::Invoices(Some(42)))
+        );
+        assert_eq!(
+            alert_destination("/invoices"),
+            Some(AlertDestination::Invoices(None))
+        );
+        for href in [
+            "https://evil.test/products",
+            "//evil.test/invoices/3",
+            "/products-other",
+            "/invoices/0",
+            "/invoices/-2",
+            "/invoices/2/other",
+            "/invoices/99999999999999999999999",
+        ] {
+            assert_eq!(alert_destination(href), None);
+        }
     }
 }

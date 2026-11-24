@@ -1,5 +1,5 @@
 //! Central desktop palette and widget tokens. The default light palette uses
-//! opaque Fluent-inspired surfaces; dark and custom palettes remain available.
+//! Bento slate surfaces; dark and custom palettes remain available.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -25,6 +25,10 @@ pub struct Palette {
     pub accent: Color32,
     pub accent_hover: Color32,
     pub on_accent: Color32,
+    /// Copper is a decorative accent, not the primary action color.
+    pub copper: Color32,
+    pub copper_soft: Color32,
+    pub copper_border: Color32,
     pub danger: Color32,
     pub warning: Color32,
     pub overlay: Color32,
@@ -50,26 +54,26 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// The product default. Tokens mirror the web app's dark scheme:
-    /// `#111113` background, a subtly lifted `#17171a` chrome, `#1c1c1f`
-    /// paper, `#27272a` hover, `#2a2a2e` lines, `#f4f4f5` ink, `#a1a1aa`
-    /// muted and a white primary carrying near-black (`#0a0a0a`) text.
+    /// Default dark slate surfaces, with high-contrast ink and neutral actions.
     #[must_use]
     pub fn dark() -> Self {
         Self {
             dark: true,
-            window: hex(0x11, 0x11, 0x13),
-            panel: hex(0x17, 0x17, 0x1a),
-            surface: hex(0x1c, 0x1c, 0x1f),
-            surface_hover: hex(0x27, 0x27, 0x2a),
+            window: hex(0x12, 0x13, 0x17),
+            panel: hex(0x16, 0x18, 0x1e),
+            surface: hex(0x1a, 0x1f, 0x26),
+            surface_hover: hex(0x20, 0x23, 0x2b),
             surface_active: hex(0x27, 0x27, 0x2a),
-            outline: hex(0x2a, 0x2a, 0x2e),
-            text: hex(0xf4, 0xf4, 0xf5),
+            outline: hex(0x2a, 0x2d, 0x37),
+            text: hex(0xf4, 0xf4, 0xf6),
             secondary: hex(0xa1, 0xa1, 0xaa),
             dim: hex(0x71, 0x71, 0x7a),
             accent: hex(0xfa, 0xfa, 0xfa),
             accent_hover: hex(0xe4, 0xe4, 0xe7),
             on_accent: hex(0x0a, 0x0a, 0x0a),
+            copper: hex(0xea, 0xb3, 0x7d),
+            copper_soft: Color32::from_rgba_unmultiplied(212, 165, 116, 31),
+            copper_border: Color32::from_rgba_unmultiplied(212, 165, 116, 66),
             danger: hex(0xf8, 0x71, 0x71),
             warning: hex(0xfb, 0xbf, 0x24),
             overlay: hex(0x1c, 0x1c, 0x1f),
@@ -90,23 +94,26 @@ impl Palette {
         }
     }
 
-    /// Solid Fluent-inspired light workspace and semantic status colours.
+    /// Light slate workspace with neutral primary actions and semantic status colours.
     #[must_use]
     pub fn light() -> Self {
         Self {
             dark: false,
-            window: hex(0xf3, 0xf4, 0xf6),
+            window: hex(0xf8, 0xfa, 0xfc),
             panel: hex(0xff, 0xff, 0xff),
             surface: hex(0xff, 0xff, 0xff),
-            surface_hover: hex(0xed, 0xeb, 0xe9),
-            surface_active: hex(0xeb, 0xf3, 0xfc),
-            outline: hex(0xe1, 0xdf, 0xdd),
-            text: hex(0x24, 0x24, 0x24),
-            secondary: hex(0x61, 0x61, 0x61),
-            dim: hex(0x61, 0x61, 0x61),
-            accent: hex(0x0f, 0x6c, 0xbd),
-            accent_hover: hex(0x11, 0x5e, 0xa3),
+            surface_hover: hex(0xf1, 0xf5, 0xf9),
+            surface_active: hex(0xe2, 0xe8, 0xf0),
+            outline: hex(0xe8, 0xea, 0xef),
+            text: hex(0x0f, 0x17, 0x2a),
+            secondary: hex(0x64, 0x74, 0x8b),
+            dim: hex(0x94, 0xa3, 0xb8),
+            accent: hex(0x0f, 0x17, 0x2a),
+            accent_hover: hex(0x1e, 0x29, 0x3b),
             on_accent: hex(0xff, 0xff, 0xff),
+            copper: hex(0xb8, 0x73, 0x33),
+            copper_soft: Color32::from_rgba_unmultiplied(184, 115, 51, 26),
+            copper_border: Color32::from_rgba_unmultiplied(184, 115, 51, 56),
             danger: hex(0xa4, 0x26, 0x2c),
             warning: hex(0x8a, 0x53, 0x00),
             overlay: hex(0xff, 0xff, 0xff),
@@ -133,10 +140,10 @@ const fn hex(r: u8, g: u8, b: u8) -> Color32 {
 }
 
 /// Desktop radius scale for controls, cards and larger panels.
-pub const RADIUS_CONTROL: u8 = 8;
-pub const RADIUS_CARD: u8 = 10;
-pub const RADIUS_LARGE: u8 = 8;
-pub const RADIUS_HERO: u8 = 8;
+pub const RADIUS_CONTROL: u8 = 10;
+pub const RADIUS_CARD: u8 = 16;
+pub const RADIUS_LARGE: u8 = 16;
+pub const RADIUS_HERO: u8 = 20;
 
 /// Minimum interactive target (master parity spec §4): every control is at
 /// least 44 px tall; the primary action sits at 48 px (Android primary is
@@ -179,6 +186,9 @@ impl PaletteTrait for Palette {
             "accent" => &mut self.accent,
             "accent_hover" => &mut self.accent_hover,
             "on_accent" => &mut self.on_accent,
+            "copper" => &mut self.copper,
+            "copper_soft" => &mut self.copper_soft,
+            "copper_border" => &mut self.copper_border,
             "danger" => &mut self.danger,
             "warning" => &mut self.warning,
             "overlay" => &mut self.overlay,
@@ -598,21 +608,23 @@ mod tests {
     }
 
     #[test]
-    fn light_tokens_match_fluent_and_dark_remains_available() {
+    fn default_tokens_match_the_slate_palette_in_both_modes() {
         // Keep the selected light surfaces opaque and high contrast.
         let dark = Palette::dark();
         let light = Palette::light();
-        assert_eq!(dark.window, hex(0x11, 0x11, 0x13));
-        assert_eq!(dark.surface, hex(0x1c, 0x1c, 0x1f));
-        assert_eq!(dark.outline, hex(0x2a, 0x2a, 0x2e));
-        assert_eq!(dark.text, hex(0xf4, 0xf4, 0xf5));
+        assert_eq!(dark.window, hex(0x12, 0x13, 0x17));
+        assert_eq!(dark.surface, hex(0x1a, 0x1f, 0x26));
+        assert_eq!(dark.outline, hex(0x2a, 0x2d, 0x37));
+        assert_eq!(dark.copper, hex(0xea, 0xb3, 0x7d));
+        assert_eq!(light.copper, hex(0xb8, 0x73, 0x33));
+        assert_eq!(dark.text, hex(0xf4, 0xf4, 0xf6));
         assert_eq!(dark.secondary, hex(0xa1, 0xa1, 0xaa));
         // Dark mode has no shadow at all (--ac-shadow: none).
         assert_eq!(dark.shadow, Color32::TRANSPARENT);
-        assert_eq!(light.window, hex(0xf3, 0xf4, 0xf6));
+        assert_eq!(light.window, hex(0xf8, 0xfa, 0xfc));
         assert_eq!(light.surface, hex(0xff, 0xff, 0xff));
         assert_eq!(light.panel, hex(0xff, 0xff, 0xff));
-        assert_eq!(light.accent, hex(0x0f, 0x6c, 0xbd));
+        assert_eq!(light.accent, hex(0x0f, 0x17, 0x2a));
         for color in [
             light.window,
             light.panel,
@@ -622,9 +634,9 @@ mod tests {
         ] {
             assert_eq!(color.a(), 255);
         }
-        assert_eq!(light.text, hex(0x24, 0x24, 0x24));
-        assert_eq!(light.secondary, hex(0x61, 0x61, 0x61));
-        assert_eq!(light.outline, hex(0xe1, 0xdf, 0xdd));
+        assert_eq!(light.text, hex(0x0f, 0x17, 0x2a));
+        assert_eq!(light.secondary, hex(0x64, 0x74, 0x8b));
+        assert_eq!(light.outline, hex(0xe8, 0xea, 0xef));
         assert_eq!(
             light.shadow,
             Color32::from_rgba_unmultiplied(15, 23, 42, 10)

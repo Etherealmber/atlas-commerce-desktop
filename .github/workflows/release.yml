@@ -663,7 +663,7 @@ jobs:
             custom_file="--custom CUSTOM_NOTES.txt"
           fi
           python3 scripts/release-notes.py "$RELEASE_VERSION" $custom_file \
-            --out-md RELEASE_NOTES.md --out-note IN_APP_NOTE.txt
+            --asset-dir dist --out-md RELEASE_NOTES.md --out-note IN_APP_NOTE.txt
           echo "--- RELEASE_NOTES.md ---"
           cat RELEASE_NOTES.md
           echo "--- note interne (update.json) ---"

@@ -1,14 +1,19 @@
 //! Every full screen the app draws.
 
+pub mod actions;
 pub mod agent;
+pub mod attendance;
 pub mod auth;
+pub mod cash_shifts;
 pub mod catalog;
 pub mod clients;
 pub mod dashboard;
 pub mod delivery_notes;
 pub mod employees;
 pub mod expenses;
+pub mod inventory_ops;
 pub mod notifications;
+pub mod payroll;
 pub mod products;
 pub mod sales;
 pub mod scan;
@@ -52,41 +57,17 @@ pub fn centered_spinner(ui: &mut Ui, palette: &Palette) {
 pub fn list_skeleton(
     ui: &mut Ui,
     palette: &Palette,
-    locale: crate::i18n::Locale,
+    _locale: crate::i18n::Locale,
     reduced_motion: bool,
 ) {
-    ui.label(RichText::new(crate::t!(locale, "Loading…")).color(palette.secondary));
-    let phase = if reduced_motion {
-        0.65
-    } else {
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_millis(80));
-        0.60 + 0.15 * (ui.input(|input| input.time) as f32 * 2.0).sin()
-    };
-    let width = ui.available_width().max(0.0);
-    for _ in 0..5 {
-        let (row, _) = ui.allocate_exact_size(egui::vec2(width, 58.0), Sense::hover());
-        let color = palette.surface_active.gamma_multiply(phase);
-        ui.painter()
-            .rect_filled(row.shrink2(egui::vec2(2.0, 5.0)), 7.0, color);
-        let left = row.left() + 16.0;
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(left, row.top() + 15.0),
-                egui::vec2((width * 0.30).min(220.0), 9.0),
-            ),
-            4.0,
-            palette.secondary.gamma_multiply(0.28),
-        );
-        ui.painter().rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(left, row.top() + 32.0),
-                egui::vec2((width * 0.18).min(140.0), 7.0),
-            ),
-            3.0,
-            palette.secondary.gamma_multiply(0.20),
-        );
-    }
+    let time = ui.input(|input| input.time);
+    crate::widgets::draw_page_skeleton(
+        ui,
+        palette,
+        crate::widgets::PageSkeleton::TableOnly,
+        time,
+        reduced_motion,
+    );
 }
 
 /// Renders the transient notice stack (bottom-left toasts).

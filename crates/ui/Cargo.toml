@@ -26,6 +26,10 @@ chrono.workspace = true
 qrcode.workspace = true
 open.workspace = true
 reqwest.workspace = true
+# fastframe-update v0.17.1 exposes a reqwest 0.12 ClientBuilder. Keep this
+# compatibility dependency isolated to its updater transport.
+reqwest-updater = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots", "system-proxy"] }
+hex.workspace = true
 tokio.workspace = true
 url.workspace = true
 

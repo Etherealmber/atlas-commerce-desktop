@@ -4,11 +4,107 @@ use crate::dialogs::{Confirm, ConfirmAction};
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
 use crate::theme::Palette;
-use crate::widgets::{icon, secondary_button};
+use crate::widgets::secondary_button;
 use crate::{t, widgets};
 use egui::{Align, Layout, RichText, Sense, Vec2, vec2};
 
-const PROFILE_MENU_WIDTH: f32 = 248.0;
+const PROFILE_MENU_WIDTH: f32 = 296.0;
+
+#[derive(Clone, Copy, Default)]
+struct DockScroll {
+    offset: f32,
+    compact: bool,
+}
+
+fn route_scroll_id(route: Route) -> egui::Id {
+    egui::Id::new(("shell-dock-scroll", format!("{route:?}")))
+}
+
+fn update_dock_scroll(mut state: DockScroll, offset: f32, menu_open: bool) -> DockScroll {
+    let offset = offset.max(0.0);
+    if offset <= 140.0 || offset < state.offset - 0.5 {
+        state.compact = false;
+    } else if offset > state.offset + 0.5 && !menu_open {
+        state.compact = true;
+    }
+    state.offset = offset;
+    state
+}
+
+pub(super) fn record_scroll(app: &AtlasApp, ctx: &egui::Context, offset: f32) {
+    let Screen::Shell(route) = app.screen else {
+        return;
+    };
+    let id = route_scroll_id(route);
+    let menu_open = app.profile_menu_open
+        || ctx.data(|d| {
+            d.get_temp::<bool>(egui::Id::new("notification-popover-open"))
+                .unwrap_or(false)
+        });
+    ctx.data_mut(|d| {
+        let previous = d.get_temp::<DockScroll>(id).unwrap_or_default();
+        d.insert_temp(id, update_dock_scroll(previous, offset, menu_open));
+    });
+}
+
+fn detail_back_available(app: &AtlasApp, route: Route) -> bool {
+    match route {
+        Route::Products => app
+            .stock_history
+            .as_ref()
+            .is_some_and(|history| history.full),
+        Route::Sales => app.invoice_detail_id.is_some() && !app.quick_sale_open,
+        Route::Clients => app.client_report_id.is_some(),
+        Route::Employees => app.employee_situation_id.is_some(),
+        Route::Expenses => app.finance_report_open || app.bills_open,
+        _ => false,
+    }
+}
+
+fn back_to_parent(app: &mut AtlasApp, route: Route) {
+    match route {
+        Route::Products if detail_back_available(app, route) => app.stock_history = None,
+        Route::Sales if detail_back_available(app, route) => {
+            app.invoice_detail_id = None;
+            app.invoice_detail = Default::default();
+        }
+        Route::Clients if detail_back_available(app, route) => {
+            app.client_report_id = None;
+            app.client_report = Default::default();
+        }
+        Route::Employees if detail_back_available(app, route) => {
+            app.employee_situation_id = None;
+            app.employee_situation = Default::default();
+        }
+        Route::Expenses if detail_back_available(app, route) => {
+            app.finance_report_open = false;
+            app.bills_open = false;
+        }
+        _ => {
+            app.go_back();
+        }
+    }
+}
+
+fn dock_title(app: &AtlasApp, route: Route) -> String {
+    let source = match route {
+        Route::Products if app.stock_history.as_ref().is_some_and(|h| h.full) => {
+            Some("Stock history")
+        }
+        Route::Sales if app.quick_sale_open => Some("Quick sale"),
+        Route::Sales if app.quotes_open => Some("Quotes"),
+        Route::Sales if app.receipts_open => Some("Receipts"),
+        Route::Sales if app.refunds_open => Some("Reimbursements"),
+        Route::Sales => Some("Sales invoices"),
+        Route::Expenses if app.finance_report_open => Some("Reports and closing"),
+        Route::Expenses if app.bills_open => Some("Purchase invoices"),
+        _ => None,
+    };
+    source.map_or_else(
+        || route_meta(app.locale, route).1,
+        |label| crate::i18n::gettext(app.locale, label).into_owned(),
+    )
+}
 
 pub(super) fn draw_titlebar(
     app: &mut AtlasApp,
@@ -16,194 +112,227 @@ pub(super) fn draw_titlebar(
     ctx: &egui::Context,
     palette: &Palette,
 ) {
-    // The top panel already owns a TITLEBAR_HEIGHT strip; paint into it.
     let rect = ui.available_rect_before_wrap();
     ui.allocate_exact_size(rect.size(), Sense::hover());
     if fastframe_titlebar::enabled() {
         fastframe_titlebar::drag(ui, rect);
     }
     let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
-    let left_inset = footprint.left.max(12.0);
-    let right_inset = footprint.right.max(120.0);
-
-    // Compact pane toggle stays in the caption row; navigation state is
-    // window-local and can always be overridden by the user.
-    let brand_width = 220.0_f32.min((rect.width() * 0.30).max(80.0));
-    let brand = egui::Rect::from_min_size(
-        egui::pos2(rect.left() + left_inset, rect.top()),
-        egui::vec2(brand_width, rect.height()),
-    );
-    widgets::overlay_at(ui, brand, |ui| {
-        ui.horizontal_centered(|ui| {
-            let toggle = widgets::icon_circle_button(ui, palette, Icon::PanelLeft, true)
-                .on_hover_text(t!(app.locale, "Toggle sidebar"));
-            if toggle.clicked() {
-                let id = egui::Id::new("rail-collapsed");
-                let initial =
-                    ctx.input(|input| input.viewport_rect().width()) < RAIL_COLLAPSE_BELOW;
-                ctx.data_mut(|data| {
-                    let collapsed = data.get_temp::<bool>(id).unwrap_or(initial);
-                    data.insert_temp(id, !collapsed);
-                });
-            }
-            if let Screen::Shell(route) = app.screen {
-                let (_, title) = route_meta(app.locale, route);
-                ui.label(RichText::new(title).color(palette.text).strong().size(14.0));
-            }
-        });
+    let left = rect.left() + footprint.left.max(8.0);
+    let right = (rect.right() - footprint.right.max(120.0) - 8.0).max(left);
+    let available = (right - left).max(1.0);
+    let route = match app.screen {
+        Screen::Shell(route) => route,
+        _ => Route::Dashboard,
+    };
+    let title = dock_title(app, route);
+    let title_width = ui
+        .painter()
+        .layout_no_wrap(title.clone(), crate::fonts::semibold(14.0), palette.text)
+        .size()
+        .x
+        .min(180.0);
+    let notifications_open = ctx.data(|d| {
+        d.get_temp::<bool>(egui::Id::new("notification-popover-open"))
+            .unwrap_or(false)
     });
-    let strip = egui::Rect::from_min_max(
-        egui::pos2(rect.left() + left_inset + brand_width, rect.top()),
-        egui::pos2(rect.right() - right_inset - 8.0, rect.bottom()),
+    let hover = ctx
+        .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("dock-last-rect")))
+        .is_some_and(|last| {
+            ctx.input(|i| i.pointer.hover_pos())
+                .is_some_and(|pos| last.contains(pos))
+        });
+    let scroll = ctx
+        .data(|d| d.get_temp::<DockScroll>(route_scroll_id(route)))
+        .unwrap_or_default();
+    let focus_ids = ctx
+        .data(|d| d.get_temp::<Vec<egui::Id>>(egui::Id::new("dock-focus-ids")))
+        .unwrap_or_default();
+    let focused = ctx.memory(|memory| memory.focused().is_some_and(|id| focus_ids.contains(&id)));
+    let compact =
+        scroll.compact && !hover && !focused && !app.profile_menu_open && !notifications_open;
+    let t = if app.settings.reduced_motion {
+        if compact { 1.0 } else { 0.0 }
+    } else {
+        ctx.animate_bool_with_time_and_easing(
+            egui::Id::new("dock-compact-animation"),
+            compact,
+            crate::motion::duration(crate::motion::FAST, false),
+            crate::motion::standard,
+        )
+    };
+    let show_extras = available >= 330.0;
+    let show_back = (available >= 280.0 && detail_back_available(app, route))
+        || (available >= 430.0 && !app.nav_back.is_empty());
+    let icon_count = 3.0 + if show_extras { 2.0 } else { 0.0 } + if show_back { 1.0 } else { 0.0 };
+    let full_width = (icon_count * 48.0 + title_width + 32.0).min(available);
+    let compact_width = (title_width + 38.0).min(available).max(1.0);
+    let width = full_width + (compact_width - full_width) * t;
+    let dock = egui::Rect::from_center_size(
+        egui::pos2((left + right) * 0.5, rect.center().y),
+        vec2(width, 48.0 * (1.0 - 0.06 * t)),
     );
-
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("dock-last-rect"), dock));
+    ui.painter().rect_filled(
+        dock.translate(vec2(0.0, 2.0)),
+        255.0,
+        egui::Color32::from_black_alpha(if palette.dark { 35 } else { 16 }),
+    );
+    ui.painter().rect_filled(dock, 255.0, palette.panel);
+    ui.painter().rect_stroke(
+        dock,
+        255.0,
+        egui::Stroke::new(1.0, palette.outline),
+        egui::StrokeKind::Inside,
+    );
     let mut avatar_rect = egui::Rect::NOTHING;
     let mut bell_rect = egui::Rect::NOTHING;
-    widgets::overlay_at(ui, strip, |ui| {
-        // Right-to-left layout: the action cluster is placed against the
-        // caption buttons first, the search pill fills whatever remains.
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-
-            let initial = app
-                .session
-                .as_ref()
-                .and_then(|session| {
-                    if session.display_name.is_empty() {
-                        session.username.chars().next()
-                    } else {
-                        session.display_name.chars().next()
-                    }
-                })
-                .unwrap_or('A')
-                .to_uppercase()
-                .collect::<String>();
-            let avatar_url = app.avatar_texture_uri.as_deref();
-            // Fallback disk uses the primary accent so the initials stay
-            // readable in both themes: paper-white disk with near-black ink
-            // in dark mode, the inverse in light mode. The account menu the
-            // avatar opens already carries the Settings entry, so no
-            // separate gear button is shown here.
-            let avatar = widgets::avatar(
-                ui,
-                avatar_url,
-                &initial,
-                crate::theme::TARGET_MIN_HEIGHT,
-                palette.accent,
-                palette.on_accent,
-                palette.outline,
-            );
-            avatar_rect = avatar.rect;
-            if avatar.clicked() {
-                app.profile_menu_open = !app.profile_menu_open;
-            }
-
-            // An available release is visible from every screen: the icon
-            // opens the update, and a dot means a copy is already staged and
-            // only needs a restart.
-            if app.update.progress.is_none()
-                && (app.update.last_manifest.is_some() || app.update.ready_version.is_some())
-            {
-                let update = widgets::icon_circle_button(ui, palette, Icon::Download, true);
-                if app.update.ready_version.is_some() {
-                    paint_update_dot(ui, &update, palette);
-                }
-                let tooltip = match &app.update.ready_version {
-                    Some(version) => format!(
-                        "{} · v{version}",
-                        t!(app.locale, "Update ready — restart to install")
-                    ),
-                    None => format!(
-                        "{} · v{}",
-                        t!(app.locale, "Update available"),
-                        app.update
-                            .last_manifest
-                            .as_ref()
-                            .map(|manifest| manifest.version.as_str())
-                            .unwrap_or("—")
-                    ),
-                };
-                let update = update.on_hover_text(tooltip);
-                if update.clicked() {
-                    // Reuses the staged copy when one exists; otherwise this
-                    // starts the verified download and then the hand-off.
-                    app.start_update_download();
-                }
-            }
-
-            if app.role_policy().allows_route(Route::Notifications) {
-                let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
-                bell_rect = bell.rect;
-                let alert_count = app.nav_badges.data.as_ref().map_or(0, |badges| {
-                    badges.products_low + badges.invoices_unpaid + badges.vr_open
-                });
-                if alert_count > 0 {
-                    paint_titlebar_badge(ui, &bell, palette, alert_count);
-                }
-                if bell.clicked() {
-                    let id = egui::Id::new("notification-popover-open");
-                    let open = ctx.data_mut(|data| {
-                        let next = !data.get_temp::<bool>(id).unwrap_or(false);
-                        data.insert_temp(id, next);
-                        next
+    let mut focus_ids = Vec::new();
+    widgets::overlay_at(ui, dock.shrink2(vec2(6.0, 0.0)), |ui| {
+        ui.set_clip_rect(ui.clip_rect().intersect(dock));
+        ui.horizontal_centered(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            if t < 0.25 {
+                let sidebar = widgets::icon_circle_button(ui, palette, Icon::PanelLeft, true)
+                    .on_hover_text(t!(app.locale, "Toggle sidebar"));
+                focus_ids.push(sidebar.id);
+                if sidebar.clicked() {
+                    let id = egui::Id::new("rail-collapsed");
+                    let initial = ctx.input(|i| i.viewport_rect().width()) < RAIL_COLLAPSE_BELOW;
+                    ctx.data_mut(|d| {
+                        let was = d.get_temp::<bool>(id).unwrap_or(initial);
+                        d.insert_temp(id, !was);
                     });
-                    app.profile_menu_open = false;
-                    if open {
-                        let interval =
-                            std::time::Duration::from_secs(app.settings.poll_interval_secs.max(15));
-                        if !app.alerts.loading && app.alerts.stale_for(interval) {
-                            app.load_alerts();
-                        }
-                        if !app.nav_badges.loading && app.nav_badges.stale_for(interval) {
-                            app.load_nav_badges();
-                        }
+                }
+                if show_back {
+                    let back = widgets::icon_circle_button(ui, palette, Icon::ArrowLeft, true)
+                        .on_hover_text(t!(app.locale, "Back"));
+                    focus_ids.push(back.id);
+                    if back.clicked() {
+                        back_to_parent(app, route);
                     }
                 }
             }
-            let theme_button = widgets::icon_circle_button(
-                ui,
-                palette,
-                if palette.dark { Icon::Sun } else { Icon::Moon },
-                true,
-            )
-            .on_hover_text(t!(app.locale, "Toggle theme"));
-            if theme_button.clicked() {
-                app.settings.theme = if palette.dark {
-                    atlas_core::settings::ThemeMode::Light
-                } else {
-                    atlas_core::settings::ThemeMode::Dark
-                };
-                app.save_settings();
-                ctx.request_repaint();
+            let title_space = if t < 0.25 {
+                (width - icon_count * 48.0 - 20.0).max(20.0)
+            } else {
+                (width - 18.0).max(1.0)
+            };
+            let title_button =
+                egui::Button::new(RichText::new(title).strong().size(14.0).color(palette.text))
+                    .frame(false)
+                    .min_size(vec2(title_space, 38.0));
+            let title_response = ui.add_sized(vec2(title_space, 38.0), title_button);
+            focus_ids.push(title_response.id);
+            if title_response.clicked() {
+                ctx.data_mut(|d| {
+                    let id = route_scroll_id(route);
+                    let mut state = d.get_temp::<DockScroll>(id).unwrap_or_default();
+                    state.compact = false;
+                    d.insert_temp(id, state);
+                });
             }
-
-            // While a release is downloading, surface a live progress pill
-            // next to the bell instead of hiding the transfer on Settings.
-            if let Some((downloaded, total)) = app.update.progress {
-                draw_update_pill(ui, app, palette, downloaded, total);
-                ui.add_space(6.0);
+            if t < 0.25 {
+                let search = widgets::icon_circle_button(ui, palette, Icon::Search, true)
+                    .on_hover_text("Ctrl+K");
+                focus_ids.push(search.id);
+                if search.clicked() {
+                    app.open_palette();
+                }
+                if show_extras {
+                    let theme = widgets::icon_circle_button(
+                        ui,
+                        palette,
+                        if palette.dark { Icon::Sun } else { Icon::Moon },
+                        true,
+                    )
+                    .on_hover_text(t!(app.locale, "Toggle theme"));
+                    focus_ids.push(theme.id);
+                    if theme.clicked() {
+                        app.settings.theme = if palette.dark {
+                            atlas_core::settings::ThemeMode::Light
+                        } else {
+                            atlas_core::settings::ThemeMode::Dark
+                        };
+                        app.save_settings();
+                        ctx.request_repaint();
+                    }
+                    if app.role_policy().allows_route(Route::Notifications) {
+                        let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                        focus_ids.push(bell.id);
+                        bell_rect = bell.rect;
+                        let count = app.nav_badges.data.as_ref().map_or(0, |b| {
+                            b.actions_pending
+                                .max(0)
+                                .saturating_add(b.employees_pay_due.max(0))
+                                .saturating_add(b.invoices_unpaid.max(0))
+                                .saturating_add(b.products_low.max(0))
+                        });
+                        if count > 0 {
+                            paint_titlebar_badge(ui, &bell, palette, count);
+                        }
+                        if bell.clicked() {
+                            let id = egui::Id::new("notification-popover-open");
+                            let open = ctx.data_mut(|d| {
+                                let next = !d.get_temp::<bool>(id).unwrap_or(false);
+                                d.insert_temp(id, next);
+                                next
+                            });
+                            app.profile_menu_open = false;
+                            if open {
+                                let interval = std::time::Duration::from_secs(
+                                    app.settings.poll_interval_secs.max(15),
+                                );
+                                if !app.alerts.loading && app.alerts.stale_for(interval) {
+                                    app.load_alerts();
+                                }
+                                if !app.nav_badges.loading && app.nav_badges.stale_for(interval) {
+                                    app.load_nav_badges();
+                                }
+                            }
+                        }
+                    }
+                }
+                let initial = app
+                    .session
+                    .as_ref()
+                    .and_then(|s| {
+                        if s.display_name.is_empty() {
+                            s.username.chars().next()
+                        } else {
+                            s.display_name.chars().next()
+                        }
+                    })
+                    .unwrap_or('A')
+                    .to_uppercase()
+                    .collect::<String>();
+                let avatar = widgets::avatar(
+                    ui,
+                    app.avatar_texture_uri.as_deref(),
+                    &initial,
+                    36.0,
+                    palette.accent,
+                    palette.on_accent,
+                    palette.outline,
+                );
+                focus_ids.push(avatar.id);
+                avatar_rect = avatar.rect;
+                if avatar.clicked() {
+                    app.profile_menu_open = !app.profile_menu_open;
+                    ctx.data_mut(|d| {
+                        d.insert_temp(egui::Id::new("notification-popover-open"), false)
+                    });
+                }
             }
-
-            ui.add_space(8.0);
-
-            // The pill takes the room left by the action cluster and the
-            // navigation arrows, clamped to a readable range.
-            let search_width = ui.available_width().clamp(80.0, 260.0);
-            draw_search_pill(app, ui, palette, search_width);
         });
     });
-
-    if app.profile_menu_open {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("dock-focus-ids"), focus_ids));
+    if app.profile_menu_open && avatar_rect != egui::Rect::NOTHING {
         draw_profile_menu(app, ctx, palette, &avatar_rect);
     }
-    if ctx.data(|data| {
-        data.get_temp::<bool>(egui::Id::new("notification-popover-open"))
-            .unwrap_or(false)
-    }) && bell_rect != egui::Rect::NOTHING
-    {
+    if notifications_open && bell_rect != egui::Rect::NOTHING {
         draw_notifications_popover(app, ctx, palette, bell_rect);
     }
-
     if fastframe_titlebar::enabled() {
         let style = fastframe_titlebar::Style {
             icon: if cfg!(target_os = "linux") {
@@ -227,8 +356,8 @@ pub(super) fn draw_titlebar(
         widgets::overlay_at(
             ui,
             egui::Rect::from_min_size(
-                egui::pos2(rect.right() - footprint.right - 4.0, rect.top()),
-                vec2(right_inset, TITLEBAR_HEIGHT),
+                egui::pos2(rect.right() - footprint.right.max(120.0), rect.top()),
+                vec2(footprint.right.max(120.0), TITLEBAR_HEIGHT),
             ),
             |ui| {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -239,7 +368,8 @@ pub(super) fn draw_titlebar(
     }
 }
 
-/// Recognize page shortcuts; other text starts a business search.
+/// Recognize page shortcuts.
+#[cfg(test)]
 pub(super) fn search_destination(query: &str) -> Option<Route> {
     match crate::shortcuts::normalize(query.trim()).as_str() {
         "facture" | "factures" | "invoice" | "invoices" | "ventes" | "sales" => Some(Route::Sales),
@@ -253,49 +383,10 @@ pub(super) fn search_destination(query: &str) -> Option<Route> {
     }
 }
 
-/// Search offers page shortcuts and searches business data on Enter.
-fn draw_search_pill(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, width: f32) {
-    egui::Frame::NONE
-        .fill(palette.surface)
-        .stroke(egui::Stroke::new(1.0, palette.outline))
-        .corner_radius(999.0)
-        .inner_margin(egui::Margin::symmetric(14, 0))
-        .show(ui, |ui| {
-            ui.set_height(crate::theme::TARGET_MIN_HEIGHT);
-            ui.allocate_ui_with_layout(
-                vec2(width, crate::theme::TARGET_MIN_HEIGHT),
-                Layout::left_to_right(Align::Center),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    let search = widgets::icon_circle_button(ui, palette, Icon::Search, true)
-                        .on_hover_text(t!(app.locale, "Search"));
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut app.top_search)
-                            .id(egui::Id::new("titlebar-search"))
-                            .frame(egui::Frame::NONE)
-                            .hint_text(t!(app.locale, "Search pages or business data…"))
-                            .desired_width((width - 60.0).max(30.0))
-                            .clip_text(true),
-                    );
-                    let enter = response.lost_focus()
-                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                    if (enter || search.clicked()) && !app.top_search.trim().is_empty() {
-                        let query = app.top_search.trim().to_owned();
-                        if let Some(route) = search_destination(&query) {
-                            app.go(route);
-                        } else {
-                            app.search_business(query);
-                        }
-                    }
-                },
-            );
-        });
-}
-
 /// Small accent counter at a title-bar button's top-right corner.
 fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Palette, count: i64) {
-    let text = if count > 9 {
-        "9+".to_owned()
+    let text = if count > 99 {
+        "99+".to_owned()
     } else {
         count.to_string()
     };
@@ -317,71 +408,6 @@ fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Pa
         galley,
         palette.on_badge,
     );
-}
-
-/// A small accent dot on the update icon: a verified copy is staged and the
-/// next restart installs it.
-fn paint_update_dot(ui: &egui::Ui, response: &egui::Response, palette: &Palette) {
-    let rect = response.rect;
-    let center = egui::pos2(rect.right() - 3.0, rect.top() + 3.0);
-    ui.painter().circle_filled(center, 4.0, palette.accent);
-}
-
-/// Compact live download indicator shown beside the notification bell while
-/// a release is being fetched, so the transfer never hides on Settings.
-fn draw_update_pill(
-    ui: &mut egui::Ui,
-    app: &AtlasApp,
-    palette: &Palette,
-    downloaded: u64,
-    total: u64,
-) {
-    let fraction = if total > 0 {
-        (downloaded as f32 / total as f32).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    let percent = (fraction * 100.0).round() as u8;
-    let mega = |bytes: u64| format!("{:.1} Mo", bytes as f64 / 1_048_576.0);
-    let tooltip = format!(
-        "{} — {} / {}",
-        t!(app.locale, "Downloading update"),
-        mega(downloaded),
-        mega(total.max(downloaded))
-    );
-    let response = egui::Frame::NONE
-        .fill(palette.surface)
-        .stroke(egui::Stroke::new(1.0, palette.outline))
-        .corner_radius(999.0)
-        .inner_margin(egui::Margin::symmetric(10, 0))
-        .show(ui, |ui| {
-            ui.set_height(crate::theme::TARGET_MIN_HEIGHT);
-            ui.horizontal_centered(|ui| {
-                ui.spacing_mut().item_spacing.x = 7.0;
-                icon(ui, Icon::Download, palette.accent, 14.0);
-                ui.label(
-                    RichText::new(format!("{percent} %"))
-                        .color(palette.text)
-                        .strong()
-                        .size(12.0),
-                );
-                let (track, _) = ui.allocate_exact_size(vec2(56.0, 4.0), Sense::hover());
-                ui.painter()
-                    .rect_filled(track, 999.0, palette.surface_active);
-                let fill_rect = egui::Rect::from_min_size(
-                    track.min,
-                    vec2(track.width() * fraction, track.height()),
-                );
-                ui.painter().rect_filled(fill_rect, 999.0, palette.accent);
-            });
-        })
-        .response;
-    let stage = app.update.stage.trim();
-    if stage.is_empty() {
-        response.on_hover_text(tooltip);
-    } else {
-        response.on_hover_text(format!("{tooltip}\n{stage}"));
-    }
 }
 
 /// Fetch alerts only when opened, never as a background fan-out.
@@ -412,10 +438,10 @@ fn draw_notifications_popover(
                         super::super::centered_spinner(ui, palette);
                     } else if let Some(error) = &app.alerts.error {
                         widgets::error_banner(ui, error, palette);
-                        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+                        if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                             app.load_alerts();
                         }
-                    } else if let Some(alerts) = app.alerts.data.as_ref() {
+                    } else if let Some(alerts) = app.alerts.data.clone() {
                         if alerts.is_empty() {
                             ui.add_space(20.0);
                             ui.vertical_centered(|ui| {
@@ -427,7 +453,41 @@ fn draw_notifications_popover(
                             ui.add_space(20.0);
                         } else {
                             for alert in alerts.iter().take(4) {
-                                ui.label(RichText::new(&alert.label).color(palette.text));
+                                let destination = alert
+                                    .href
+                                    .as_deref()
+                                    .and_then(super::super::notifications::alert_destination)
+                                    .filter(|target| {
+                                        app.role_policy().allows_route(target.route())
+                                    });
+                                let tint = match alert.severity.as_deref() {
+                                    Some("high") => palette.finance_danger,
+                                    Some("medium") => palette.finance_warning,
+                                    _ => palette.finance_info,
+                                };
+                                let row = ui.horizontal(|ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    let (dot, _) =
+                                        ui.allocate_exact_size(vec2(14.0, 24.0), Sense::hover());
+                                    ui.painter().circle_filled(dot.center(), 3.5, tint);
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&alert.label).color(palette.text),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                                let response = row.response.interact(Sense::click());
+                                let clicked = response.clicked();
+                                if destination.is_some() {
+                                    response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                                }
+                                if let Some(target) = destination
+                                    && clicked
+                                {
+                                    ctx.data_mut(|data| data.insert_temp(id, false));
+                                    super::super::notifications::open_alert(app, target);
+                                }
                                 ui.separator();
                             }
                         }
@@ -504,7 +564,7 @@ fn draw_profile_menu(
                                 ui.label(
                                     RichText::new(format!(
                                         "{} · {}",
-                                        session.role,
+                                        super::super::settings::role_label(app),
                                         atlas_core::ServerUrl::host(&session.server_url)
                                     ))
                                     .color(palette.dim)
@@ -544,7 +604,7 @@ fn draw_profile_menu(
                         ui,
                         palette,
                         Icon::ExternalLink,
-                        t!(app.locale, "What's new"),
+                        t!(app.locale, "What's new and updates"),
                     )
                     .clicked();
                     if whats_new {
@@ -638,3 +698,28 @@ fn menu_row(
 }
 
 // ── Left rail ──────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod dock_tests {
+    use super::{DockScroll, update_dock_scroll};
+
+    #[test]
+    fn dock_compacts_on_downward_scroll_and_expands_on_upward_scroll() {
+        let state = update_dock_scroll(DockScroll::default(), 100.0, false);
+        assert!(!state.compact);
+        let state = update_dock_scroll(state, 150.0, false);
+        assert!(state.compact);
+        let state = update_dock_scroll(state, 149.0, false);
+        assert!(!state.compact);
+    }
+
+    #[test]
+    fn open_menu_prevents_compacting_and_top_always_expands() {
+        let state = update_dock_scroll(DockScroll::default(), 160.0, true);
+        assert!(!state.compact);
+        let state = update_dock_scroll(state, 180.0, false);
+        assert!(state.compact);
+        let state = update_dock_scroll(state, 140.0, false);
+        assert!(!state.compact);
+    }
+}

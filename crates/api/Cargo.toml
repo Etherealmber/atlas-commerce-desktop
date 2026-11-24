@@ -10,11 +10,13 @@ description = "Async reqwest client for the Atlas Commerce Cloudflare Worker RES
 
 [dependencies]
 atlas-core.workspace = true
+atlas-auth-core = { path = "../auth-core" }
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 reqwest.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -105,18 +105,40 @@ fn config_for(locale: Locale) -> Config {
     }
 }
 
-/// The window and taskbar icon: the same monochrome brand mark the tray
-/// uses, as a 256 px RGBA bitmap. Windows scales it for the title bar,
-/// taskbar and Alt+Tab; the embedded `.ico` resource (build.rs) is what
-/// Explorer shows for the file itself.
+/// Startup icon for window managers, before the app theme is known.
 #[must_use]
 pub fn window_icon() -> egui::IconData {
+    window_icon_for_theme(false)
+}
+
+/// Window icon with a contrasting backing, so it stays visible on both light
+/// and dark taskbars even when the OS taskbar differs from the app theme.
+#[must_use]
+pub fn window_icon_for_theme(dark: bool) -> egui::IconData {
     const SIZE: usize = 256;
-    let mut rgba = draw_icon(SIZE);
-    // The tray icon is recoloured by the OS; the window icon is not.
-    // Use the dark brand ink with the same transparent coverage mask.
-    for pixel in rgba.as_chunks_mut::<4>().0 {
-        pixel[..3].fill(10);
+    const MARK: usize = 180;
+    const OFFSET: usize = (SIZE - MARK) / 2;
+    let mark = draw_icon(MARK);
+    let foreground: u8 = if dark { 250 } else { 10 };
+    let background: u8 = if dark { 24 } else { 250 };
+    let mut rgba = vec![0; SIZE * SIZE * 4];
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let dx = x as f32 + 0.5 - SIZE as f32 / 2.0;
+            let dy = y as f32 + 0.5 - SIZE as f32 / 2.0;
+            let coverage = (119.0 - (dx * dx + dy * dy).sqrt()).clamp(0.0, 1.0);
+            let alpha =
+                if (OFFSET..OFFSET + MARK).contains(&x) && (OFFSET..OFFSET + MARK).contains(&y) {
+                    mark[((y - OFFSET) * MARK + x - OFFSET) * 4 + 3]
+                } else {
+                    0
+                };
+            let mix = u16::from(alpha);
+            let value =
+                ((u16::from(foreground) * mix + u16::from(background) * (255 - mix)) / 255) as u8;
+            let pixel = &mut rgba[(y * SIZE + x) * 4..][..4];
+            pixel.copy_from_slice(&[value, value, value, (coverage * 255.0) as u8]);
+        }
     }
     egui::IconData {
         rgba,
@@ -171,11 +193,16 @@ pub fn draw_icon(size: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn window_icon_is_a_transparent_dark_mark() {
-        let icon = super::window_icon();
-        let pixels = icon.rgba.as_chunks::<4>().0;
-        assert_eq!(pixels[0][3], 0);
-        assert!(pixels.iter().any(|pixel| pixel[3] > 200 && pixel[0] == 10));
+    fn window_icons_remain_visible_and_follow_theme() {
+        let light = super::window_icon_for_theme(false);
+        let dark = super::window_icon_for_theme(true);
+        assert_eq!(light.rgba[3], 0);
+        assert_eq!(dark.rgba[3], 0);
+        let light_pixels = light.rgba.as_chunks::<4>().0;
+        let dark_pixels = dark.rgba.as_chunks::<4>().0;
+        assert!(light_pixels.iter().any(|p| p[3] == 255 && p[0] == 10));
+        assert!(dark_pixels.iter().any(|p| p[3] == 255 && p[0] == 250));
+        assert_eq!(light_pixels[128 * 256 + 128][3], 255);
     }
 
     #[test]

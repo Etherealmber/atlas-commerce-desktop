@@ -16,6 +16,8 @@ import argparse
 import re
 import subprocess
 import pathlib
+import os
+from urllib.parse import quote
 
 NOISE_RES = [
     r"^ci:\s*build log",
@@ -80,6 +82,8 @@ def previous_tag(version: str) -> str | None:
         tag = tag.strip()
         if not tag or norm_version(tag) == norm_version(version):
             continue
+        if subprocess.run(["git", "merge-base", "--is-ancestor", tag, "HEAD"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+            continue
         if (
             subprocess.run(
                 ["git", "rev-parse", "--verify", f"{tag}^{{commit}}"],
@@ -117,35 +121,87 @@ def commit_items(version: str) -> list[str]:
     return items
 
 
+def category(subject: str) -> str:
+    """Use only explicit conventional prefixes; never invent feature claims."""
+    match = re.match(r"^(feat|fix|perf|security)(?:\([^)]+\))?!?:", subject, re.I)
+    return {"feat": "Nouveautés", "fix": "Corrections", "perf": "Améliorations", "security": "Sécurité"}.get(match.group(1).lower(), "Autres changements") if match else "Autres changements"
+
+
+def change_groups(version: str) -> dict[str, list[str]]:
+    prev = previous_tag(version)
+    rev_range = f"{prev}..HEAD" if prev else "HEAD"
+    raw = sh("git", "log", rev_range, "--no-merges", "--format=%s%x1e")
+    groups: dict[str, list[str]] = {}
+    seen: set[str] = set()
+    for raw_subject in raw.split("\x1e"):
+        raw_subject = raw_subject.strip()
+        if is_noise(raw_subject):
+            continue
+        item = PR_RE.sub("", PREFIX_RE.sub("", raw_subject)).strip()
+        if item:
+            item = item[0].upper() + item[1:]
+        accepted: list[str] = []
+        accept_item(accepted, seen, item)
+        if accepted:
+            groups.setdefault(category(raw_subject), []).extend(accepted)
+    return groups
+
+
+def render_body(version: str, custom: str, repo: str, asset_dir: pathlib.Path | None) -> str:
+    tag = f"v{norm_version(version)}"
+    # Repository must be owner/name; do not put untrusted strings in links.
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        raise ValueError("invalid repository")
+    base = f"https://github.com/{repo}"
+    lines = [f"## Atlas Commerce Desktop `{tag}`", ""]
+    if custom:
+        lines += [custom, ""]
+    else:
+        lines += [f"Voici les changements inclus dans Atlas Commerce Desktop {tag}.", ""]
+    # List only assets actually produced for this draft release. Do not guess
+    # filenames or create links to optional formats that did not build.
+    assets = sorted(p.name for p in asset_dir.iterdir() if p.is_file()) if asset_dir and asset_dir.is_dir() else []
+    downloadable = [n for n in assets if n.startswith("atlas-commerce-desktop-") and n.endswith((".dmg", ".exe", ".msi", ".zip", ".tar.gz", ".AppImage")) and not n.endswith("-source.tar.gz")]
+    if downloadable:
+        links = [f"[{name}]({base}/releases/download/{quote(tag, safe='')}/{quote(name, safe='')})" for name in downloadable]
+        lines += ["**Téléchargements :** " + " · ".join(links), ""]
+    if not custom:
+        groups = change_groups(version)
+        for name in ("Nouveautés", "Corrections", "Améliorations", "Sécurité", "Autres changements"):
+            if groups.get(name):
+                lines += [f"**{name}**", ""]
+                lines += ["- " + line for line in groups[name]]
+                lines.append("")
+        if not groups:
+            lines += ["Aucun changement descriptif disponible dans l’historique.", ""]
+    prev = previous_tag(version)
+    if prev:
+        lines += [f"**Changelog complet :** [{prev}...{tag}]({base}/compare/{quote(prev, safe='')}...{quote(tag, safe='')})", ""]
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("version")
     parser.add_argument("--custom", help="optional file with hand-written notes")
     parser.add_argument("--out-md", required=True)
     parser.add_argument("--out-note", required=True)
+    parser.add_argument("--asset-dir", type=pathlib.Path, help="directory of built release assets")
+    parser.add_argument("--repo", default=os.environ.get("RELEASE_REPO", "Etherealmber/atlas-commerce-desktop"))
     args = parser.parse_args()
-
-    tag = f"v{norm_version(args.version)}"
+    version = norm_version(args.version)
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", version):
+        parser.error("invalid release version")
+    tag = f"v{version}"
     custom = pathlib.Path(args.custom).read_text(encoding="utf-8").strip() if args.custom else ""
     if is_bare_version(custom):
         custom = ""
-
-    if custom:
-        in_app_note = custom.splitlines()[0].strip()
-        if len(in_app_note) > 96:
-            in_app_note = in_app_note[:93].rstrip() + "…"
-        body = f"## Atlas Commerce Desktop `{tag}`\n\n{custom}\n"
-    else:
-        items = commit_items(args.version) or [
-            f"Mise à jour {tag} — améliorations et correctifs."
-        ]
-        in_app_note = f"Mise à jour {tag} — optimisations et correctifs."
-        lines = [f"## Atlas Commerce Desktop `{tag}`", ""]
-        lines.extend(f"- {item}" for item in items[:5])
-        body = "\n".join(lines) + "\n"
-
+    note = custom.splitlines()[0].strip() if custom else f"Mise à jour {tag} — améliorations et correctifs."
+    if len(note) > 96:
+        note = note[:93].rstrip() + "…"
+    body = render_body(version, custom, args.repo, args.asset_dir)
     pathlib.Path(args.out_md).write_text(body, encoding="utf-8")
-    pathlib.Path(args.out_note).write_text(in_app_note, encoding="utf-8")
+    pathlib.Path(args.out_note).write_text(note, encoding="utf-8")
     print(body)
 
 

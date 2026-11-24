@@ -9,7 +9,7 @@ use atlas_core::format::{money, number, short_date};
 use crate::icons::Icon;
 use crate::state::AtlasApp;
 use crate::theme::Palette;
-use crate::widgets::{card, icon, page_title, pill, primary_button};
+use crate::widgets::{card, icon, page_title, pill};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -26,19 +26,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
 fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Dashboard"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(
-                ui,
-                t!(app.locale, "Refresh"),
-                palette,
-                !app.dashboard.loading,
-            ) {
-                app.load_dashboard();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Dashboard"), palette);
     let name = app
         .session
         .as_ref()
@@ -71,7 +59,14 @@ fn draw_dashboard(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.dashboard.loading && app.dashboard.data.is_none() {
-        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+        let time = ui.input(|input| input.time);
+        widgets::draw_page_skeleton(
+            ui,
+            palette,
+            widgets::PageSkeleton::Dashboard,
+            time,
+            app.settings.reduced_motion,
+        );
         return;
     }
 
@@ -363,7 +358,9 @@ fn metric_cards(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette, data: &Das
         (
             Icon::Wallet,
             t!(app.locale, "Current balance").into_owned(),
-            money(data.current_balance, currency),
+            data.current_balance
+                .map(|value| money(value, currency))
+                .unwrap_or_else(|| "—".to_owned()),
             false,
         ),
         (

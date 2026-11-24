@@ -63,21 +63,12 @@ const STATUSES: [(&str, &str); 3] = [
 ];
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    if let Some(id) = app.employee_situation_id {
+        situation_page(app, ui, palette, id);
+        return;
+    }
     ui.add_space(8.0);
-    ui.horizontal_wrapped(|ui| {
-        page_title(ui, t!(app.locale, "Employees"), palette);
-        ui.horizontal_wrapped(|ui| {
-            if primary_button(ui, t!(app.locale, "Add employee"), palette, true) {
-                app.employee_new = Some(NewEmployeeForm::default());
-            }
-            if secondary_button(ui, t!(app.locale, "Print hiring form"), palette) {
-                app.open_printable("/api/employees/form/print", &[]);
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_employees();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Employees"), palette);
     ui.add_space(12.0);
 
     if let Some(error) = app.employees.error.clone() {
@@ -87,11 +78,15 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     toolbar(app, ui, palette);
     ui.add_space(12.0);
-    metrics(app, ui, palette);
-    ui.add_space(12.0);
+    if app.employees.data.is_some() {
+        metrics(app, ui, palette);
+        ui.add_space(12.0);
+    }
 
     if app.employees.loading && app.employees.data.is_none() {
         super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+    } else if app.employees.error.is_some() && app.employees.data.is_none() {
+        // An error is not an empty employee list.
     } else if app
         .employees
         .data
@@ -122,6 +117,37 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             detail(app, ui, palette);
         });
     }
+}
+
+fn situation_page(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, id: i64) {
+    ui.add_space(8.0);
+    ui.horizontal_wrapped(|ui| {
+        page_title(ui, t!(app.locale, "Employee situation"), palette);
+        if secondary_button(ui, t!(app.locale, "Back"), palette) {
+            app.employee_situation_id = None;
+            app.employee_situation = Default::default();
+        }
+        if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
+            app.load_employee_situation(id);
+        }
+        if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
+            app.open_printable(
+                "/api/reports/employee-situation",
+                &[("employee_id", id.to_string())],
+            );
+        }
+    });
+    ui.add_space(12.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        if app.employee_situation.loading {
+            super::centered_spinner(ui, palette);
+        } else if let Some(error) = &app.employee_situation.error {
+            error_banner(ui, error, palette);
+        } else if let Some(report) = &app.employee_situation.data {
+            super::clients::draw_report_blocks(ui, palette, report);
+        }
+    });
 }
 
 pub(super) fn has_dialogs(app: &AtlasApp) -> bool {
@@ -473,10 +499,7 @@ fn detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             app.open_printable(&format!("/api/employees/{}/form/print", employee.id), &[]);
         }
         if secondary_button(ui, t!(app.locale, "Situation"), palette) {
-            app.open_printable(
-                "/api/reports/employee-situation",
-                &[("employee_id", employee.id.to_string())],
-            );
+            app.load_employee_situation(employee.id);
         }
     });
     ui.add_space(8.0);

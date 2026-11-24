@@ -1,6 +1,5 @@
-//! Shared Fluent-inspired controls used by every native screen.
-//! Colours are derived from the current palette so dark, light and the
-//! Windows system accent use the same geometry and accessible states.
+//! Shared controls used by every native screen.
+//! Colours are derived from the current Bento palette in light and dark modes.
 use crate::theme::{self, Palette};
 use egui::{Color32, RichText, Stroke, TextWrapMode};
 
@@ -110,4 +109,67 @@ pub fn danger_button(
         },
         enabled,
     )
+}
+
+/// Throttles manual refresh gestures across buttons and keyboard shortcuts.
+/// Mutation-triggered reloads do not go through this path.
+const REFRESH_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(3);
+
+pub(crate) fn refresh_cooldown_ready(ctx: &egui::Context) -> bool {
+    let id = egui::Id::new("manual-refresh-last-start");
+    ctx.data(|data| data.get_temp::<std::time::Instant>(id))
+        .is_none_or(|at| at.elapsed() >= REFRESH_COOLDOWN)
+}
+
+pub(crate) fn claim_refresh(ctx: &egui::Context) -> bool {
+    if !refresh_cooldown_ready(ctx) {
+        return false;
+    }
+    ctx.data_mut(|data| {
+        data.insert_temp(
+            egui::Id::new("manual-refresh-last-start"),
+            std::time::Instant::now(),
+        )
+    });
+    ctx.request_repaint_after(REFRESH_COOLDOWN);
+    true
+}
+
+pub(crate) fn refresh_button(ui: &mut egui::Ui, text: impl AsRef<str>, palette: &Palette) -> bool {
+    let ready = refresh_cooldown_ready(ui.ctx());
+    let clicked = ui
+        .add_enabled_ui(ready, |ui| secondary_button(ui, text, palette))
+        .inner;
+    clicked && claim_refresh(ui.ctx())
+}
+
+pub(crate) fn primary_refresh_button(
+    ui: &mut egui::Ui,
+    text: impl AsRef<str>,
+    palette: &Palette,
+    enabled: bool,
+) -> bool {
+    let ready = refresh_cooldown_ready(ui.ctx());
+    primary_button(ui, text, palette, enabled && ready) && claim_refresh(ui.ctx())
+}
+
+#[cfg(test)]
+mod cooldown_tests {
+    use super::*;
+
+    #[test]
+    fn manual_refresh_is_throttled_without_affecting_other_contexts() {
+        let first = egui::Context::default();
+        let second = egui::Context::default();
+        assert!(claim_refresh(&first));
+        assert!(!claim_refresh(&first));
+        assert!(claim_refresh(&second));
+        first.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("manual-refresh-last-start"),
+                std::time::Instant::now() - REFRESH_COOLDOWN,
+            )
+        });
+        assert!(claim_refresh(&first));
+    }
 }

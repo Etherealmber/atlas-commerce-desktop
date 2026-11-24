@@ -388,7 +388,7 @@ fn is_inno_install(executable: &std::path::Path) -> bool {
 /// # Errors
 /// When the transport cannot be built.
 pub fn build_updater() -> anyhow::Result<Updater> {
-    let builder = reqwest::blocking::Client::builder();
+    let builder = reqwest_updater::blocking::Client::builder();
     let inno = cfg!(target_os = "windows")
         && std::env::current_exe()
             .ok()

@@ -103,13 +103,18 @@ pub enum Route {
     DeliveryNotes,
     Sales,
     Employees,
+    Attendance,
+    Payroll,
+    InventoryOps,
+    CashShifts,
+    Actions,
     Agent,
     Notifications,
     Settings,
 }
 
 impl Route {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 17] = [
         Self::Dashboard,
         Self::Products,
         Self::Catalog,
@@ -119,6 +124,11 @@ impl Route {
         Self::DeliveryNotes,
         Self::Sales,
         Self::Employees,
+        Self::Attendance,
+        Self::Payroll,
+        Self::InventoryOps,
+        Self::CashShifts,
+        Self::Actions,
         Self::Agent,
         Self::Notifications,
         Self::Settings,
@@ -163,15 +173,27 @@ impl RolePolicy {
             && match route {
                 Route::Products | Route::Settings | Route::Agent => true,
                 Route::Dashboard => !self.stock,
+                Route::Attendance | Route::Payroll => self.admin,
+                Route::CashShifts => self.office,
                 Route::Clients
                 | Route::Vendors
                 | Route::Expenses
                 | Route::DeliveryNotes
                 | Route::Sales
                 | Route::Employees
+                | Route::InventoryOps
+                | Route::Actions
                 | Route::Catalog
                 | Route::Notifications => self.office,
             }
+    }
+
+    pub(crate) fn can_close_cash_shift(self) -> bool {
+        self.admin
+    }
+
+    pub(crate) fn can_write_ledger(self) -> bool {
+        self.admin
     }
 
     pub(crate) fn can_view_reports(self) -> bool {
@@ -255,6 +277,13 @@ pub struct LoginState {
     pub pending_link: Option<VerifyLink>,
 }
 
+/// One shared cooldown for manual and automatic checks, including channel switches.
+pub(crate) const UPDATE_CHECK_COOLDOWN: Duration = Duration::from_secs(60);
+
+pub(crate) fn update_check_cooldown_remaining(elapsed: Duration) -> Duration {
+    UPDATE_CHECK_COOLDOWN.saturating_sub(elapsed)
+}
+
 /// Self-update state.
 #[derive(Default)]
 pub struct UpdateState {
@@ -263,6 +292,7 @@ pub struct UpdateState {
     pub last_manifest: Option<UpdateManifest>,
     pub mandatory: Option<UpdateManifest>,
     pub checking: bool,
+    pub last_check_started: Option<(Instant, bool)>,
     pub job: Option<Job<Result<crate::update::UpdateCheck, String>>>,
     pub progress: Option<(u64, u64)>,
     pub stage: String,
@@ -289,6 +319,8 @@ pub struct UpdateState {
 pub struct ChatMessage {
     pub from_user: bool,
     pub text: String,
+    pub proposals: Vec<serde_json::Value>,
+    pub tools_used: Vec<String>,
 }
 
 #[derive(Default)]
@@ -299,6 +331,9 @@ pub struct AgentState {
     /// Persistent worker-side conversation id for this account.
     pub thread_id: String,
     pub policy: Option<AgentPolicy>,
+    pub history_open: bool,
+    pub history_list: Cache<Vec<AgentThreadSummary>>,
+    pub history_detail: Cache<AgentThread>,
     pub job: Option<Job<Result<AgentReply, ApiError>>>,
     pub job_policy: Option<Job<Result<AgentPolicy, ApiError>>>,
     /// Backoff gate opened once [`Self::job_policy`] has failed, so a failing
@@ -314,7 +349,12 @@ impl AgentState {
     /// Appends a message and trims the oldest entries past the cap, so a
     /// very long single conversation cannot grow memory without a bound.
     pub fn push_message(&mut self, from_user: bool, text: String) {
-        self.messages.push(ChatMessage { from_user, text });
+        self.messages.push(ChatMessage {
+            from_user,
+            text,
+            proposals: Vec::new(),
+            tools_used: Vec::new(),
+        });
         if self.messages.len() > Self::MAX_TRANSCRIPT {
             let excess = self.messages.len() - Self::MAX_TRANSCRIPT;
             self.messages.drain(0..excess);
@@ -373,6 +413,8 @@ pub enum SettingsFocus {
     General,
     Profile,
     Integrations,
+    /// Opens company attendance controls without changing the underlying route.
+    Attendance,
     /// Jumps to the updates/about area (release notes and repository links).
     About,
 }
@@ -418,6 +460,8 @@ pub struct AtlasApp {
     /// per-frame style rebuild while nothing changed (a flicker/recompute
     /// source) and re-applies as soon as any token changes.
     pub applied_palette: Option<Palette>,
+    /// Scale last applied to the current context.
+    pub applied_ui_scale: Option<u16>,
     /// Last reduced-motion value baked into the egui style, so flipping the
     /// setting rebuilds styles even when the palette is unchanged.
     pub applied_reduced_motion: Option<bool>,
@@ -471,6 +515,8 @@ pub struct AtlasApp {
     pub palette_selected: usize,
     /// Section an external entry point (avatar menu) wants to highlight.
     pub settings_focus: SettingsFocus,
+    /// Settings overlay; the current shell route stays intact underneath.
+    pub settings_dialog_open: bool,
 
     // ── auth ──
     pub server_form: ServerSetupForm,
@@ -506,6 +552,8 @@ pub struct AtlasApp {
     /// printable browser URL that must be handed to the OS opener.
     pub report_job: Option<Job<Result<String, ApiError>>>,
     pub(crate) client_report: Cache<crate::client_report::ClientReport>,
+    pub(crate) employee_situation: Cache<crate::client_report::ClientReport>,
+    pub(crate) employee_situation_id: Option<i64>,
     pub(crate) receivables_report: Cache<crate::client_report::ClientReport>,
     pub(crate) receivables_open: bool,
     pub(crate) payables_report: Cache<crate::client_report::ClientReport>,
@@ -537,6 +585,23 @@ pub struct AtlasApp {
     pub vendor_search: String,
     pub selected_vendor: Option<i64>,
     pub employees: Cache<crate::employees::EmployeesList>,
+    pub payroll_runs: Cache<Vec<atlas_api::payroll::PayrollRun>>,
+    pub(crate) payroll_detail: Cache<atlas_api::payroll::PayrollRun>,
+    pub(crate) payroll_settings: Cache<atlas_api::payroll::PayrollSettings>,
+    pub(crate) payroll_selected_id: Option<i64>,
+    pub attendance: Cache<atlas_api::attendance::AttendanceDay>,
+    pub attendance_action: Cache<atlas_api::attendance::AttendanceMutation>,
+    pub inventory_ops: Cache<atlas_api::inventory_ops::InventoryOverview>,
+    pub(crate) inventory_action: Cache<crate::screens::inventory_ops::InventoryAction>,
+    pub(crate) inventory_form: crate::screens::inventory_ops::InventoryForm,
+    pub mobile_actions: Cache<Vec<atlas_api::mobile_actions::MobileAction>>,
+    pub(crate) mobile_action_detail: Cache<atlas_api::mobile_actions::MobileAction>,
+    pub(crate) mobile_action_write: Cache<atlas_api::mobile_actions::MobileAction>,
+    pub(crate) actions_form: crate::screens::actions::ActionsForm,
+    pub cash_shifts: Cache<Vec<atlas_api::cash_shifts::CashShift>>,
+    pub cash_shift_detail: Cache<atlas_api::cash_shifts::CashShiftDetail>,
+    pub(crate) cash_shift_action: Cache<crate::screens::cash_shifts::CashShiftAction>,
+    pub(crate) cash_shift_form: crate::screens::cash_shifts::CashShiftForm,
     pub employee_search: String,
     pub employee_status: String,
     pub employee_category: String,
@@ -547,6 +612,7 @@ pub struct AtlasApp {
     pub employee_resign: Option<EmployeeResignForm>,
     pub(crate) employee_action: Option<Job<Result<crate::employees::Action, ApiError>>>,
     pub expenses: Cache<Vec<Expense>>,
+    pub(crate) ledger_uncertain: bool,
     pub expense_search: String,
     pub(crate) bills: Cache<Vec<crate::client_invoices::Bill>>,
     pub(crate) bills_open: bool,
@@ -574,6 +640,8 @@ pub struct AtlasApp {
     pub refunds_open: bool,
     /// Open the read-only quotes list within Sales.
     pub quotes_open: bool,
+    /// Dedicated quick-sale workspace, independent from invoice history.
+    pub quick_sale_open: bool,
     pub(crate) quote_search: String,
     pub(crate) refund_search: String,
     pub(crate) receipt_search: String,
@@ -710,6 +778,8 @@ impl AtlasApp {
             key_create_job: None,
             report_job: None,
             client_report: Cache::default(),
+            employee_situation: Cache::default(),
+            employee_situation_id: None,
             receivables_report: Cache::default(),
             receivables_open: false,
             payables_report: Cache::default(),
@@ -739,6 +809,7 @@ impl AtlasApp {
             palette_query: String::new(),
             palette_selected: 0,
             settings_focus: SettingsFocus::General,
+            settings_dialog_open: false,
             dashboard: Cache::default(),
             products: Cache::default(),
             product_search: String::new(),
@@ -753,6 +824,23 @@ impl AtlasApp {
             vendor_search: String::new(),
             selected_vendor: None,
             employees: Cache::default(),
+            payroll_runs: Cache::default(),
+            payroll_detail: Cache::default(),
+            payroll_settings: Cache::default(),
+            payroll_selected_id: None,
+            attendance: Cache::default(),
+            attendance_action: Cache::default(),
+            inventory_ops: Cache::default(),
+            inventory_action: Cache::default(),
+            inventory_form: Default::default(),
+            mobile_actions: Cache::default(),
+            mobile_action_detail: Cache::default(),
+            mobile_action_write: Cache::default(),
+            actions_form: Default::default(),
+            cash_shifts: Cache::default(),
+            cash_shift_detail: Cache::default(),
+            cash_shift_action: Cache::default(),
+            cash_shift_form: Default::default(),
             employee_search: String::new(),
             employee_status: "active".to_owned(),
             employee_category: String::new(),
@@ -763,6 +851,7 @@ impl AtlasApp {
             employee_resign: None,
             employee_action: None,
             expenses: Cache::default(),
+            ledger_uncertain: false,
             expense_search: String::new(),
             bills: Cache::default(),
             bills_open: false,
@@ -786,6 +875,7 @@ impl AtlasApp {
             receipts_open: false,
             refunds_open: false,
             quotes_open: false,
+            quick_sale_open: false,
             quote_search: String::new(),
             refund_search: String::new(),
             receipt_search: String::new(),
@@ -814,6 +904,7 @@ impl AtlasApp {
             update_receipt: None,
             last_clear_color: None,
             applied_palette: None,
+            applied_ui_scale: None,
             applied_reduced_motion: None,
             applied_title: None,
             notices: Vec::new(),
@@ -846,12 +937,9 @@ impl AtlasApp {
             atlas_core::settings::ThemeMode::Light => false,
             atlas_core::settings::ThemeMode::System => ctx.theme() == egui::Theme::Dark,
         };
-        let palette = crate::theme::resolve(dark);
-        #[cfg(target_os = "windows")]
-        if let Some(accent) = crate::theme::windows_accent() {
-            return crate::theme::with_system_accent(palette, accent);
-        }
-        palette
+        // Atlas's primary actions stay monochrome in both modes. Windows
+        // material/accessibility policy is handled separately from colors.
+        crate::theme::resolve(dark)
     }
 
     // ── client helpers ───────────────────────────────────────────────────
@@ -936,6 +1024,12 @@ impl AtlasApp {
         }
         if route == Route::Agent {
             self.agent_drawer_open = true;
+            return;
+        }
+        if route == Route::Settings {
+            self.settings_dialog_open = true;
+            self.profile_menu_open = false;
+            self.ensure_route_data(Route::Settings);
             return;
         }
         if let Screen::Shell(current) = self.screen
@@ -1039,7 +1133,45 @@ impl AtlasApp {
             Route::Clients if self.clients.data.is_none() => self.load_clients(),
             Route::Vendors if self.vendors.data.is_none() => self.load_vendors(),
             Route::Employees if self.employees.data.is_none() => self.load_employees(),
-            Route::Expenses if self.expenses.data.is_none() => self.load_expenses(),
+            Route::Payroll
+                if self.payroll_runs.data.is_none()
+                    && !self.payroll_runs.loading
+                    && self.payroll_runs.error.is_none() =>
+            {
+                self.load_payroll()
+            }
+            Route::Attendance if self.attendance.data.is_none() && !self.attendance.loading => {
+                self.load_attendance()
+            }
+            Route::InventoryOps
+                if self.inventory_ops.data.is_none() && !self.inventory_ops.loading =>
+            {
+                self.load_inventory_ops()
+            }
+            Route::Actions
+                if self.mobile_actions.data.is_none()
+                    && !self.mobile_actions.loading
+                    && self.mobile_actions.error.is_none() =>
+            {
+                self.load_mobile_actions()
+            }
+            Route::CashShifts if self.cash_shifts.data.is_none() && !self.cash_shifts.loading => {
+                self.load_cash_shifts()
+            }
+            Route::Expenses => {
+                if self.expenses.data.is_none()
+                    && !self.expenses.loading
+                    && self.expenses.error.is_none()
+                {
+                    self.load_expenses();
+                }
+                if self.dashboard.data.is_none()
+                    && !self.dashboard.loading
+                    && self.dashboard.error.is_none()
+                {
+                    self.load_dashboard();
+                }
+            }
             Route::DeliveryNotes if self.delivery_notes.data.is_none() => {
                 self.load_delivery_notes();
             }
@@ -1109,7 +1241,19 @@ impl AtlasApp {
             Route::Clients => self.load_clients(),
             Route::Vendors => self.load_vendors(),
             Route::Employees => self.load_employees(),
-            Route::Expenses => self.load_expenses(),
+            Route::Attendance => self.load_attendance(),
+            Route::Payroll => self.refresh_payroll(),
+            Route::InventoryOps => self.load_inventory_ops(),
+            Route::CashShifts => self.refresh_cash_shifts(),
+            Route::Actions => self.load_mobile_actions(),
+            Route::Expenses => {
+                if !self.expenses.loading {
+                    self.load_expenses();
+                }
+                if !self.dashboard.loading {
+                    self.load_dashboard();
+                }
+            }
             Route::DeliveryNotes => self.load_delivery_notes(),
             Route::Sales => self.load_invoices(),
             Route::Agent => self.load_assist(),
@@ -1133,6 +1277,7 @@ impl AtlasApp {
     #[must_use]
     pub fn modal_open(&self) -> bool {
         self.confirm_dialog.is_some()
+            || self.settings_dialog_open
             || self.product_editor.is_some()
             || self.product_label.is_some()
             || self.product_scanner_open
@@ -1164,6 +1309,16 @@ impl AtlasApp {
         }
         if self.palette_open {
             self.close_palette();
+            return true;
+        }
+        if self.settings_dialog_open {
+            if self.created_key.take().is_some() {
+                return true;
+            }
+            if self.key_editor.take().is_some() {
+                return true;
+            }
+            self.settings_dialog_open = false;
             return true;
         }
         if self.profile_menu_open {
@@ -1235,6 +1390,13 @@ impl AtlasApp {
             }
             return true;
         }
+        if self
+            .expense_editor
+            .as_ref()
+            .is_some_and(|editor| editor.saving)
+        {
+            return true;
+        }
         if self.client_editor.take().is_some()
             || self.vendor_editor.take().is_some()
             || self.expense_editor.take().is_some()
@@ -1287,7 +1449,9 @@ impl AtlasApp {
             }
             PaletteTarget::NewExpense => {
                 self.go(Route::Expenses);
-                self.expense_editor = Some(ExpenseEditor::new());
+                if self.role_policy().can_write_ledger() && !self.ledger_uncertain {
+                    self.expense_editor = Some(ExpenseEditor::new());
+                }
                 false
             }
             PaletteTarget::NewDelivery => {
@@ -1295,7 +1459,10 @@ impl AtlasApp {
                 self.delivery_note_editor = Some(DeliveryNoteEditor::new());
                 false
             }
-            PaletteTarget::FocusSearch => true,
+            PaletteTarget::FocusSearch => {
+                self.go(Route::Products);
+                true
+            }
             PaletteTarget::SettingsProfile => {
                 self.settings_focus = SettingsFocus::Profile;
                 self.go(Route::Settings);
@@ -1395,6 +1562,23 @@ impl AtlasApp {
         self.selected_vendor = None;
         self.vendor_editor = None;
         self.employees = Cache::default();
+        self.payroll_runs = Cache::default();
+        self.payroll_detail = Cache::default();
+        self.payroll_settings = Cache::default();
+        self.payroll_selected_id = None;
+        self.attendance = Cache::default();
+        self.attendance_action = Cache::default();
+        self.inventory_ops = Cache::default();
+        self.inventory_action = Cache::default();
+        self.inventory_form = Default::default();
+        self.mobile_actions = Cache::default();
+        self.mobile_action_detail = Cache::default();
+        self.mobile_action_write = Cache::default();
+        self.actions_form = Default::default();
+        self.cash_shifts = Cache::default();
+        self.cash_shift_detail = Cache::default();
+        self.cash_shift_action = Cache::default();
+        self.cash_shift_form = Default::default();
         self.employee_search.clear();
         self.employee_status = "active".to_owned();
         self.employee_category.clear();
@@ -1405,6 +1589,7 @@ impl AtlasApp {
         self.employee_resign = None;
         self.employee_action = None;
         self.expenses = Cache::default();
+        self.ledger_uncertain = false;
         self.expense_search = String::new();
         self.bills = Cache::default();
         self.bills_open = false;
@@ -1430,6 +1615,7 @@ impl AtlasApp {
         self.refunds_open = false;
         self.refund_search.clear();
         self.quotes_open = false;
+        self.quick_sale_open = false;
         self.quote_search.clear();
         self.alerts = Cache::default();
         self.nav_badges = Cache::default();
@@ -1447,6 +1633,8 @@ impl AtlasApp {
         self.key_create_job = None;
         self.report_job = None;
         self.client_report = Cache::default();
+        self.employee_situation = Cache::default();
+        self.employee_situation_id = None;
         self.receivables_report = Cache::default();
         self.receivables_open = false;
         self.payables_report = Cache::default();
@@ -1467,6 +1655,7 @@ impl AtlasApp {
         self.profile_menu_open = false;
         self.agent_drawer_open = false;
         self.settings_focus = SettingsFocus::General;
+        self.settings_dialog_open = false;
         self.agent = AgentState::default();
         self.screen = Screen::Login;
         if vault_problem {
@@ -1507,7 +1696,28 @@ pub fn persist_private(path: std::path::PathBuf, bytes: Vec<u8>) {
 
 #[cfg(test)]
 mod role_policy_tests {
-    use super::{RolePolicy, Route};
+    use super::{RolePolicy, Route, update_check_cooldown_remaining};
+    use std::time::Duration;
+
+    #[test]
+    fn update_cooldown_is_bounded_and_shared() {
+        assert_eq!(
+            update_check_cooldown_remaining(Duration::ZERO),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            update_check_cooldown_remaining(Duration::from_secs(59)),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            update_check_cooldown_remaining(Duration::from_secs(60)),
+            Duration::ZERO
+        );
+        assert_eq!(
+            update_check_cooldown_remaining(Duration::from_secs(90)),
+            Duration::ZERO
+        );
+    }
 
     #[test]
     fn stock_is_routed_away_from_financial_views() {
@@ -1528,6 +1738,60 @@ mod role_policy_tests {
             Route::Notifications,
         ] {
             assert!(!stock.allows_route(route));
+        }
+    }
+
+    #[test]
+    fn payroll_is_admin_only() {
+        for role in ["owner", "admin"] {
+            assert!(RolePolicy::from_role(Some(role)).allows_route(Route::Payroll));
+        }
+        for role in ["secretaire", "stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).allows_route(Route::Payroll));
+        }
+    }
+
+    #[test]
+    fn mobile_action_inbox_is_office_only() {
+        for role in ["owner", "admin", "secretaire"] {
+            assert!(RolePolicy::from_role(Some(role)).allows_route(Route::Actions));
+        }
+        for role in ["stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).allows_route(Route::Actions));
+        }
+    }
+
+    #[test]
+    fn cash_shift_policy_matches_web_and_close_is_admin_only() {
+        for role in ["owner", "admin", "secretaire"] {
+            assert!(RolePolicy::from_role(Some(role)).allows_route(Route::CashShifts));
+        }
+        for role in ["stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).allows_route(Route::CashShifts));
+        }
+        assert!(RolePolicy::from_role(Some("admin")).can_close_cash_shift());
+        assert!(!RolePolicy::from_role(Some("secretaire")).can_close_cash_shift());
+        assert!(RolePolicy::from_role(Some("owner")).can_write_ledger());
+        assert!(!RolePolicy::from_role(Some("secretaire")).can_write_ledger());
+    }
+
+    #[test]
+    fn inventory_operations_follow_web_office_policy() {
+        for role in ["owner", "admin", "secretaire"] {
+            assert!(RolePolicy::from_role(Some(role)).allows_route(Route::InventoryOps));
+        }
+        for role in ["stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).allows_route(Route::InventoryOps));
+        }
+    }
+
+    #[test]
+    fn attendance_is_restricted_to_employee_admins() {
+        for role in ["owner", "admin"] {
+            assert!(RolePolicy::from_role(Some(role)).allows_route(Route::Attendance));
+        }
+        for role in ["secretaire", "stock", "user", ""] {
+            assert!(!RolePolicy::from_role(Some(role)).allows_route(Route::Attendance));
         }
     }
 
