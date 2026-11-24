@@ -256,6 +256,17 @@ pub fn client_kind() -> &'static str {
     CLIENT_KIND
 }
 
+fn transport_error(error: reqwest::Error) -> ApiError {
+    log::warn!("network failure: {error}");
+    if error.is_timeout() {
+        ApiError::transport("Le serveur met trop de temps à répondre. Vérifiez votre connexion.")
+    } else if error.is_connect() {
+        ApiError::transport("Connexion impossible au serveur. Vérifiez l'adresse et votre réseau.")
+    } else {
+        ApiError::transport(format!("Erreur réseau : {error}"))
+    }
+}
+
 #[cfg(test)]
 mod bearer_isolation_tests {
     use super::ApiClient;
@@ -270,16 +281,5 @@ mod bearer_isolation_tests {
         assert!(client.token().is_none());
         client.set_token(Some(" nv3.example".to_owned()));
         assert!(client.token().is_none());
-    }
-}
-
-fn transport_error(error: reqwest::Error) -> ApiError {
-    log::warn!("network failure: {error}");
-    if error.is_timeout() {
-        ApiError::transport("Le serveur met trop de temps à répondre. Vérifiez votre connexion.")
-    } else if error.is_connect() {
-        ApiError::transport("Connexion impossible au serveur. Vérifiez l'adresse et votre réseau.")
-    } else {
-        ApiError::transport(format!("Erreur réseau : {error}"))
     }
 }

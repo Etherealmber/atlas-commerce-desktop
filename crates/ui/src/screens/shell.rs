@@ -313,8 +313,8 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
 /// remain intact. Clicking the scrim does not discard settings in progress.
 fn draw_settings_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
     let screen = ctx.input(|input| input.viewport_rect());
-    let width = (screen.width() - 32.0).max(1.0).min(1080.0);
-    let height = (screen.height() - 32.0).max(1.0).min(740.0);
+    let width = (screen.width() - 32.0).clamp(1.0, 1080.0);
+    let height = (screen.height() - 32.0).clamp(1.0, 740.0);
     let dialog = egui::Rect::from_center_size(screen.center(), vec2(width, height));
     egui::Area::new(egui::Id::new("settings-dialog-layer"))
         .order(egui::Order::Foreground)
@@ -334,12 +334,7 @@ fn draw_settings_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palet
                     .fill(palette.overlay)
                     .stroke(egui::Stroke::new(1.0, palette.outline))
                     .corner_radius(20.0)
-                    .shadow(egui::Shadow {
-                        offset: [0, 8],
-                        blur: 24,
-                        spread: 0,
-                        color: egui::Color32::from_black_alpha(80),
-                    })
+                    .shadow(crate::theme::elevation_shadow(palette))
                     .inner_margin(egui::Margin::same(16))
                     .show(ui, |ui| {
                         ui.set_width((width - 32.0).max(1.0));

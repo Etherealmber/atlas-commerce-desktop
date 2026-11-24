@@ -59,24 +59,24 @@ impl Palette {
     pub fn dark() -> Self {
         Self {
             dark: true,
-            window: hex(0x12, 0x13, 0x17),
-            panel: hex(0x16, 0x18, 0x1e),
-            surface: hex(0x1a, 0x1f, 0x26),
-            surface_hover: hex(0x20, 0x23, 0x2b),
-            surface_active: hex(0x27, 0x27, 0x2a),
-            outline: hex(0x2a, 0x2d, 0x37),
+            window: hex(0x12, 0x12, 0x15),
+            panel: hex(0x18, 0x18, 0x1b),
+            surface: hex(0x18, 0x18, 0x1b),
+            surface_hover: hex(0x20, 0x20, 0x24),
+            surface_active: hex(0x27, 0x27, 0x2b),
+            outline: hex(0x27, 0x27, 0x2d),
             text: hex(0xf4, 0xf4, 0xf6),
             secondary: hex(0xa1, 0xa1, 0xaa),
             dim: hex(0x71, 0x71, 0x7a),
-            accent: hex(0xfa, 0xfa, 0xfa),
+            accent: hex(0xf4, 0xf4, 0xf6),
             accent_hover: hex(0xe4, 0xe4, 0xe7),
-            on_accent: hex(0x0a, 0x0a, 0x0a),
+            on_accent: hex(0x12, 0x12, 0x15),
             copper: hex(0xea, 0xb3, 0x7d),
             copper_soft: Color32::from_rgba_unmultiplied(212, 165, 116, 31),
             copper_border: Color32::from_rgba_unmultiplied(212, 165, 116, 66),
             danger: hex(0xf8, 0x71, 0x71),
             warning: hex(0xfb, 0xbf, 0x24),
-            overlay: hex(0x1c, 0x1c, 0x1f),
+            overlay: hex(0x18, 0x18, 0x1b),
             // SOURCED-FROM: Theme.kt badge saffron, counters only.
             badge: hex(0xf5, 0x9e, 0x0b),
             on_badge: hex(0x0a, 0x0a, 0x0a),
@@ -104,7 +104,7 @@ impl Palette {
             surface: hex(0xff, 0xff, 0xff),
             surface_hover: hex(0xf1, 0xf5, 0xf9),
             surface_active: hex(0xe2, 0xe8, 0xf0),
-            outline: hex(0xe8, 0xea, 0xef),
+            outline: hex(0xe2, 0xe8, 0xf0),
             text: hex(0x0f, 0x17, 0x2a),
             secondary: hex(0x64, 0x74, 0x8b),
             dim: hex(0x94, 0xa3, 0xb8),
@@ -612,9 +612,16 @@ mod tests {
         // Keep the selected light surfaces opaque and high contrast.
         let dark = Palette::dark();
         let light = Palette::light();
-        assert_eq!(dark.window, hex(0x12, 0x13, 0x17));
-        assert_eq!(dark.surface, hex(0x1a, 0x1f, 0x26));
-        assert_eq!(dark.outline, hex(0x2a, 0x2d, 0x37));
+        assert_eq!(dark.window, hex(0x12, 0x12, 0x15));
+        assert_eq!(dark.panel, hex(0x18, 0x18, 0x1b));
+        assert_eq!(dark.surface, hex(0x18, 0x18, 0x1b));
+        assert_eq!(dark.overlay, hex(0x18, 0x18, 0x1b));
+        assert_eq!(dark.surface_hover, hex(0x20, 0x20, 0x24));
+        assert_eq!(dark.surface_active, hex(0x27, 0x27, 0x2b));
+        assert_eq!(dark.accent, hex(0xf4, 0xf4, 0xf6));
+        assert_eq!(dark.accent_hover, hex(0xe4, 0xe4, 0xe7));
+        assert_eq!(dark.on_accent, dark.window);
+        assert_eq!(dark.outline, hex(0x27, 0x27, 0x2d));
         assert_eq!(dark.copper, hex(0xea, 0xb3, 0x7d));
         assert_eq!(light.copper, hex(0xb8, 0x73, 0x33));
         assert_eq!(dark.text, hex(0xf4, 0xf4, 0xf6));
@@ -636,7 +643,7 @@ mod tests {
         }
         assert_eq!(light.text, hex(0x0f, 0x17, 0x2a));
         assert_eq!(light.secondary, hex(0x64, 0x74, 0x8b));
-        assert_eq!(light.outline, hex(0xe8, 0xea, 0xef));
+        assert_eq!(light.outline, hex(0xe2, 0xe8, 0xf0));
         assert_eq!(
             light.shadow,
             Color32::from_rgba_unmultiplied(15, 23, 42, 10)

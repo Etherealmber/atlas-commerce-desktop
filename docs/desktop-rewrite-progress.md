@@ -5,11 +5,17 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Area | Approximate implementation progress | Current limitation |
 | --- | ---: | --- |
 | Shell, dock and theme | 60% | Floating surfaces, sidebar, responsive action row and partial dock behavior exist; focus routes, visual parity and all interactions need completion and verification. |
-| Settings and updates | 45% | Modal, partial search, update check and observed-version history exist; sections and exact layout remain incomplete. Desktop CDN integration is deferred. |
+| Settings and updates | 45% | Modal, partial search, update check and observed-version history exist; sections and exact layout remain incomplete. CDN1 integration is now requested but not implemented; its publishing contract still needs confirmation. |
 | ERP screens and workflows | 30% | Existing commerce screens plus partial attendance, inventory, cash shifts, mobile actions and read-only payroll; several workflows and route parity are missing. |
 | Native v3 authentication | 20% | Auth core and isolated transport/account methods exist, but are not connected to login, OS key storage, session lifecycle or protected ERP requests. |
-| Verification | 5% | Rust compilation, Rust tests, visual fixtures and real Windows/provider tests have not been run for this patch. |
+| Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
+
+## Current pass (web palette)
+
+- Updated central dark and light palette tokens to the requested zinc/slate values and removed the Settings modal's heavy dark shadow. Settings already uses a centered scrim, close control and Escape handling; full web parity remains incomplete.
+- CI at `7839f55`: platform tests, vulnerability scan and Windows installer passed; quality (Clippy) and offline screenshots failed. Some Clippy findings have been addressed locally, but multiple collapsible-if findings remain. No visual or interactive Windows verification has been performed for this pass.
+- CDN1 and release upload are now in scope, but not implemented: the admin endpoint payload, authorization, atomic publication and rollback contract are not established. No installer execution or v3 lifecycle wiring has been claimed.
 
 ## Latest pass
 

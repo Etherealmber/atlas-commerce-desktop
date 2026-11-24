@@ -109,7 +109,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     if app.ledger_uncertain {
         error_banner(
             ui,
-            &t!(
+            t!(
                 app.locale,
                 "The server may have recorded this entry. Verify the ledger before trying again; retrying can create a duplicate."
             ),

@@ -60,7 +60,7 @@ pub fn draw_page_skeleton(
         } else {
             1
         };
-        let rows = (metrics + columns - 1) / columns;
+        let rows = metrics.div_ceil(columns);
         for row in 0..rows {
             let count = (metrics - row * columns).min(columns);
             ui.columns(columns, |items| {
@@ -216,7 +216,7 @@ pub fn product_list_skeleton(ui: &mut egui::Ui, palette: &Palette, reduced_motio
             8.0,
             ink,
         );
-        let text_width = (width - 88.0).max(0.0).min(220.0);
+        let text_width = (width - 88.0).clamp(0.0, 220.0);
         for (offset, ratio) in [(21.0, 1.0), (40.0, 0.6)] {
             painter.rect_filled(
                 egui::Rect::from_min_size(
