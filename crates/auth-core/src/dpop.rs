@@ -3,7 +3,6 @@ use crate::origin::ServerOrigin;
 use crate::schemas::SessionTokensV3;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use url::Url;
@@ -88,7 +87,7 @@ impl std::fmt::Debug for SoftwareP256Key {
 impl DeviceKeyAdapter for SoftwareP256Key {
     fn public_jwk(&self) -> EcPublicJwk {
         let verifying = self.signing_key.verifying_key();
-        let point = verifying.to_encoded_point(false);
+        let point = verifying.to_sec1_point(false);
         let x = URL_SAFE_NO_PAD.encode(point.x().expect("uncompressed P-256 point has x"));
         let y = URL_SAFE_NO_PAD.encode(point.y().expect("uncompressed P-256 point has y"));
         EcPublicJwk {

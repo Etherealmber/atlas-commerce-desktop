@@ -2305,7 +2305,7 @@ impl EframeShell {
         // seed it at construction (the CreationContext already knows the
         // system theme) to avoid the dark fallback on even the first frame.
         held.last_clear_color = Some(
-            screen_palette(held.palette(ctx), held.screen)
+            screen_palette(held.palette(ctx), held.screen.clone())
                 .window
                 .to_normalized_gamma_f32(),
         );
@@ -2380,7 +2380,7 @@ impl eframe::App for EframeShell {
         #[cfg(target_os = "windows")]
         ctx.request_repaint_after(Duration::from_secs(5));
         self.held.scrolling.apply(ctx);
-        let palette = screen_palette(self.held.palette(ctx), self.held.screen);
+        let palette = screen_palette(self.held.palette(ctx), self.held.screen.clone());
         #[cfg(target_os = "windows")]
         if let Some(window) = frame.winit_window() {
             // Never expose the auth page or a custom palette through the
@@ -2612,7 +2612,7 @@ impl eframe::App for EframeShell {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let palette = screen_palette(self.held.palette(&ctx), self.held.screen);
+        let palette = screen_palette(self.held.palette(&ctx), self.held.screen.clone());
         if !matches!(self.held.screen, Screen::Shell(_)) && fastframe_titlebar::enabled() {
             egui::Panel::top(egui::Id::new("auth-titlebar"))
                 .exact_size(48.0)

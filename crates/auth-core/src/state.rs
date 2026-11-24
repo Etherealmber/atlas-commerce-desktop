@@ -5,7 +5,7 @@ use crate::pkce::{validate_pairing_code, PkcePair};
 use crate::schemas::{
     CapabilitiesV3Response, ChallengePollRequestV3, ChallengePollResponse, ChallengeVerifyStatus,
     CreateRequestV3Body, CreateRequestV3Response, LogoutResponseV3, OtpLoginRequestV3,
-    PasswordLoginRequestV3, PasswordLoginResponseV3, SessionTokensV3,
+    PasswordLoginRequestV3, SessionTokensV3,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
