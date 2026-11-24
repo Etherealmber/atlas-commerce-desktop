@@ -176,6 +176,7 @@ jobs:
       - name: Surface fixture errors
         if: failure()
         run: |
+          echo "::error title=Fixture files::$(find visual-output -maxdepth 1 -type f -printf '%f ' | sort)"
           for file in visual-output/*.log visual-output/*.windows; do
             if [ -f "$file" ]; then
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
