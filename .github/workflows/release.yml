@@ -788,6 +788,45 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           draft: false
           make_latest: 'true'
+      # Publish only after the GitHub release is public. This endpoint replaces
+      # the existing Desktop feed; do not call it for artifact-only builds or
+      # retry a request whose outcome is unknown.
+      - name: Publish Windows installer to CDN1
+        if: needs.prepare.outputs.repo == github.repository
+        env:
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DESKTOP_RELEASE_TOKEN" ]; then
+            echo "CDN1 non configuré : publication ignorée."
+            exit 0
+          fi
+          installer="dist/atlas-commerce-desktop-${RELEASE_TAG}-setup.exe"
+          test -s "$installer"
+          size=$(wc -c < "$installer" | tr -d ' ')
+          sha256=$(sha256sum "$installer" | cut -d ' ' -f 1)
+          notes=$(python3 -c 'import base64; print(base64.b64encode(open("IN_APP_NOTE.txt", encoding="utf-8").read()[:4000].encode()).decode())')
+          filename="atlas-commerce-desktop-${RELEASE_TAG}-windows-universal-setup.exe"
+          github_url="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/atlas-commerce-desktop-${RELEASE_TAG}-setup.exe"
+          # Keep the credential out of curl's command-line arguments.
+          config=$(mktemp)
+          trap 'rm -f "$config"' EXIT
+          chmod 600 "$config"
+          python3 -c 'import os,sys; t=os.environ["DESKTOP_RELEASE_TOKEN"]; assert all(32 <= ord(c) < 127 for c in t); t=t.replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34)); open(sys.argv[1], "w").write("header = "+chr(34)+"Authorization: Bearer "+t+chr(34)+"\n")' "$config"
+          curl --fail-with-body --silent --show-error --max-time 900 --config "$config" \
+            --request POST --data-binary "@$installer" \
+            --header 'Content-Type: application/vnd.microsoft.portable-executable' \
+            --header "Content-Length: $size" \
+            --header "X-Release-Version: $RELEASE_VERSION" \
+            --header 'X-Release-Channel: stable' \
+            --header 'X-Release-Arch: universal' \
+            --header "X-Release-Filename: $filename" \
+            --header "X-Release-Sha256: $sha256" \
+            --header "X-Release-Github-Url: $github_url" \
+            --header "X-Release-Mandatory: $RELEASE_MANDATORY" \
+            --header "X-Release-Notes-B64: $notes" \
+            https://api.afmarbre.com/api/admin/desktop-release
+
       - name: Job summary
         if: always()
         run: |

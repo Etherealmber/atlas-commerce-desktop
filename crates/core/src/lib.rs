@@ -6,6 +6,7 @@
 //! no network client live here, so every module is unit-testable headless.
 
 pub mod deep_link;
+pub mod desktop_update;
 pub mod device;
 pub mod dirs;
 pub mod format;

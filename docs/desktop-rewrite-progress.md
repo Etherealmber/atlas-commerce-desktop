@@ -11,7 +11,15 @@ This is a rough implementation estimate, not a measured completion or a release 
 | Verification | 5% | CI Rust tests passed on Linux, macOS and Windows at 7839f55; Clippy and visual fixtures failed. Interactive Windows/provider testing remains outstanding. |
 | Overall | roughly 35–40% | These estimates overlap and are subjective; they do not establish production readiness. |
 
-## Current pass (update dialog and notifications)
+## Phase 1 — in progress, not yet verified
+
+- Corrected the dark primary color and unused import. The previous screenshot failure is still under investigation; the workflow now preserves failure artifacts and reports the page rather than exiting silently if a wizard marker is missing. No visual assertion has been removed.
+- Inspected Worker PR #217 head `060d3f8`: GitHub reports the PR **open**, so deployment status is not established by repository state. Implemented a standalone bounded metadata parser and tests for explicit absence, platform, SHA-256, URL, size and minimum-version handling. The parser is **not yet wired** to the updater; CDN discovery, fallback, display and verified installation are unfinished.
+- Added an optional CDN1 upload after successful GitHub publication, restricted to the current repository; no release or upload was performed. The Worker deletes old Desktop objects when ingesting. Endpoint deployment and upload behavior are not verified here.
+- The currently pinned fastframe updater expects its own signed feed format, not Worker `latest.json`, and does not expose the prepared installer path. Do not claim SHA-256 verification of the CDN artifact or launch it until the actual bytes can be verified before handoff.
+- GitHub Actions for the current changes is still needed. Rust toolchain is not available in this sandbox. Python tests pass; Windows interactive tests remain outstanding.
+
+## Prior pass (update dialog and notifications)
 
 - Added a centered shell update dialog for available GitHub manifest metadata, with explicit install, progress, optional dismissal and an in-session mandatory lock. Pre-shell mandatory updates still use the existing gate. The manifest does not provide size or checksum details, which are explicitly marked unavailable; this does not implement CDN1 or claim a verified status before the updater verifies anything.
 - The notifications popover now uses a count of loaded alerts, known Worker alert-kind icon tiles, dividers and a footer link. Navigation continues to use the existing route allowlist and role checks. Mobile-action rows still need parity.
