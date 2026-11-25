@@ -12,21 +12,49 @@ const PROFILE_MENU_WIDTH: f32 = 296.0;
 #[derive(Clone, Copy, Default)]
 struct DockScroll {
     offset: f32,
+    travel: f32,
     compact: bool,
+    expanded_until: f64,
 }
 
 fn route_scroll_id(route: Route) -> egui::Id {
     egui::Id::new(("shell-dock-scroll", format!("{route:?}")))
 }
 
-fn update_dock_scroll(mut state: DockScroll, offset: f32, menu_open: bool) -> DockScroll {
+fn update_dock_scroll(mut state: DockScroll, offset: f32, locked: bool, now: f64) -> DockScroll {
     let offset = offset.max(0.0);
-    if offset <= 140.0 || offset < state.offset - 0.5 {
-        state.compact = false;
-    } else if offset > state.offset + 0.5 && !menu_open {
-        state.compact = true;
-    }
+    let delta = offset - state.offset;
     state.offset = offset;
+    if offset <= 60.0 {
+        state.travel = 0.0;
+        state.compact = false;
+        return state;
+    }
+    if locked || now < state.expanded_until {
+        state.travel = 0.0;
+        return state;
+    }
+    if delta > 0.0 {
+        state.travel = if state.travel > 0.0 {
+            state.travel + delta
+        } else {
+            delta
+        };
+        if offset > 140.0 && state.travel >= 48.0 {
+            state.compact = true;
+            state.travel = 0.0;
+        }
+    } else if delta < 0.0 {
+        state.travel = if state.travel < 0.0 {
+            state.travel + delta
+        } else {
+            delta
+        };
+        if state.compact && state.travel <= -48.0 {
+            state.compact = false;
+            state.travel = 0.0;
+        }
+    }
     state
 }
 
@@ -40,10 +68,52 @@ pub(super) fn record_scroll(app: &AtlasApp, ctx: &egui::Context, offset: f32) {
             d.get_temp::<bool>(egui::Id::new("notification-popover-open"))
                 .unwrap_or(false)
         });
+    let (now, pointer) = ctx.input(|input| (input.time, input.pointer.hover_pos()));
+    let hover = ctx
+        .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("dock-last-rect")))
+        .is_some_and(|rect| pointer.is_some_and(|pos| rect.contains(pos)));
     ctx.data_mut(|d| {
         let previous = d.get_temp::<DockScroll>(id).unwrap_or_default();
-        d.insert_temp(id, update_dock_scroll(previous, offset, menu_open));
+        d.insert_temp(
+            id,
+            update_dock_scroll(previous, offset, menu_open || hover, now),
+        );
     });
+}
+
+/// Shared source for both bell and header. Follow the web's four badge
+/// categories and at most six extra alert kinds, avoiding double counting.
+fn notification_total(
+    badges: Option<&atlas_api::models::NavBadges>,
+    alerts: &[atlas_api::models::Alert],
+) -> i64 {
+    let defaults = atlas_api::models::NavBadges::default();
+    let badges = badges.unwrap_or(&defaults);
+    let extra = alerts
+        .iter()
+        .filter(|alert| {
+            let kind = alert.kind.to_ascii_lowercase();
+            !((kind == "mobile_actions" && badges.actions_pending > 0)
+                || (kind == "low_stock" && badges.products_low > 0)
+                || (kind == "unpaid_invoices" && badges.invoices_unpaid > 0)
+                || (kind == "pay_due" && badges.employees_pay_due > 0))
+        })
+        .take(6)
+        .count() as i64;
+    badges
+        .actions_pending
+        .max(0)
+        .saturating_add(badges.employees_pay_due.max(0))
+        .saturating_add(badges.invoices_unpaid.max(0))
+        .saturating_add(badges.products_low.max(0))
+        .saturating_add(extra)
+}
+
+fn app_notification_total(app: &AtlasApp) -> i64 {
+    notification_total(
+        app.nav_badges.data.as_ref(),
+        app.alerts.data.as_deref().unwrap_or(&[]),
+    )
 }
 
 fn detail_back_available(app: &AtlasApp, route: Route) -> bool {
@@ -116,18 +186,26 @@ pub(super) fn draw_titlebar(
     if fastframe_titlebar::enabled() {
         fastframe_titlebar::drag(ui, rect);
     }
-    let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
-    let left = rect.left() + footprint.left.max(8.0);
-    let right = (rect.right() - footprint.right.max(120.0) - 8.0).max(left);
+    let left = rect.left() + 8.0;
+    let right = rect.right().max(left);
     let available = (right - left).max(1.0);
     let route = match app.screen {
         Screen::Shell(route) => route,
         _ => Route::Dashboard,
     };
-    let title = dock_title(app, route);
+    let title = dock_title(app, route)
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().collect::<String>() + chars.as_str()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
     let title_width = ui
         .painter()
-        .layout_no_wrap(title.clone(), crate::fonts::semibold(14.0), palette.text)
+        .layout_no_wrap(title.clone(), crate::fonts::semibold(14.4), palette.text)
         .size()
         .x
         .min(180.0);
@@ -163,13 +241,15 @@ pub(super) fn draw_titlebar(
     let show_extras = available >= 330.0;
     let show_back = (available >= 280.0 && detail_back_available(app, route))
         || (available >= 430.0 && !app.nav_back.is_empty());
-    let icon_count = 2.0 + if show_extras { 2.0 } else { 0.0 } + if show_back { 1.0 } else { 0.0 };
-    let full_width = (icon_count * 48.0 + title_width + 32.0).min(available);
-    let compact_width = (title_width + 38.0).min(available).max(1.0);
+    let right_width = if show_extras { 136.0 } else { 40.0 };
+    let back_width = if show_back { 48.0 } else { 0.0 };
+    let title_space = title_width + 40.0;
+    let full_width = (22.0 + title_space + 12.0 + right_width + back_width).min(available);
+    let compact_width = (title_space + 22.0).min(available).max(1.0);
     let width = full_width + (compact_width - full_width) * t;
     let dock = egui::Rect::from_center_size(
         egui::pos2((left + right) * 0.5, rect.center().y),
-        vec2(width, 48.0 * (1.0 - 0.06 * t)),
+        vec2(width, 58.0),
     );
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("dock-last-rect"), dock));
     ui.painter().rect_filled(
@@ -177,7 +257,15 @@ pub(super) fn draw_titlebar(
         255.0,
         egui::Color32::from_black_alpha(if palette.dark { 35 } else { 16 }),
     );
-    ui.painter().rect_filled(dock, 255.0, palette.panel);
+    ui.painter().rect_filled(
+        dock,
+        255.0,
+        if palette.dark {
+            egui::Color32::from_rgb(20, 20, 23)
+        } else {
+            egui::Color32::WHITE
+        },
+    );
     ui.painter().rect_stroke(
         dock,
         255.0,
@@ -187,50 +275,45 @@ pub(super) fn draw_titlebar(
     let mut avatar_rect = egui::Rect::NOTHING;
     let mut bell_rect = egui::Rect::NOTHING;
     let mut focus_ids = Vec::new();
-    widgets::overlay_at(ui, dock.shrink2(vec2(6.0, 0.0)), |ui| {
+    widgets::overlay_at(ui, dock.shrink2(vec2(11.0, 0.0)), |ui| {
         ui.set_clip_rect(ui.clip_rect().intersect(dock));
         ui.horizontal_centered(|ui| {
-            ui.spacing_mut().item_spacing.x = 3.0;
+            ui.spacing_mut().item_spacing.x = 8.0;
             if t < 0.25 && show_back {
-                let back = widgets::icon_circle_button(ui, palette, Icon::ArrowLeft, true)
-                    .on_hover_text(t!(app.locale, "Back"));
+                let back =
+                    dock_icon(ui, palette, Icon::ArrowLeft).on_hover_text(t!(app.locale, "Back"));
                 focus_ids.push(back.id);
                 if back.clicked() {
                     back_to_parent(app, route);
                 }
             }
-            let title_space = if t < 0.25 {
-                (width - icon_count * 48.0 - 20.0).max(20.0)
-            } else {
-                (width - 18.0).max(1.0)
-            };
-            let title_button =
-                egui::Button::new(RichText::new(title).strong().size(14.0).color(palette.text))
-                    .frame(false)
-                    .min_size(vec2(title_space, 38.0));
-            let title_response = ui.add_sized(vec2(title_space, 38.0), title_button);
+            let title_button = egui::Button::new(
+                RichText::new(title)
+                    .font(crate::fonts::semibold(14.4))
+                    .color(palette.text),
+            )
+            .frame(false)
+            .min_size(vec2(title_space, 44.0));
+            let title_response = ui.add_sized(vec2(title_space, 44.0), title_button);
             focus_ids.push(title_response.id);
             if title_response.clicked() {
+                let now = ctx.input(|input| input.time);
                 ctx.data_mut(|d| {
                     let id = route_scroll_id(route);
                     let mut state = d.get_temp::<DockScroll>(id).unwrap_or_default();
                     state.compact = false;
+                    state.travel = 0.0;
+                    state.expanded_until = now + 0.4;
                     d.insert_temp(id, state);
                 });
             }
             if t < 0.25 {
-                let search = widgets::icon_circle_button(ui, palette, Icon::Search, true)
-                    .on_hover_text("Ctrl+K");
-                focus_ids.push(search.id);
-                if search.clicked() {
-                    app.open_palette();
-                }
+                ui.add_space(4.0);
                 if show_extras {
-                    let theme = widgets::icon_circle_button(
+                    let theme = dock_icon(
                         ui,
                         palette,
                         if palette.dark { Icon::Sun } else { Icon::Moon },
-                        true,
                     )
                     .on_hover_text(t!(app.locale, "Toggle theme"));
                     focus_ids.push(theme.id);
@@ -244,18 +327,12 @@ pub(super) fn draw_titlebar(
                         ctx.request_repaint();
                     }
                     if app.role_policy().allows_route(Route::Notifications) {
-                        let bell = widgets::icon_circle_button(ui, palette, Icon::Bell, true);
+                        let bell = dock_icon(ui, palette, Icon::Bell);
                         focus_ids.push(bell.id);
                         bell_rect = bell.rect;
-                        let count = app.nav_badges.data.as_ref().map_or(0, |b| {
-                            b.actions_pending
-                                .max(0)
-                                .saturating_add(b.employees_pay_due.max(0))
-                                .saturating_add(b.invoices_unpaid.max(0))
-                                .saturating_add(b.products_low.max(0))
-                        });
+                        let count = app_notification_total(app);
                         if count > 0 {
-                            paint_titlebar_badge(ui, &bell, palette, count);
+                            paint_titlebar_badge(ui, &bell, count);
                         }
                         if bell.clicked() {
                             let id = egui::Id::new("notification-popover-open");
@@ -296,7 +373,7 @@ pub(super) fn draw_titlebar(
                     ui,
                     app.avatar_texture_uri.as_deref(),
                     &initial,
-                    36.0,
+                    40.0,
                     palette.accent,
                     palette.on_accent,
                     palette.outline,
@@ -368,30 +445,56 @@ pub(super) fn search_destination(query: &str) -> Option<Route> {
     }
 }
 
+fn dock_icon(ui: &mut egui::Ui, palette: &Palette, which: Icon) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::click());
+    let fill = if response.hovered() {
+        palette.surface_hover
+    } else if palette.dark {
+        egui::Color32::from_rgb(32, 32, 36)
+    } else {
+        egui::Color32::WHITE
+    };
+    ui.painter().rect_filled(rect, 255.0, fill);
+    ui.painter().rect_stroke(
+        rect,
+        255.0,
+        egui::Stroke::new(1.0, palette.outline),
+        egui::StrokeKind::Inside,
+    );
+    widgets::overlay_at(
+        ui,
+        egui::Rect::from_center_size(rect.center(), Vec2::splat(18.0)),
+        |ui| {
+            widgets::icon(ui, which, palette.secondary, 18.0);
+        },
+    );
+    response
+}
+
 /// Small accent counter at a title-bar button's top-right corner.
-fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, palette: &Palette, count: i64) {
+fn paint_titlebar_badge(ui: &mut egui::Ui, button: &egui::Response, count: i64) {
     let text = if count > 99 {
         "99+".to_owned()
     } else {
         count.to_string()
     };
-    // Counters are the one sanctioned saffron surface (Theme.kt badge).
     let galley =
         ui.painter()
-            .layout_no_wrap(text, egui::FontId::proportional(10.5), palette.on_badge);
+            .layout_no_wrap(text, egui::FontId::proportional(10.5), egui::Color32::WHITE);
     let width = (galley.size().x + 8.0).max(15.0);
     let rect = egui::Rect::from_min_size(
         egui::pos2(button.rect.right() - width + 2.0, button.rect.top() - 2.0),
         vec2(width, 15.0),
     );
-    ui.painter().rect_filled(rect, 999.0, palette.badge);
+    ui.painter()
+        .rect_filled(rect, 999.0, egui::Color32::from_rgb(239, 68, 68));
     ui.painter().galley(
         egui::pos2(
             rect.center().x - galley.size().x / 2.0,
             rect.center().y - galley.size().y / 2.0,
         ),
         galley,
-        palette.on_badge,
+        egui::Color32::WHITE,
     );
 }
 
@@ -426,14 +529,14 @@ fn draw_notifications_popover(
 ) {
     let id = egui::Id::new("notification-popover-open");
     let area = egui::Area::new(egui::Id::new("notification-popover"))
-        .fixed_pos(egui::pos2(anchor.right() - 320.0, anchor.bottom() + 8.0))
+        .fixed_pos(egui::pos2(anchor.right() - 336.0, anchor.bottom() + 8.0))
         .order(egui::Order::Foreground)
         .constrain(true)
         .show(ctx, |ui| {
             widgets::pop_card(palette)
                 .inner_margin(egui::Margin::same(14))
                 .show(ui, |ui| {
-                    ui.set_width(292.0);
+                    ui.set_width(308.0);
                     ui.horizontal(|ui| {
                         ui.label(
                             RichText::new(t!(app.locale, "Notifications"))
@@ -441,16 +544,15 @@ fn draw_notifications_popover(
                                 .strong()
                                 .size(15.0),
                         );
-                        if let Some(alerts) = &app.alerts.data {
-                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                widgets::pill(
-                                    ui,
-                                    alerts.len().to_string(),
-                                    palette.surface_hover,
-                                    palette.secondary,
-                                );
-                            });
-                        }
+                        let count = app_notification_total(app);
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            widgets::pill(
+                                ui,
+                                format!("{count} alertes"),
+                                palette.surface_hover,
+                                palette.secondary,
+                            );
+                        });
                     });
                     ui.separator();
                     if app.alerts.loading && app.alerts.data.is_none() {
@@ -750,25 +852,56 @@ fn menu_row(
 
 #[cfg(test)]
 mod dock_tests {
-    use super::{DockScroll, update_dock_scroll};
+    use super::{DockScroll, notification_total, update_dock_scroll};
+    use atlas_api::models::{Alert, NavBadges};
 
     #[test]
-    fn dock_compacts_on_downward_scroll_and_expands_on_upward_scroll() {
-        let state = update_dock_scroll(DockScroll::default(), 100.0, false);
-        assert!(!state.compact);
-        let state = update_dock_scroll(state, 150.0, false);
+    fn compact_requires_directional_travel_and_top_or_upward_travel_expands() {
+        let state = update_dock_scroll(DockScroll::default(), 141.0, false, 0.0);
         assert!(state.compact);
-        let state = update_dock_scroll(state, 149.0, false);
+        let state = update_dock_scroll(state, 140.0, false, 0.1);
+        assert!(state.compact);
+        let state = update_dock_scroll(state, 94.0, false, 0.2);
+        assert!(state.compact);
+        let state = update_dock_scroll(state, 93.0, false, 0.3);
         assert!(!state.compact);
+        let state = update_dock_scroll(state, 200.0, false, 0.4);
+        assert!(state.compact);
+        assert!(!update_dock_scroll(state, 60.0, false, 0.5).compact);
     }
 
     #[test]
-    fn open_menu_prevents_compacting_and_top_always_expands() {
-        let state = update_dock_scroll(DockScroll::default(), 160.0, true);
+    fn lock_and_manual_expansion_suppress_downward_compaction() {
+        let state = update_dock_scroll(DockScroll::default(), 160.0, true, 0.0);
         assert!(!state.compact);
-        let state = update_dock_scroll(state, 180.0, false);
+        let state = DockScroll {
+            expanded_until: 1.0,
+            ..state
+        };
+        let state = update_dock_scroll(state, 240.0, false, 0.9);
+        assert!(!state.compact);
+        let state = update_dock_scroll(state, 288.0, false, 1.0);
         assert!(state.compact);
-        let state = update_dock_scroll(state, 140.0, false);
-        assert!(!state.compact);
+    }
+
+    #[test]
+    fn badge_and_header_use_same_web_total_and_cap_extra_kinds() {
+        let badges = NavBadges {
+            actions_pending: 2,
+            products_low: 3,
+            invoices_unpaid: 4,
+            employees_pay_due: 5,
+            ..Default::default()
+        };
+        let mut alerts = vec![Alert {
+            kind: "low_stock".into(),
+            ..Default::default()
+        }];
+        alerts.extend((0..9).map(|_| Alert {
+            kind: "cheque".into(),
+            ..Default::default()
+        }));
+        assert_eq!(notification_total(Some(&badges), &alerts), 20);
+        assert_eq!(notification_total(None, &alerts), 6);
     }
 }

@@ -18,8 +18,8 @@ mod topbar;
 #[cfg(test)]
 use topbar::search_destination;
 
-/// Height of the custom caption row (web topbar: 56 px).
-const TITLEBAR_HEIGHT: f32 = 56.0;
+/// Caption area accommodating the 58 px dock and its vertical margins.
+const TITLEBAR_HEIGHT: f32 = 78.0;
 /// Compact labelled rail and icon-only rail at narrower window widths.
 const RAIL_WIDTH_EXPANDED: f32 = 280.0;
 const RAIL_WIDTH_COLLAPSED: f32 = 64.0;
