@@ -43,6 +43,14 @@ jobs:
               fi
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = dashboard ] || [ "$page" = dashboard-dark ]; then
+                # A nonblank window alone is insufficient: the sidebar can be
+                # visible while the page body has accidentally been clipped.
+                body_colors=$(convert "visual-output/$page.png" -crop 900x500+250+120 +repage -format "%k" info:)
+                if [ "$body_colors" -lt 80 ]; then
+                  echo "Dashboard body is blank: $page ($body_colors colors)"; kill "$pid"; exit 1
+                fi
+              fi
               if [ "$page" = login-qr ]; then
                 # Decode the actual rendered, branded QR, not just its source data.
                 decoded=$(zbarimg --quiet --raw "visual-output/login-qr.png" 2>/dev/null || true)

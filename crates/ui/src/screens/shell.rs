@@ -473,7 +473,17 @@ fn draw_content(
         )
     };
     if !actions_in_top_band {
-        top_page_actions::draw(app, ui, palette);
+        // Right-to-left actions center within their available height. Bound the
+        // row explicitly so it cannot consume the entire page before the
+        // route scroll area is laid out.
+        ui.allocate_ui_with_layout(
+            vec2(ui.available_width(), 56.0),
+            Layout::top_down(Align::Min),
+            |ui| {
+                ui.set_max_height(56.0);
+                top_page_actions::draw(app, ui, palette);
+            },
+        );
     }
     // Vertical-only scrolling: every screen wraps inside the viewport, so a
     // horizontal scrollbar must never appear (content overflow would paint
