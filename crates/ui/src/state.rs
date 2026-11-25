@@ -508,6 +508,8 @@ pub struct AtlasApp {
     pub(crate) business_search: Cache<crate::business_search::SearchResults>,
     /// Account popover under the title-bar avatar.
     pub profile_menu_open: bool,
+    /// Language information overlay from the account menu.
+    pub language_dialog_open: bool,
     pub agent_drawer_open: bool,
     /// Ctrl+K command palette overlay.
     pub palette_open: bool,
@@ -804,6 +806,7 @@ impl AtlasApp {
             business_search_query: String::new(),
             business_search: Cache::default(),
             profile_menu_open: false,
+            language_dialog_open: false,
             agent_drawer_open: false,
             palette_open: false,
             palette_query: String::new(),
@@ -1264,6 +1267,7 @@ impl AtlasApp {
     pub fn modal_open(&self) -> bool {
         self.update.dialog_open
             || self.confirm_dialog.is_some()
+            || self.language_dialog_open
             || self.settings_dialog_open
             || self.product_editor.is_some()
             || self.product_label.is_some()
@@ -1295,6 +1299,10 @@ impl AtlasApp {
             if self.update.mandatory.is_none() {
                 self.update.dialog_open = false;
             }
+            return true;
+        }
+        if self.language_dialog_open {
+            self.language_dialog_open = false;
             return true;
         }
         if self.confirm_dialog.take().is_some() {
@@ -1636,6 +1644,7 @@ impl AtlasApp {
         self.nav_back.clear();
         self.nav_forward.clear();
         self.profile_menu_open = false;
+        self.language_dialog_open = false;
         self.agent_drawer_open = false;
         self.settings_focus = SettingsFocus::General;
         self.settings_dialog_open = false;

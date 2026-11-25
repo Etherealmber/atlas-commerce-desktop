@@ -276,6 +276,11 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             data.insert_temp(egui::Id::new(super::settings::SETTINGS_OPEN_ID), false)
         });
     }
+    if app.confirm_dialog.is_none() {
+        ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new("signout-cancel-focus-initialized"), false)
+        });
+    }
     if app.confirm_dialog.is_some() && !app.settings_dialog_open {
         let screen = ctx.input(|input| input.viewport_rect());
         egui::Area::new(egui::Id::new("confirmation-layer"))
@@ -286,9 +291,84 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 draw_confirm_dialog(app, ui, palette);
             });
     }
+    if app.language_dialog_open {
+        draw_language_dialog(app, ctx, palette);
+    }
     if app.update.dialog_open {
         draw_update_dialog(app, ctx, palette);
     }
+}
+
+/// The account language entry is informational: it never changes the locale.
+fn draw_language_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    let screen = ctx.input(|input| input.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            420.0_f32.min(screen.width()),
+            335.0_f32.min(screen.height()),
+        ),
+    );
+    egui::Area::new(egui::Id::new("language-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("language-dialog-scrim")) {
+                app.language_dialog_open = false;
+                return;
+            }
+            widgets::overlay_at(ui, rect, |ui| {
+                widgets::dialog_frame(palette).show(ui, |ui| {
+                    ui.set_min_width((rect.width() - 44.0).max(0.0));
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new("Langue")
+                                .font(crate::fonts::bold(18.0))
+                                .color(palette.text),
+                        );
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("×").clicked() {
+                                app.language_dialog_open = false;
+                            }
+                        });
+                    });
+                    ui.label(
+                        RichText::new("Bientôt disponible — l’arabe et l’anglais arrivent.")
+                            .color(palette.secondary)
+                            .size(13.0),
+                    );
+                    ui.add_space(12.0);
+                    for (name, subtitle, badge) in [
+                        ("Français", "Langue actuelle", "✓"),
+                        ("العربية", "Arabe", "Bientôt"),
+                        ("English", "Anglais", "Bientôt"),
+                    ] {
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(name)
+                                        .font(crate::fonts::semibold(14.0))
+                                        .color(palette.text),
+                                );
+                                ui.label(
+                                    RichText::new(subtitle).color(palette.secondary).size(12.0),
+                                );
+                            });
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                widgets::pill(ui, badge, palette.surface_hover, palette.secondary);
+                            });
+                        });
+                        ui.add_space(8.0);
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if crate::widgets::primary_button(ui, "Compris", palette, true) {
+                            app.language_dialog_open = false;
+                        }
+                    });
+                });
+            });
+        });
 }
 
 /// Settings is an overlay, not navigation: the active page and its draft
@@ -607,7 +687,8 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         return;
     };
     let screen = ui.ctx().input(|i| i.viewport_rect());
-    let width = 420.0;
+    let is_sign_out = matches!(dialog.action, ConfirmAction::SignOut);
+    let width = if is_sign_out { 380.0 } else { 420.0 };
     let height = 210.0;
     let rect = egui::Rect::from_center_size(screen.center(), vec2(width, height));
 
@@ -622,11 +703,23 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 .max_height((rect.height() - 46.0).max(1.0))
                 .show(ui, |ui| {
                     ui.set_min_size(vec2(width - 44.0, 0.0));
-                    ui.label(
-                        RichText::new(dialog.title.clone())
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
-                    );
+                    ui.horizontal(|ui| {
+                        if is_sign_out {
+                            widgets::icon(ui, Icon::LogOut, palette.finance_danger, 20.0);
+                        }
+                        ui.label(
+                            RichText::new(dialog.title.clone())
+                                .color(palette.text)
+                                .font(crate::fonts::semibold(17.0)),
+                        );
+                        if is_sign_out {
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui.button("×").clicked() {
+                                    app.confirm_dialog = None;
+                                }
+                            });
+                        }
+                    });
                     ui.add_space(8.0);
                     ui.label(
                         RichText::new(dialog.body.clone())
@@ -640,7 +733,25 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                         } else {
                             crate::widgets::primary_button(ui, &dialog.confirm_label, palette, true)
                         };
-                        let dismissed = secondary_button(ui, t!(app.locale, "Cancel"), palette);
+                        let dismissed = if is_sign_out {
+                            let response = ui.add(
+                                egui::Button::new(RichText::new("Annuler").color(palette.text))
+                                    .min_size(vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
+                                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                                    .corner_radius(crate::theme::RADIUS_CONTROL as f32),
+                            );
+                            let focused_id = egui::Id::new("signout-cancel-focus-initialized");
+                            if !ui
+                                .ctx()
+                                .data(|data| data.get_temp::<bool>(focused_id).unwrap_or(false))
+                            {
+                                response.request_focus();
+                                ui.ctx().data_mut(|data| data.insert_temp(focused_id, true));
+                            }
+                            response.clicked()
+                        } else {
+                            secondary_button(ui, t!(app.locale, "Cancel"), palette)
+                        };
                         if dismissed {
                             app.confirm_dialog = None;
                         }

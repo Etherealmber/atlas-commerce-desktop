@@ -671,10 +671,10 @@ fn draw_profile_menu(
     palette: &Palette,
     avatar_rect: &egui::Rect,
 ) {
-    let position = egui::pos2(
-        avatar_rect.right() - PROFILE_MENU_WIDTH,
-        avatar_rect.bottom() + 8.0,
-    );
+    let dock = ctx
+        .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("dock-last-rect")))
+        .unwrap_or(*avatar_rect);
+    let position = egui::pos2(dock.right() - PROFILE_MENU_WIDTH, dock.bottom() + 8.0);
     let response = egui::Area::new(egui::Id::new("titlebar-profile-menu"))
         .fixed_pos(position)
         .order(egui::Order::Foreground)
@@ -685,78 +685,39 @@ fn draw_profile_menu(
                 .show(ui, |ui| {
                     ui.set_width(PROFILE_MENU_WIDTH - 20.0);
                     if let Some(session) = app.session.clone() {
-                        ui.horizontal(|ui| {
-                            ui.add_space(2.0);
-                            let initial = if session.display_name.is_empty() {
-                                session.username.chars().next().unwrap_or('A')
-                            } else {
-                                session.display_name.chars().next().unwrap_or('A')
-                            }
-                            .to_string();
-                            widgets::avatar(
-                                ui,
-                                app.avatar_texture_uri.as_deref(),
-                                &initial,
-                                34.0,
-                                palette.accent,
-                                palette.on_accent,
-                                palette.outline,
-                            );
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new(if session.display_name.is_empty() {
-                                        session.username.clone()
-                                    } else {
-                                        session.display_name.clone()
-                                    })
-                                    .color(palette.text)
-                                    .strong()
-                                    .size(13.5),
-                                );
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{} · {}",
-                                        super::super::settings::role_label(app),
-                                        atlas_core::ServerUrl::host(&session.server_url)
-                                    ))
-                                    .color(palette.dim)
-                                    .size(11.5),
-                                );
+                        egui::Frame::NONE
+                            .fill(palette.surface_hover)
+                            .corner_radius(12.0)
+                            .inner_margin(egui::Margin::same(12))
+                            .show(ui, |ui| {
+                                ui.set_min_width(PROFILE_MENU_WIDTH - 44.0);
+                                ui.label(RichText::new("Bonjour").color(palette.secondary).size(12.0));
+                                ui.label(RichText::new(if session.display_name.is_empty() { &session.username } else { &session.display_name })
+                                    .color(palette.text).font(crate::fonts::semibold(15.0)));
+                                let role = match session.role.to_ascii_lowercase().as_str() {
+                                    "owner" => "Propriétaire", "admin" => "Admin", "secretaire" => "Secrétaire", "stock" => "Magasinier", _ => "Utilisateur",
+                                };
+                                widgets::pill(ui, role, palette.panel, palette.secondary);
                             });
-                        });
                         ui.separator();
                     }
 
-                    if menu_row(ui, palette, Icon::User, t!(app.locale, "My profile")).clicked() {
-                        app.profile_menu_open = false;
-                        app.settings_focus = crate::state::SettingsFocus::Profile;
-                        app.open_settings();
-                    }
-                    let settings_click =
-                        menu_row(ui, palette, Icon::Settings, t!(app.locale, "Settings")).clicked();
-                    if settings_click {
+                    if menu_row(ui, palette, Icon::Settings, "Paramètres", "Compte et préférences", false).clicked() {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::General;
                         app.open_settings();
                     }
-                    // The server is fixed by the installer and read-only in
-                    // Settings; only a reinstall can point elsewhere.
-                    if !app.server_store.is_locked()
-                        && menu_row(ui, palette, Icon::Server, t!(app.locale, "Change server"))
-                            .clicked()
-                    {
+                    if menu_row(ui, palette, Icon::Globe, "Langue", "Arabe et anglais bientôt", false).clicked() {
                         app.profile_menu_open = false;
-                        app.sign_out();
-                        app.server_form.verified_selected = None;
-                        app.screen = Screen::ServerSetup;
+                        app.language_dialog_open = true;
                     }
-                    // Release notes are shown in the application; a browser
-                    // link remains available in the settings section.
                     let whats_new = menu_row(
                         ui,
                         palette,
                         Icon::ExternalLink,
-                        t!(app.locale, "What's new and updates"),
+                        "Nouveautés",
+                        "Journal des versions",
+                        false,
                     )
                     .clicked();
                     if whats_new {
@@ -768,23 +729,19 @@ fn draw_profile_menu(
                         }
                     }
                     let about =
-                        menu_row(ui, palette, Icon::Info, t!(app.locale, "About")).clicked();
+                        menu_row(ui, palette, Icon::Info, "À propos", "Version et légal", false).clicked();
                     if about {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::About;
                         app.open_settings();
                     }
                     ui.separator();
-                    if menu_row(ui, palette, Icon::LogOut, t!(app.locale, "Sign out")).clicked() {
+                    if menu_row(ui, palette, Icon::LogOut, "Déconnexion", "Terminer la session", true).clicked() {
                         app.profile_menu_open = false;
                         app.confirm_dialog = Some(Confirm {
-                            title: t!(app.locale, "Sign out").into_owned(),
-                            body: t!(
-                                app.locale,
-                                "You will need to sign in again to reach this server."
-                            )
-                            .into_owned(),
-                            confirm_label: t!(app.locale, "Sign out").into_owned(),
+                            title: "Se déconnecter ?".into(),
+                            body: "La session actuelle sera fermée. Les données du serveur ne seront pas supprimées.".into(),
+                            confirm_label: "Se déconnecter".into(),
                             danger: true,
                             action: ConfirmAction::SignOut,
                         });
@@ -811,39 +768,74 @@ fn menu_row(
     ui: &mut egui::Ui,
     palette: &Palette,
     which: Icon,
-    label: impl AsRef<str>,
+    title: &str,
+    subtitle: &str,
+    danger: bool,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(ui.available_width(), crate::theme::TARGET_MIN_HEIGHT),
-        Sense::click(),
-    );
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 54.0), Sense::click());
     if response.hovered() {
-        ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
+        ui.painter().rect_filled(rect, 9.0, palette.surface_hover);
     }
+    let color = if danger {
+        palette.finance_danger
+    } else {
+        palette.text
+    };
+    let tile = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 20.0, rect.center().y),
+        Vec2::splat(32.0),
+    );
+    ui.painter().rect_filled(
+        tile,
+        999.0,
+        if danger {
+            palette.finance_danger_soft
+        } else {
+            palette.surface_hover
+        },
+    );
     widgets::overlay_at(
         ui,
-        egui::Rect::from_center_size(
-            egui::pos2(rect.left() + 18.0, rect.center().y),
-            Vec2::splat(18.0),
-        ),
-        |ui| widgets::icon(ui, which, palette.secondary, 16.0),
+        egui::Rect::from_center_size(tile.center(), Vec2::splat(17.0)),
+        |ui| widgets::icon(ui, which, color, 17.0),
     );
     widgets::overlay_at(
         ui,
         egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 38.0, rect.top()),
-            vec2(rect.width() - 44.0, rect.height()),
+            egui::pos2(rect.left() + 44.0, rect.top() + 6.0),
+            vec2((rect.width() - 65.0).max(0.0), 44.0),
         ),
         |ui| {
-            widgets::no_wrap_scope(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.label(
-                        RichText::new(label.as_ref())
-                            .color(palette.text)
-                            .font(crate::fonts::medium(13.5)),
-                    );
-                });
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.label(
+                    RichText::new(title)
+                        .font(crate::fonts::semibold(14.0))
+                        .color(color),
+                );
+                ui.label(RichText::new(subtitle).size(12.0).color(palette.secondary));
             });
+        },
+    );
+    widgets::overlay_at(
+        ui,
+        egui::Rect::from_center_size(
+            egui::pos2(
+                rect.right() - if title == "Langue" { 26.0 } else { 12.0 },
+                rect.center().y,
+            ),
+            if title == "Langue" {
+                vec2(52.0, 18.0)
+            } else {
+                Vec2::splat(14.0)
+            },
+        ),
+        |ui| {
+            if title == "Langue" {
+                ui.label(RichText::new("Bientôt").size(10.0).color(palette.secondary));
+            } else if !danger {
+                widgets::icon(ui, Icon::ChevronRight, palette.secondary, 14.0);
+            }
         },
     );
     response
