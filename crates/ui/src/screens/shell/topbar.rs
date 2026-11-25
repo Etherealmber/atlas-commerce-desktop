@@ -186,6 +186,7 @@ pub(super) fn draw_titlebar(
     if fastframe_titlebar::enabled() {
         fastframe_titlebar::drag(ui, rect);
     }
+    let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
     let left = rect.left() + 8.0;
     let right = rect.right().max(left);
     let available = (right - left).max(1.0);
