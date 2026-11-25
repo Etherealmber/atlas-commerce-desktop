@@ -1,5 +1,5 @@
 //! Title bar, search, profile and notification chrome.
-use super::{RAIL_COLLAPSE_BELOW, TITLEBAR_HEIGHT, route_meta};
+use super::{TITLEBAR_HEIGHT, route_meta};
 use crate::dialogs::{Confirm, ConfirmAction};
 use crate::icons::Icon;
 use crate::state::{AtlasApp, Route, Screen};
@@ -163,7 +163,7 @@ pub(super) fn draw_titlebar(
     let show_extras = available >= 330.0;
     let show_back = (available >= 280.0 && detail_back_available(app, route))
         || (available >= 430.0 && !app.nav_back.is_empty());
-    let icon_count = 3.0 + if show_extras { 2.0 } else { 0.0 } + if show_back { 1.0 } else { 0.0 };
+    let icon_count = 2.0 + if show_extras { 2.0 } else { 0.0 } + if show_back { 1.0 } else { 0.0 };
     let full_width = (icon_count * 48.0 + title_width + 32.0).min(available);
     let compact_width = (title_width + 38.0).min(available).max(1.0);
     let width = full_width + (compact_width - full_width) * t;
@@ -192,17 +192,6 @@ pub(super) fn draw_titlebar(
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
             if t < 0.25 {
-                let sidebar = widgets::icon_circle_button(ui, palette, Icon::PanelLeft, true)
-                    .on_hover_text(t!(app.locale, "Toggle sidebar"));
-                focus_ids.push(sidebar.id);
-                if sidebar.clicked() {
-                    let id = egui::Id::new("rail-collapsed");
-                    let initial = ctx.input(|i| i.viewport_rect().width()) < RAIL_COLLAPSE_BELOW;
-                    ctx.data_mut(|d| {
-                        let was = d.get_temp::<bool>(id).unwrap_or(initial);
-                        d.insert_temp(id, !was);
-                    });
-                }
                 if show_back {
                     let back = widgets::icon_circle_button(ui, palette, Icon::ArrowLeft, true)
                         .on_hover_text(t!(app.locale, "Back"));
@@ -376,7 +365,6 @@ pub(super) fn search_destination(query: &str) -> Option<Route> {
         "produit" | "produits" | "products" => Some(Route::Products),
         "depense" | "depenses" | "expenses" => Some(Route::Expenses),
         "employe" | "employes" | "employees" | "equipe" | "rh" => Some(Route::Employees),
-        "parametres" | "reglages" | "settings" => Some(Route::Settings),
         "agent" => Some(Route::Agent),
         _ => None,
     }
@@ -641,14 +629,14 @@ fn draw_profile_menu(
                     if menu_row(ui, palette, Icon::User, t!(app.locale, "My profile")).clicked() {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::Profile;
-                        app.go(Route::Settings);
+                        app.open_settings();
                     }
                     let settings_click =
                         menu_row(ui, palette, Icon::Settings, t!(app.locale, "Settings")).clicked();
                     if settings_click {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::General;
-                        app.go(Route::Settings);
+                        app.open_settings();
                     }
                     // The server is fixed by the installer and read-only in
                     // Settings; only a reinstall can point elsewhere.
@@ -673,7 +661,7 @@ fn draw_profile_menu(
                     if whats_new {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::About;
-                        app.go(Route::Settings);
+                        app.open_settings();
                         if app.update.release_notes.is_none() && !app.update.checking {
                             app.check_for_updates(false);
                         }
@@ -683,7 +671,7 @@ fn draw_profile_menu(
                     if about {
                         app.profile_menu_open = false;
                         app.settings_focus = crate::state::SettingsFocus::About;
-                        app.go(Route::Settings);
+                        app.open_settings();
                     }
                     ui.separator();
                     if menu_row(ui, palette, Icon::LogOut, t!(app.locale, "Sign out")).clicked() {

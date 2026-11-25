@@ -7,7 +7,7 @@ use egui::RichText;
 use crate::icons::Icon;
 use crate::state::AtlasApp;
 use crate::theme::Palette;
-use crate::widgets::{card, empty_state, error_banner, icon, page_title, pill, secondary_button};
+use crate::widgets::{card, empty_state, error_banner, icon, page_title, pill};
 use crate::{t, widgets};
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
@@ -22,9 +22,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 !app.alerts.loading,
             ) {
                 app.load_alerts();
-            }
-            if secondary_button(ui, t!(app.locale, "Open settings"), palette) {
-                app.go(crate::state::Route::Settings);
             }
         });
     });

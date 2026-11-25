@@ -8,7 +8,6 @@
 //! * `Ctrl/⌘+Shift+K` — open and focus the stock search, while the window is active,
 //! * `Ctrl/⌘+R` and `F5` — reload the current screen's data,
 //! * `Ctrl/⌘+F` — focus the title-bar product search,
-//! * `Ctrl/⌘+,` — open Settings,
 //! * `F2` — open the quick-sale screen,
 //! * `Ctrl/⌘+P` — print the open document,
 //! * `Escape` — dismiss the topmost overlay, then release text focus.
@@ -56,8 +55,6 @@ pub enum PaletteTarget {
     NewExpense,
     NewDelivery,
     FocusSearch,
-    SettingsProfile,
-    SettingsGeneral,
     SignOut,
 }
 
@@ -71,11 +68,7 @@ pub(crate) fn target_allowed(policy: crate::state::RolePolicy, target: PaletteTa
         PaletteTarget::NewVendor => policy.allows_route(Route::Vendors),
         PaletteTarget::NewExpense => policy.allows_route(Route::Expenses),
         PaletteTarget::NewDelivery => policy.allows_route(Route::DeliveryNotes),
-        PaletteTarget::Refresh
-        | PaletteTarget::FocusSearch
-        | PaletteTarget::SettingsProfile
-        | PaletteTarget::SettingsGeneral
-        | PaletteTarget::SignOut => true,
+        PaletteTarget::Refresh | PaletteTarget::FocusSearch | PaletteTarget::SignOut => true,
     }
 }
 
@@ -166,16 +159,6 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
         (
             PaletteTarget::NewDelivery,
             t!(locale, "New delivery note").into_owned(),
-            None,
-        ),
-        (
-            PaletteTarget::SettingsProfile,
-            t!(locale, "My profile").into_owned(),
-            None,
-        ),
-        (
-            PaletteTarget::SettingsGeneral,
-            t!(locale, "Settings").into_owned(),
             None,
         ),
         (
@@ -352,12 +335,6 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
                 memory.request_focus(crate::screens::products::product_search_id())
             });
         }
-        return;
-    }
-
-    // Ctrl/Cmd+, opens Settings (master parity spec §8).
-    if ctx.input(|input| input.key_pressed(egui::Key::Comma)) {
-        app.go(Route::Settings);
         return;
     }
 
@@ -707,7 +684,6 @@ mod tests {
         assert_eq!(routes.len(), 8);
         // The title-bar sections are not in the rail's digit range.
         assert!(!routes.contains(&Route::Notifications));
-        assert!(!routes.contains(&Route::Settings));
         assert!(!routes.contains(&Route::Agent));
         assert!(!routes.contains(&Route::Catalog));
         assert_eq!(rail_route_at(0), Some(Route::Dashboard));
@@ -729,11 +705,6 @@ mod tests {
             filter_entries("ventes", &entries)
                 .iter()
                 .any(|index| entries[*index].target == PaletteTarget::Route(Route::Sales))
-        );
-        assert!(
-            filter_entries("reglages", &entries)
-                .iter()
-                .any(|index| entries[*index].target == PaletteTarget::Route(Route::Settings))
         );
     }
 

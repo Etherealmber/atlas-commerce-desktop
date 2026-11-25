@@ -21,9 +21,8 @@ use topbar::search_destination;
 /// Height of the custom caption row (web topbar: 56 px).
 const TITLEBAR_HEIGHT: f32 = 56.0;
 /// Compact labelled rail and icon-only rail at narrower window widths.
-const RAIL_WIDTH_EXPANDED: f32 = 252.0;
-const RAIL_WIDTH_COLLAPSED: f32 = 88.0;
-const RAIL_COLLAPSE_BELOW: f32 = 1180.0;
+const RAIL_WIDTH_EXPANDED: f32 = 280.0;
+const RAIL_WIDTH_COLLAPSED: f32 = 64.0;
 
 /// Localized label + icon of every rail destination. Shared with the Ctrl+K
 /// command palette so navigation labels never diverge and the English locale
@@ -46,7 +45,6 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Actions => (Icon::CircleCheck, t!(locale, "Mobile actions").into_owned()),
         Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
         Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
-        Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
     }
 }
 
@@ -55,47 +53,24 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Ctrl+F and Escape, all suppressed while a text field owns the keys.
     crate::shortcuts::handle_shortcuts(app, ctx);
 
-    // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
-    // with an exact size reserves its width up front, so the rail can never
-    // expand to the full window and starve the central column (the blank
-    // shell bug came from Frame + set_min_size, whose minimum width did not
-    // stop rows calling available_width() from growing the frame).
-    // Below the 1180 px breakpoint the rail drops its labels and becomes
-    // the 72 px icon strip, mirroring the web sidebar's collapsed state.
     let viewport_width = ctx.input(|input| input.viewport_rect().width());
-    let rail_collapsed = ctx
-        .data(|data| data.get_temp::<bool>(egui::Id::new("rail-collapsed")))
-        .unwrap_or(viewport_width < RAIL_COLLAPSE_BELOW);
+    let rail_collapsed = app.settings.sidebar_collapsed;
     let rail_width = if rail_collapsed {
         RAIL_WIDTH_COLLAPSED
     } else {
         RAIL_WIDTH_EXPANDED
     };
-    // Reserve room for the card without painting the entire left panel.
     egui::Panel::left(egui::Id::new("shell-rail"))
         .exact_size(rail_width)
         .resizable(false)
         .show_separator_line(false)
-        .frame(egui::Frame::NONE.inner_margin(egui::Margin::same(12)))
+        .frame(egui::Frame::NONE.fill(if palette.dark {
+            egui::Color32::from_rgb(17, 17, 19)
+        } else {
+            egui::Color32::WHITE
+        }))
         .show(ui, |ui| {
-            egui::Frame::NONE
-                .fill(if palette.dark {
-                    egui::Color32::from_rgb(0x14, 0x14, 0x17)
-                } else {
-                    palette.panel
-                })
-                .stroke(egui::Stroke::new(1.0, palette.outline))
-                .corner_radius(20.0)
-                .shadow(crate::theme::elevation_shadow(palette))
-                .inner_margin(if rail_collapsed {
-                    egui::Margin::symmetric(12, 14)
-                } else {
-                    egui::Margin::symmetric(10, 14)
-                })
-                .show(ui, |ui| {
-                    ui.set_min_size(ui.available_size());
-                    sidebar::draw_rail(app, ui, palette, rail_collapsed);
-                });
+            sidebar::draw_rail(app, ui, palette, rail_collapsed)
         });
 
     // Transparent reserved space keeps content from sliding under controls;
@@ -745,7 +720,7 @@ mod search_tests {
     #[test]
     fn recognizes_navigation_but_leaves_product_queries_intact() {
         assert_eq!(search_destination(" Factures "), Some(Route::Sales));
-        assert_eq!(search_destination("Réglages"), Some(Route::Settings));
+        assert_eq!(search_destination("Réglages"), None);
         assert_eq!(search_destination("Situation"), Some(Route::Clients));
         assert_eq!(search_destination("café 1kg"), None);
     }

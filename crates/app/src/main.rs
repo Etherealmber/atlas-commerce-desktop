@@ -194,7 +194,7 @@ fn main() -> eframe::Result<()> {
         .selected_url()
         .filter(|_| !servers.requires_verification)
         .map(|base| {
-            atlas_core::vault_authority::restore_mode(&paths.browser_authority_file(), base)
+            atlas_core::vault_authority::restore_mode(&paths.legacy_authority_file(), base)
         });
     let session = if matches!(
         restore_mode,

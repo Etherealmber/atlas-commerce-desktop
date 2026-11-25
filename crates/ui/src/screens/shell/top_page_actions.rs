@@ -1,7 +1,7 @@
 //! Shared, non-scrolling page action row. It uses the existing page actions
 //! and retains their role checks; it never invokes a mutation by itself.
 use crate::dialogs::{Confirm, ConfirmAction};
-use crate::state::{AtlasApp, Route, Screen, SettingsFocus};
+use crate::state::{AtlasApp, Route, Screen};
 use crate::t;
 use crate::theme::Palette;
 use crate::widgets::{primary_button, secondary_button};
@@ -260,11 +260,6 @@ pub(super) fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                                 danger: false,
                                 action: ConfirmAction::EnableAttendance,
                             });
-                        }
-                        if secondary_button(ui, t!(app.locale, "Open attendance settings"), palette)
-                        {
-                            app.settings_focus = SettingsFocus::Attendance;
-                            app.go(Route::Settings);
                         }
                     }
                     if secondary_button(ui, t!(app.locale, "Refresh"), palette) {

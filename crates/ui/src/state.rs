@@ -110,11 +110,10 @@ pub enum Route {
     Actions,
     Agent,
     Notifications,
-    Settings,
 }
 
 impl Route {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 16] = [
         Self::Dashboard,
         Self::Products,
         Self::Catalog,
@@ -131,7 +130,6 @@ impl Route {
         Self::Actions,
         Self::Agent,
         Self::Notifications,
-        Self::Settings,
     ];
 }
 
@@ -171,7 +169,7 @@ impl RolePolicy {
     pub(crate) fn allows_route(self, route: Route) -> bool {
         self.signed_in
             && match route {
-                Route::Products | Route::Settings | Route::Agent => true,
+                Route::Products | Route::Agent => true,
                 Route::Dashboard => !self.stock,
                 Route::Attendance | Route::Payroll => self.admin,
                 Route::CashShifts => self.office,
@@ -716,7 +714,7 @@ impl AtlasApp {
         tray: Option<crate::tray::TrayHandle>,
     ) -> Self {
         let vault_worker =
-            atlas_core::vault_worker::VaultWorker::new(paths.browser_authority_file());
+            atlas_core::vault_worker::VaultWorker::new(paths.legacy_authority_file());
         let locale = Locale::from_tag(&settings.language);
         let screen = if server_store.requires_verification {
             Screen::ServerSetup
@@ -1019,6 +1017,27 @@ impl AtlasApp {
         RolePolicy::from_role(self.session.as_ref().map(|session| session.role.as_str()))
     }
 
+    /// Open settings over the current page without creating a route.
+    pub fn open_settings(&mut self) {
+        if !self.role_policy().signed_in {
+            return;
+        }
+        self.settings_dialog_open = true;
+        self.profile_menu_open = false;
+        if self.profile.data.is_none() && !self.profile.loading && self.profile.error.is_none() {
+            self.load_profile();
+        }
+        if self.devices.data.is_none() && !self.devices.loading {
+            self.load_devices();
+        }
+        if self.role_policy().admin && self.api_keys.data.is_none() && !self.api_keys.loading {
+            self.load_api_keys();
+        }
+        if self.assist.data.is_none() && !self.assist.loading {
+            self.load_assist();
+        }
+    }
+
     /// Opens a shell route, recording the current one for the back button.
     pub fn go(&mut self, route: Route) {
         if !self.role_policy().allows_route(route) {
@@ -1026,12 +1045,6 @@ impl AtlasApp {
         }
         if route == Route::Agent {
             self.agent_drawer_open = true;
-            return;
-        }
-        if route == Route::Settings {
-            self.settings_dialog_open = true;
-            self.profile_menu_open = false;
-            self.ensure_route_data(Route::Settings);
             return;
         }
         if let Screen::Shell(current) = self.screen
@@ -1201,28 +1214,6 @@ impl AtlasApp {
                     self.load_nav_badges();
                 }
             }
-            // Settings aggregates four independent caches; load each once,
-            // leaving the in-screen Retry action in charge of failed loads.
-            Route::Settings => {
-                if self.profile.data.is_none()
-                    && !self.profile.loading
-                    && self.profile.error.is_none()
-                {
-                    self.load_profile();
-                }
-                if self.devices.data.is_none() && !self.devices.loading {
-                    self.load_devices();
-                }
-                if self.role_policy().admin
-                    && self.api_keys.data.is_none()
-                    && !self.api_keys.loading
-                {
-                    self.load_api_keys();
-                }
-                if self.assist.data.is_none() && !self.assist.loading {
-                    self.load_assist();
-                }
-            }
             _ => {}
         }
     }
@@ -1262,13 +1253,6 @@ impl AtlasApp {
             Route::Notifications => {
                 self.load_alerts();
                 self.load_nav_badges();
-            }
-            Route::Settings => {
-                self.load_profile();
-                self.load_devices();
-                if self.role_policy().admin {
-                    self.load_api_keys();
-                }
             }
         }
     }
@@ -1471,16 +1455,6 @@ impl AtlasApp {
             PaletteTarget::FocusSearch => {
                 self.go(Route::Products);
                 true
-            }
-            PaletteTarget::SettingsProfile => {
-                self.settings_focus = SettingsFocus::Profile;
-                self.go(Route::Settings);
-                false
-            }
-            PaletteTarget::SettingsGeneral => {
-                self.settings_focus = SettingsFocus::General;
-                self.go(Route::Settings);
-                false
             }
             PaletteTarget::SignOut => {
                 self.confirm_dialog = Some(crate::dialogs::Confirm {

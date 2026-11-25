@@ -12,15 +12,11 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         Screen::Shell(route) => Some(route),
         _ => None,
     };
-    // Leave the native macOS traffic lights unobstructed in the top-left.
-    #[cfg(target_os = "macos")]
-    if fastframe_titlebar::enabled() {
-        ui.add_space(super::TITLEBAR_HEIGHT);
-    }
-    ui.add_space(8.0);
+    ui.spacing_mut().item_spacing.y = 4.0;
+    ui.add_space(12.0);
     let brand = ui.vertical_centered(|ui| {
         if collapsed {
-            crate::branding::mark(ui, palette, 24.0);
+            crate::branding::mark(ui, palette, 28.0);
         } else {
             crate::branding::lockup(ui, palette, 26.0);
             let stock = app
@@ -46,8 +42,8 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         )
         .double_clicked()
     {
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(egui::Id::new("rail-collapsed"), !collapsed));
+        app.settings.sidebar_collapsed = !collapsed;
+        app.save_settings();
     }
     ui.add_space(8.0);
     ui.separator();
@@ -63,18 +59,14 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         app.load_nav_badges();
     }
     type RailGroup<'a> = (std::borrow::Cow<'a, str>, &'a [(Route, &'a str)]);
-    let groups: [RailGroup<'_>; 8] = [
+    let groups: [RailGroup<'_>; 6] = [
         (
             t!(app.locale, "Overview"),
             &[(Route::Dashboard, "Dashboard")],
         ),
         (
             t!(app.locale, "Catalog"),
-            &[
-                (Route::Products, "Products and stock"),
-                (Route::Products, "Scan barcode"),
-                (Route::Catalog, "Catalog"),
-            ],
+            &[(Route::Products, "Products and stock")],
         ),
         (
             t!(app.locale, "Customer relations"),
@@ -85,12 +77,6 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
             &[
                 (Route::Employees, "Employees"),
                 (Route::Attendance, "Attendance"),
-                (Route::Payroll, "Payroll CNSS / AMO"),
-            ],
-        ),
-        (
-            t!(app.locale, "Sales"),
-            &[
                 (Route::Sales, "Quotes"),
                 (Route::Sales, "Quick sale"),
                 (Route::Sales, "Sales invoices"),
@@ -109,104 +95,17 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
             t!(app.locale, "Finance"),
             &[
                 (Route::Expenses, "Balance and income"),
-                (Route::Expenses, "Reports and closing"),
                 (Route::CashShifts, "Cash shifts"),
-                (Route::DeliveryNotes, "Delivery notes"),
-            ],
-        ),
-        (
-            t!(app.locale, "Operations and actions"),
-            &[
+                (Route::Payroll, "Payroll CNSS / AMO"),
+                (Route::Expenses, "Reports and closing"),
                 (Route::InventoryOps, "Stock operations"),
-                (Route::Actions, "Mobile actions"),
-                (Route::Notifications, "Notifications"),
             ],
         ),
     ];
-    // Keep the settings entry reachable even when the route list is long.
-    let navigation_height = (ui.available_height() - 54.0).max(0.0);
+    let navigation_height = ui.available_height().max(0.0);
     egui::ScrollArea::vertical()
         .max_height(navigation_height)
         .show(ui, |ui| {
-            if collapsed && app.role_policy().allows_route(Route::Notifications) {
-                let mut target = None;
-                if let Some(badges) = &app.nav_badges.data {
-                    for (index, (label, count, danger)) in [
-                        (
-                            t!(app.locale, "Unpaid invoices"),
-                            badges.invoices_unpaid,
-                            true,
-                        ),
-                        (t!(app.locale, "Low stock"), badges.products_low, false),
-                        (
-                            t!(app.locale, "Mobile actions"),
-                            badges.actions_pending,
-                            false,
-                        ),
-                        (t!(app.locale, "Open quick sales"), badges.vr_open, false),
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        if count <= 0 {
-                            continue;
-                        }
-                        let (rect, response) = ui.allocate_exact_size(
-                            vec2(ui.available_width().max(0.0), 24.0),
-                            Sense::click(),
-                        );
-                        let tint = if danger {
-                            palette.finance_danger
-                        } else {
-                            palette.finance_warning
-                        };
-                        ui.painter().rect_filled(
-                            rect.shrink2(vec2(2.0, 2.0)),
-                            255.0,
-                            palette.surface_hover,
-                        );
-                        ui.painter().circle_filled(
-                            egui::pos2(rect.left() + 8.0, rect.center().y),
-                            3.0,
-                            tint,
-                        );
-                        let value = if count > 99 {
-                            "99+".to_owned()
-                        } else {
-                            count.to_string()
-                        };
-                        ui.painter().text(
-                            egui::pos2(rect.center().x + 3.0, rect.center().y),
-                            egui::Align2::CENTER_CENTER,
-                            value,
-                            egui::FontId::proportional(11.0),
-                            palette.text,
-                        );
-                        if response.on_hover_text(label).clicked() {
-                            target = Some(index);
-                        }
-                    }
-                }
-                if let Some(index) = target {
-                    match index {
-                        0 => super::super::notifications::open_alert(
-                            app,
-                            super::super::notifications::AlertDestination::Invoices(None),
-                        ),
-                        1 => super::super::notifications::open_alert(
-                            app,
-                            super::super::notifications::AlertDestination::Products,
-                        ),
-                        2 => app.go(Route::Actions),
-                        // The quick-sale list is not available here yet; do not
-                        // redirect users to the unrelated creation form.
-                        _ => app.notice(
-                            t!(app.locale, "This list is not available in desktop yet.")
-                                .into_owned(),
-                        ),
-                    }
-                }
-            }
             for (heading, entries) in groups {
                 if !entries
                     .iter()
@@ -231,11 +130,6 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                     }
                     let (default_icon, _) = route_meta(app.locale, route);
                     let which = entry_icon(source, default_icon);
-                    let badge = app
-                        .nav_badges
-                        .data
-                        .as_ref()
-                        .and_then(|badges| entry_count(source, badges));
                     let label = crate::i18n::gettext(app.locale, source);
                     let selected = active == Some(route)
                         && match (route, source) {
@@ -260,8 +154,7 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                             _ => true,
                         };
                     {
-                        let response =
-                            rail_row(ui, palette, which, &label, selected, collapsed, badge);
+                        let response = rail_row(ui, palette, which, &label, selected, collapsed);
                         if response.clicked() {
                             app.go(route);
                             match (route, source) {
@@ -303,22 +196,6 @@ pub(super) fn draw_rail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                 }
             }
         });
-    ui.add_space(4.0);
-    ui.separator();
-    let settings = t!(app.locale, "Settings");
-    if rail_row(
-        ui,
-        palette,
-        Icon::Settings,
-        &settings,
-        app.settings_dialog_open,
-        collapsed,
-        None,
-    )
-    .clicked()
-    {
-        app.go(Route::Settings);
-    }
 }
 
 fn entry_icon(source: &str, fallback: Icon) -> Icon {
@@ -334,20 +211,6 @@ fn entry_icon(source: &str, fallback: Icon) -> Icon {
     }
 }
 
-fn entry_count(source: &str, badges: &atlas_api::models::NavBadges) -> Option<i64> {
-    let count = match source {
-        "Products and stock" => badges.products_low,
-        "Quotes" => badges.quotes_open,
-        "Quick sale" => badges.vr_open,
-        "Sales invoices" => badges.invoices_unpaid,
-        "Purchase invoices" => badges.bills_unpaid.max(badges.bills_receive),
-        "Employees" => badges.employees_pay_due,
-        "Mobile actions" => badges.actions_pending,
-        _ => 0,
-    };
-    (count > 0).then_some(count)
-}
-
 fn rail_row(
     ui: &mut egui::Ui,
     palette: &Palette,
@@ -355,17 +218,27 @@ fn rail_row(
     label: &str,
     is_active: bool,
     collapsed: bool,
-    badge: Option<i64>,
 ) -> egui::Response {
     // Web sidebar items are 40 px rows; the desktop parity floor is 44 px
     // touch targets.
-    let height = 44.0;
+    let height = if collapsed { 44.0 } else { 40.0 };
     // Reserve the row with a passive hover sense first. The icon and label
     // are painted through overlay child UIs whose widgets register their own
     // hover rectangles and used to swallow presses landing on the text; the
     // click interaction below is therefore registered last, so the full row
     // (icon and label text included) is one clickable surface.
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let (slot, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    let rect = egui::Rect::from_center_size(
+        slot.center(),
+        vec2(
+            if collapsed {
+                44.0
+            } else {
+                231.0_f32.min(slot.width())
+            },
+            height,
+        ),
+    );
     let hovered = ui.rect_contains_pointer(rect);
     if is_active {
         ui.painter().rect_filled(rect, 12.0, palette.surface_active);
@@ -392,14 +265,6 @@ fn rail_row(
             |ui| icon(ui, which, tint, 19.0),
         );
     } else {
-        let badge_text = badge.map(|count| {
-            if count > 99 {
-                "99+".to_owned()
-            } else {
-                count.to_string()
-            }
-        });
-        let badge_width = if badge_text.is_some() { 34.0 } else { 0.0 };
         widgets::overlay_at(
             ui,
             egui::Rect::from_center_size(
@@ -412,7 +277,7 @@ fn rail_row(
             ui,
             egui::Rect::from_min_size(
                 egui::pos2(rect.left() + 44.0, rect.top()),
-                vec2((rect.width() - 52.0 - badge_width).max(1.0), rect.height()),
+                vec2((rect.width() - 52.0).max(1.0), rect.height()),
             ),
             |ui| {
                 // Rail entries are one-line chrome labels, even at narrow widths.
@@ -439,21 +304,6 @@ fn rail_row(
                 });
             },
         );
-        if let Some(text) = badge_text {
-            let badge_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.right() - 18.0, rect.center().y),
-                vec2(30.0, 20.0),
-            );
-            ui.painter()
-                .rect_filled(badge_rect, 255.0, palette.finance_warning_soft);
-            ui.painter().text(
-                badge_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                text,
-                egui::FontId::proportional(10.5),
-                palette.finance_warning,
-            );
-        }
     }
     // Last interaction wins for overlapping rectangles, so registering the
     // row click after the overlay widgets keeps the label text clickable.
@@ -462,24 +312,5 @@ fn rail_row(
         response.on_hover_text(label)
     } else {
         response
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::entry_count;
-    use atlas_api::models::NavBadges;
-
-    #[test]
-    fn purchase_badge_uses_maximum_not_sum_and_hides_zero() {
-        let badges = NavBadges {
-            bills_unpaid: 3,
-            bills_receive: 7,
-            products_low: -1,
-            ..NavBadges::default()
-        };
-        assert_eq!(entry_count("Purchase invoices", &badges), Some(7));
-        assert_eq!(entry_count("Products and stock", &badges), None);
-        assert_eq!(entry_count("unknown", &badges), None);
     }
 }

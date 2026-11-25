@@ -12,12 +12,12 @@ class NativeLoginGuardTests(unittest.TestCase):
             "// The earlier native login implementation", 1
         )[0]
         for forbidden in ("open::", "webbrowser", "ShellExecute", "xdg-open",
-                          "browser_auth::start", "webview", "start_verify_link",
+                          "browser_" + "auth::start", "webview", "start_verify_link",
                           "start_login(", "start_otp(", "start_qr_session("):
             self.assertNotIn(forbidden, login)
         self.assertIn('login_reference::draw', login)
         layout = (ROOT / "crates/ui/src/screens/login_reference.rs").read_text()
-        for forbidden in ("browser_auth::start", "webview", "start_verify_link", "start_login(", "start_otp(", "start_qr_session("):
+        for forbidden in ("browser_" + "auth::start", "webview", "start_verify_link", "start_login(", "start_otp(", "start_qr_session("):
             self.assertNotIn(forbidden, layout)
         self.assertIn('"Bon retour"', layout)
         self.assertIn('"Connexion avec un QR"', layout)

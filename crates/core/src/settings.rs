@@ -75,6 +75,8 @@ pub struct Settings {
     pub custom_titlebar: bool,
     /// Allow system window material when the Windows accessibility policy permits it.
     pub windows_material: bool,
+    /// Remember whether the main navigation is collapsed.
+    pub sidebar_collapsed: bool,
     /// Honour the web's `prefers-reduced-motion` rule: every animation then
     /// resolves instantly (the forked egui exposes no OS signal, so the
     /// choice is an in-app, persisted toggle).
@@ -102,6 +104,7 @@ impl Default for Settings {
             custom_titlebar: true,
             windows_material: true,
             reduced_motion: false,
+            sidebar_collapsed: true,
         }
     }
 }
@@ -168,6 +171,7 @@ mod tests {
         assert_eq!(settings.theme, ThemeMode::Light);
         assert!(settings.close_to_tray);
         assert!(settings.windows_material);
+        assert!(settings.sidebar_collapsed);
     }
 
     #[test]
@@ -175,6 +179,7 @@ mod tests {
         let settings: Settings =
             serde_json::from_str(r#"{"theme":"dark","language":"fr"}"#).unwrap();
         assert_eq!(settings.ui_scale_percent, 100);
+        assert!(settings.sidebar_collapsed);
         assert_eq!(settings.theme, ThemeMode::Dark);
         let json = serde_json::to_string(&settings).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);

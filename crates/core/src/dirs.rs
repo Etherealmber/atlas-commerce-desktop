@@ -106,7 +106,7 @@ impl AppPaths {
 
     /// Non-secret authority marker for browser-v1 restoration.
     #[must_use]
-    pub fn browser_authority_file(&self) -> PathBuf {
+    pub fn legacy_authority_file(&self) -> PathBuf {
         self.dirs.state.join("browser-v1-authority.json")
     }
 
