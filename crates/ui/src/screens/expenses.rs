@@ -10,6 +10,7 @@ use atlas_core::format::money;
 use atlas_core::jobs::Job;
 use egui::{RichText, Sense, vec2};
 
+use crate::dialogs::{Confirm, ConfirmAction};
 use crate::icons::Icon;
 use crate::state::AtlasApp;
 use crate::theme::Palette;
@@ -31,7 +32,7 @@ const PAYMENT_METHODS: [(&str, &str); 5] = [
 /// Create form for an expense or an income entry.
 #[derive(Default)]
 pub struct ExpenseEditor {
-    /// `"expense"` or `"income"`; owner movements are created server-side.
+    /// Worker ledger entry type, including owner contributions and draws.
     pub entry_type: String,
     pub description: String,
     pub category: String,
@@ -65,7 +66,9 @@ impl ExpenseEditor {
             return Some("The description must be 300 characters or fewer.");
         }
         match self.amount.trim().replace(',', ".").parse::<f64>() {
-            Ok(amount) if amount >= 0.01 => None,
+            Ok(amount) if amount.is_finite() && (0.01..=1_000_000_000_000.0).contains(&amount) => {
+                None
+            }
             _ => Some("The amount must be a positive number."),
         }
     }
@@ -91,32 +94,32 @@ impl ExpenseEditor {
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
-
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Expenses"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "New entry"), palette, true) {
-                app.expense_editor = Some(ExpenseEditor::new());
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_expenses();
-            }
-        });
-    });
-    ui.add_space(12.0);
-
-    if app.role_policy().can_view_reports() {
-        if secondary_button(ui, t!(app.locale, "Finance reports"), palette) {
-            app.finance_report_open = !app.finance_report_open;
-        }
-        if app.finance_report_open {
-            ui.add_space(10.0);
-            draw_finance_reports(app, ui, palette);
-            ui.add_space(12.0);
-        }
+    if app.finance_report_open && app.role_policy().can_view_reports() {
+        ui.add_space(8.0);
+        page_title(ui, t!(app.locale, "Reports and closing"), palette);
+        ui.add_space(12.0);
+        draw_finance_reports(app, ui, palette);
+        return;
     }
 
+    ui.add_space(8.0);
+    page_title(ui, t!(app.locale, "Balance and income"), palette);
+    ui.add_space(12.0);
+
+    if app.ledger_uncertain {
+        error_banner(
+            ui,
+            t!(
+                app.locale,
+                "The server may have recorded this entry. Verify the ledger before trying again; retrying can create a duplicate."
+            ),
+            palette,
+        );
+        if secondary_button(ui, t!(app.locale, "Review uncertain write"), palette) {
+            warn_uncertain_write(app);
+        }
+        ui.add_space(10.0);
+    }
     if let Some(error) = app.expenses.error.clone() {
         error_banner(ui, &error, palette);
         ui.add_space(10.0);
@@ -161,7 +164,33 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         draw_bills(app, ui, palette);
         ui.add_space(12.0);
     }
+    if app.role_policy().can_view_reports() {
+        // The existing report view stays server-backed; do not imply that
+        // exports unavailable in this client have been implemented.
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if secondary_button(ui, t!(app.locale, "Reports and closing"), palette) {
+                app.finance_report_open = true;
+                app.bills_open = false;
+            }
+        });
+        ui.add_space(8.0);
+    }
+    if app.expenses.loading && app.expenses.data.is_none() {
+        let time = ui.input(|input| input.time);
+        widgets::draw_page_skeleton(
+            ui,
+            palette,
+            widgets::PageSkeleton::Balance,
+            time,
+            app.settings.reduced_motion,
+        );
+        return;
+    }
+    if app.expenses.error.is_some() && app.expenses.data.is_none() {
+        return;
+    }
     draw_totals(app, ui, palette);
+    ui.label(RichText::new(t!(app.locale, "Treasury totals come from the server dashboard and may be cached; the movements list is separate.")).color(palette.dim).size(11.5));
     ui.add_space(12.0);
 
     card(palette).show(ui, |ui| {
@@ -181,10 +210,6 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         });
         ui.add_space(10.0);
 
-        if app.expenses.loading && app.expenses.data.is_none() {
-            super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
-            return;
-        }
         let expenses = app.expenses.data.clone().unwrap_or_default();
         if expenses.is_empty() {
             empty_state(
@@ -297,7 +322,8 @@ fn expense_row(
     expense: &Expense,
     currency: &str,
 ) {
-    let is_income = expense.entry_type == "income";
+    let direction = entry_direction(&expense.entry_type);
+    let is_income = direction == Some(true);
     let height = 56.0;
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -331,7 +357,15 @@ fn expense_row(
                         payment_source(expense.payment_method.as_str()),
                     )
                     .to_string();
+                    let kind = match expense.entry_type.as_str() {
+                        "income" => "Income",
+                        "owner_contrib" => "Owner contribution",
+                        "owner_draw" => "Owner draw",
+                        "expense" | "" => "Expense",
+                        _ => "Other",
+                    };
                     let subline = [
+                        crate::i18n::gettext(locale, kind).into_owned(),
                         expense.expense_date.clone(),
                         expense.category.clone(),
                         method,
@@ -344,12 +378,15 @@ fn expense_row(
                     ui.label(RichText::new(subline).color(palette.dim).size(11.5));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let sign = if is_income { "+" } else { "−" };
+                    let sign = match direction {
+                        Some(true) => "+",
+                        Some(false) => "−",
+                        None => "",
+                    };
                     ui.label(
                         RichText::new(format!("{sign}{}", money(expense.amount, currency)))
                             .color(palette.text)
-                            .strong()
-                            .size(13.0),
+                            .font(crate::fonts::mono_semibold(13.0)),
                     );
                 });
             });
@@ -411,7 +448,7 @@ fn draw_ledger_reconciliation(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &P
                     .color(palette.text)
                     .strong(),
             );
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_ledger_reconciliation();
             }
         });
@@ -470,7 +507,7 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .color(palette.text)
                     .strong(),
             );
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_bills();
             }
         });
@@ -562,49 +599,80 @@ fn draw_bills(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     });
 }
 
+fn entry_direction(entry_type: &str) -> Option<bool> {
+    match entry_type {
+        "income" | "owner_contrib" => Some(true),
+        "expense" | "owner_draw" | "" => Some(false),
+        _ => None,
+    }
+}
+
+/// The Worker dashboard is the source of truth; never substitute a partial
+/// expenses list for treasury-wide figures or silently turn missing data into zero.
+fn treasury_totals(data: &atlas_api::models::Dashboard) -> [Option<f64>; 4] {
+    if data.operational_only {
+        return [None; 4];
+    }
+    let finite = |value: Option<f64>| value.filter(|v| v.is_finite());
+    let inflow = finite(data.sales_received)
+        .zip(finite(data.other_income_total))
+        .zip(finite(data.owner_contrib_total))
+        .map(|((sales, other), contribution)| sales + other + contribution)
+        .filter(|v| v.is_finite());
+    let outflow = finite(data.purchases_paid)
+        .zip(finite(data.expenses_total))
+        .zip(finite(data.owner_draw_total))
+        .map(|((purchases, expenses), draw)| purchases + expenses + draw)
+        .filter(|v| v.is_finite());
+    let net = inflow
+        .zip(outflow)
+        .map(|(incoming, outgoing)| incoming - outgoing)
+        .filter(|v| v.is_finite());
+    [finite(data.current_balance), inflow, outflow, net]
+}
+
 fn draw_totals(app: &AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    let Some(expenses) = app.expenses.data.clone() else {
-        return;
-    };
+    if let Some(error) = &app.dashboard.error {
+        error_banner(ui, error, palette);
+    }
     let currency = app
         .dashboard
         .data
         .as_ref()
         .map(|data| data.currency())
         .unwrap_or("MAD");
-    let mut spent = 0.0;
-    let mut earned = 0.0;
-    for expense in &expenses {
-        match expense.entry_type.as_str() {
-            "income" => earned += expense.amount,
-            _ => spent += expense.amount,
-        }
+    let values = app
+        .dashboard
+        .data
+        .as_ref()
+        .map(treasury_totals)
+        .unwrap_or([None; 4]);
+    let totals = [
+        (t!(app.locale, "Current balance"), values[0]),
+        (t!(app.locale, "Inflows"), values[1]),
+        (t!(app.locale, "Outflows"), values[2]),
+        (t!(app.locale, "Net cash flow"), values[3]),
+    ];
+    let width = ui.available_width();
+    let columns = if width >= 850.0 {
+        4
+    } else if width >= 400.0 {
+        2
+    } else {
+        1
+    };
+    for row in totals.chunks(columns) {
+        ui.columns(columns, |items| {
+            for (column, (label, value)) in items.iter_mut().zip(row.iter()) {
+                let inner_width = (column.available_width() - 32.0).max(1.0);
+                let value = value
+                    .map(|amount| money(amount, currency))
+                    .unwrap_or_else(|| "—".to_owned());
+                stat_card(column, palette, inner_width, label, &value);
+            }
+        });
+        ui.add_space(8.0);
     }
-    let net = earned - spent;
-    let width = ((ui.available_width() - 24.0) / 3.0).max(160.0);
-    ui.horizontal(|ui| {
-        stat_card(
-            ui,
-            palette,
-            width,
-            &t!(app.locale, "Expenses"),
-            &money(spent, currency),
-        );
-        stat_card(
-            ui,
-            palette,
-            width,
-            &t!(app.locale, "Income"),
-            &money(earned, currency),
-        );
-        stat_card(
-            ui,
-            palette,
-            width,
-            &t!(app.locale, "Net balance"),
-            &money(net, currency),
-        );
-    });
 }
 
 fn stat_card(ui: &mut egui::Ui, palette: &Palette, width: f32, label: &str, value: &str) {
@@ -615,7 +683,7 @@ fn stat_card(ui: &mut egui::Ui, palette: &Palette, width: f32, label: &str, valu
         ui.label(
             RichText::new(value)
                 .color(palette.text)
-                .font(crate::fonts::semibold(17.0)),
+                .font(crate::fonts::mono_semibold(17.0)),
         );
     });
 }
@@ -637,7 +705,12 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         screen.center(),
         vec2(520.0, 620.0_f32.min((screen.height() - 32.0).max(1.0))),
     );
-    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("expense-editor-scrim")) {
+    if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("expense-editor-scrim"))
+        && !app
+            .expense_editor
+            .as_ref()
+            .is_some_and(|editor| editor.saving)
+    {
         app.expense_editor = None;
         return;
     }
@@ -763,7 +836,7 @@ fn draw_editor(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                             .is_some_and(|editor| editor.saving);
                         let save = primary_button(ui, t!(locale, "Save"), palette, !saving);
                         let cancel = secondary_button(ui, t!(locale, "Cancel"), palette);
-                        if cancel {
+                        if cancel && !saving {
                             app.expense_editor = None;
                         }
                         if save {
@@ -781,8 +854,13 @@ fn segmented_type(
     palette: &Palette,
     locale: crate::i18n::Locale,
 ) {
-    ui.horizontal(|ui| {
-        for (key, label) in [("expense", "Expense"), ("income", "Income")] {
+    ui.horizontal_wrapped(|ui| {
+        for (key, label) in [
+            ("expense", "Expense"),
+            ("income", "Income"),
+            ("owner_contrib", "Owner contribution"),
+            ("owner_draw", "Owner draw"),
+        ] {
             let selected = editor.entry_type == key;
             let button = egui::Button::new(
                 RichText::new(crate::i18n::gettext(locale, label))
@@ -813,6 +891,18 @@ fn segmented_type(
     });
 }
 
+fn warn_uncertain_write(app: &mut AtlasApp) {
+    app.ledger_uncertain = true;
+    app.confirm_dialog = Some(Confirm {
+        title: t!(app.locale, "Ledger write outcome uncertain").into_owned(),
+        body: t!(app.locale, "The server may have recorded this entry. Verify the ledger before trying again; retrying can create a duplicate.").into_owned(),
+        confirm_label: t!(app.locale, "I will verify before retrying").into_owned(),
+        danger: true,
+        action: ConfirmAction::AcknowledgeLedgerUncertainty,
+    });
+    app.load_expenses();
+}
+
 fn poll_editor(app: &mut AtlasApp) {
     if let Some(editor) = app.expense_editor.as_mut()
         && let Some(job) = &editor.job
@@ -827,18 +917,27 @@ fn poll_editor(app: &mut AtlasApp) {
                 app.load_expenses();
                 app.load_dashboard();
             }
-            Err(error) => editor.error = Some(error.message),
+            Err(_error) => {
+                app.expense_editor = None;
+                warn_uncertain_write(app);
+            }
         }
     }
 }
 
 fn submit_editor(app: &mut AtlasApp) {
+    if !app.role_policy().can_write_ledger() || app.ledger_uncertain {
+        return;
+    }
     let Some(client) = app.client.clone() else {
         return;
     };
     let Some(editor) = app.expense_editor.as_mut() else {
         return;
     };
+    if editor.saving {
+        return;
+    }
     if let Some(validation) = editor.validate() {
         editor.error = Some(crate::i18n::gettext(app.locale, validation).into_owned());
         return;
@@ -850,4 +949,61 @@ fn submit_editor(app: &mut AtlasApp) {
         .runner
         .spawn(async move { client.create_expense(&body).await });
     editor.job = Some(job);
+}
+
+#[cfg(test)]
+mod ledger_tests {
+    use super::{ExpenseEditor, entry_direction, treasury_totals};
+
+    #[test]
+    fn treasury_uses_complete_server_aggregates_and_never_fabricates_missing_values() {
+        let data = atlas_api::models::Dashboard {
+            current_balance: Some(50.0),
+            sales_received: Some(100.0),
+            other_income_total: Some(20.0),
+            owner_contrib_total: Some(10.0),
+            purchases_paid: Some(40.0),
+            expenses_total: Some(5.0),
+            owner_draw_total: Some(15.0),
+            ..Default::default()
+        };
+        assert_eq!(
+            treasury_totals(&data),
+            [Some(50.0), Some(130.0), Some(60.0), Some(70.0)]
+        );
+        let incomplete = atlas_api::models::Dashboard {
+            other_income_total: None,
+            ..data
+        };
+        assert_eq!(
+            treasury_totals(&incomplete),
+            [Some(50.0), None, Some(60.0), None]
+        );
+        let restricted = atlas_api::models::Dashboard {
+            operational_only: true,
+            ..incomplete
+        };
+        assert_eq!(treasury_totals(&restricted), [None; 4]);
+    }
+
+    #[test]
+    fn directions_match_worker_entry_types() {
+        assert_eq!(entry_direction("income"), Some(true));
+        assert_eq!(entry_direction("owner_contrib"), Some(true));
+        assert_eq!(entry_direction("expense"), Some(false));
+        assert_eq!(entry_direction("owner_draw"), Some(false));
+        assert_eq!(entry_direction("unknown"), None);
+    }
+
+    #[test]
+    fn owner_entries_are_sent_unchanged() {
+        for kind in ["owner_contrib", "owner_draw"] {
+            let mut editor = ExpenseEditor::new();
+            editor.entry_type = kind.to_owned();
+            editor.description = "Test".to_owned();
+            editor.amount = "12.50".to_owned();
+            assert!(editor.validate().is_none());
+            assert_eq!(editor.to_write().entry_type, kind);
+        }
+    }
 }

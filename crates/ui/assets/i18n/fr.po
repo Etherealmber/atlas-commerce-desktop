@@ -2014,3 +2014,634 @@ msgstr "En attente de l’approbation sur le téléphone…"
 
 msgid "Preparing secure QR sign-in…"
 msgstr "Préparation du QR sécurisé…"
+
+msgid "Manage your account, workspace and security in one place."
+msgstr "Gérez votre compte, votre espace de travail et votre sécurité au même endroit."
+
+msgid "Your account"
+msgstr "Votre compte"
+
+msgid "Profile and access to your account."
+msgstr "Profil et accès à votre compte."
+
+msgid "Your workspace"
+msgstr "Votre espace de travail"
+
+msgid "Personalize the app and how it behaves on this computer."
+msgstr "Personnalisez l’application et son comportement sur cet ordinateur."
+
+msgid "Connections and security"
+msgstr "Connexions et sécurité"
+
+msgid "Review your server, integrations and connected devices."
+msgstr "Consultez votre serveur, vos intégrations et vos appareils connectés."
+
+msgid "Maintenance"
+msgstr "Maintenance"
+
+msgid "Updates and information about Atlas Commerce."
+msgstr "Mises à jour et informations sur Atlas Commerce."
+
+msgid "Interface size"
+msgstr "Taille de l’interface"
+
+msgid "Adjust the size of text and controls on this device."
+msgstr "Ajustez la taille du texte et des commandes sur cet appareil."
+
+msgid "Employee situation"
+msgstr "Situation employé"
+
+msgid "Sign in with your username and password, or use a passkey, on the secure server page."
+msgstr "Connectez-vous avec votre identifiant et votre mot de passe, ou une clé d’accès, sur la page sécurisée du serveur."
+
+msgid "Password or passkey"
+msgstr "Mot de passe ou clé d’accès"
+
+msgid "Or approve with a phone"
+msgstr "Ou approuver avec un téléphone"
+
+msgid "Weekly quota"
+msgstr "Quota hebdomadaire"
+
+msgid "Quota information is unavailable; the server will check access when you send."
+msgstr "Quota indisponible ; le serveur vérifiera l’accès à l’envoi."
+
+msgid "Ask about sales, stock or your daily work."
+msgstr "Posez une question sur les ventes, le stock ou votre activité."
+
+msgid "Atlas Agent is thinking…"
+msgstr "Atlas Agent réfléchit…"
+
+
+msgid "Summarize low stock."
+msgstr "Résumé stock bas"
+
+msgid "You"
+msgstr "Vous"
+
+msgid "Tools used"
+msgstr "Outils utilisés"
+
+msgid "The server returned action proposals. This app cannot yet review or approve them."
+msgstr "Le serveur a renvoyé des propositions d’action. Cette application ne permet pas encore de les examiner ou de les valider."
+
+msgid "Server conversation history (read-only)"
+msgstr "Historique des conversations du serveur (lecture seule)"
+
+msgid "Current desktop conversations are not yet synced to this list."
+msgstr "Les conversations de cette application ne sont pas encore synchronisées avec cette liste."
+
+msgid "No saved conversations."
+msgstr "Aucune conversation enregistrée."
+
+msgid "Action proposals"
+msgstr "Propositions d’action"
+
+msgid "Review only: these proposals are not approved by this app."
+msgstr "Consultation uniquement : cette application ne valide pas ces propositions."
+
+msgid "Details truncated."
+msgstr "Détails tronqués."
+
+msgid "Search settings"
+msgstr "Rechercher dans les réglages…"
+
+msgid "Integrations"
+msgstr "Intégrations"
+
+msgid "Account and profile"
+msgstr "Compte et profil"
+
+msgid "Language, startup and notifications"
+msgstr "Langue, démarrage et notifications"
+
+msgid "Theme, scale and motion"
+msgstr "Thème, échelle et animations"
+
+msgid "Assistant preferences"
+msgstr "Préférences de l’assistant"
+
+msgid "Server and connection"
+msgstr "Serveur et connexion"
+
+msgid "API keys and integrations"
+msgstr "Clés API et intégrations"
+
+msgid "Trusted devices and security"
+msgstr "Appareils de confiance et sécurité"
+
+msgid "Updates and release notes"
+msgstr "Mises à jour et notes de version"
+
+msgid "Checks run on startup and periodically; downloads are always manual."
+msgstr "Vérification au démarrage et périodiquement ; les téléchargements restent manuels."
+
+msgid "About your version"
+msgstr "À propos de votre version"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Platform"
+msgstr "Plateforme"
+
+msgid "First version recorded"
+msgstr "Première version enregistrée"
+
+msgid "Version history"
+msgstr "Historique des versions"
+
+msgid "Versions observed on this device; earlier installations may not appear."
+msgstr "Versions observées sur cet appareil ; les installations antérieures peuvent ne pas apparaître."
+
+msgid "No version history recorded."
+msgstr "Aucun historique de versions enregistré."
+
+msgid "Current"
+msgstr "Actuelle"
+
+msgid "Search business data"
+msgstr "Rechercher dans les données"
+
+msgid "Back"
+msgstr "Retour"
+
+msgid "No matching settings."
+msgstr "Aucun réglage correspondant."
+
+msgid "Attendance is disabled."
+msgstr "Le module Présence est désactivé."
+
+msgid "Enable attendance for the company to use check-in and check-out."
+msgstr "Activez le module Présence pour enregistrer les arrivées et les départs."
+
+msgid "Enable now"
+msgstr "Activer maintenant"
+
+msgid "Enable attendance?"
+msgstr "Activer le module Présence ?"
+
+msgid "This enables attendance for the entire company."
+msgstr "Cela active le module Présence pour toute la société."
+
+msgid "Refresh before retrying: the server may have saved the change."
+msgstr "Actualisez avant de réessayer : le serveur a peut-être enregistré la modification."
+
+msgid "Present"
+msgstr "Présent"
+
+msgid "Absent"
+msgstr "Absent"
+
+msgid "Late"
+msgstr "En retard"
+
+msgid "Excused"
+msgstr "Excusé"
+
+msgid "No active employee."
+msgstr "Aucun employé actif."
+
+msgid "Check-in"
+msgstr "Arrivée"
+
+msgid "Check-out"
+msgstr "Départ"
+
+msgid "Half day"
+msgstr "Demi-journée"
+
+msgid "Stock · warehouse keeper"
+msgstr "Stock · magasinier"
+
+msgid "Unpaid invoices"
+msgstr "Factures impayées"
+
+msgid "Mobile actions"
+msgstr "Actions mobile"
+
+msgid "Open quick sales"
+msgstr "VR ouvertes"
+
+msgid "Stock locations"
+msgstr "Emplacements de stock"
+
+msgid "Location code"
+msgstr "Code de l’emplacement"
+
+msgid "Location name"
+msgstr "Nom de l’emplacement"
+
+msgid "Create location"
+msgstr "Créer un emplacement"
+
+msgid "Location created."
+msgstr "Emplacement créé."
+
+msgid "Physical stock count"
+msgstr "Inventaire physique"
+
+msgid "This count adjusts the product’s consolidated stock, not an individual warehouse."
+msgstr "Ce comptage ajuste le stock global du produit, pas celui d’un entrepôt particulier."
+
+msgid "The selector shows up to 300 catalogue products."
+msgstr "Le sélecteur affiche jusqu’à 300 produits du catalogue."
+
+msgid "Choose a product"
+msgstr "Choisir un produit"
+
+msgid "Counted quantity"
+msgstr "Quantité comptée"
+
+msgid "Record count"
+msgstr "Enregistrer le comptage"
+
+msgid "Confirm physical count?"
+msgstr "Confirmer l’inventaire physique ?"
+
+msgid "This changes consolidated stock."
+msgstr "Cela modifie le stock global."
+
+msgid "Stock count recorded."
+msgstr "Comptage enregistré."
+
+msgid "Default"
+msgstr "Par défaut"
+
+msgid "Operations and actions"
+msgstr "Opérations & actions"
+
+msgid "The server may have saved the change. Lists can be cached; verify the result before continuing."
+msgstr "Le serveur a peut-être enregistré la modification. Les listes peuvent être en cache ; vérifiez le résultat avant de continuer."
+
+msgid "I have verified the result"
+msgstr "J’ai vérifié le résultat"
+
+msgid "Continue after verification?"
+msgstr "Continuer après vérification ?"
+
+msgid "Only continue after checking the actual server state. Retrying an operation that already succeeded can change stock again."
+msgstr "Ne continuez qu’après avoir vérifié l’état réel sur le serveur. Répéter une opération déjà enregistrée peut modifier à nouveau le stock."
+
+msgid "This changes consolidated stock. Concurrent stock movements may affect the final quantity."
+msgstr "Cela modifie le stock global. Des mouvements simultanés peuvent modifier la quantité finale."
+
+msgid "Displayed stock (may be cached)"
+msgstr "Stock affiché (peut être en cache)"
+
+msgid "Cash shifts"
+msgstr "Clôtures de caisse"
+
+msgid "The server may have saved the change. Verify the shift and movements before continuing."
+msgstr "Le serveur a peut-être enregistré la modification. Vérifiez la session et ses mouvements avant de continuer."
+
+msgid "Only continue after checking the actual shift and its movements. Repeating an operation that already succeeded can duplicate it."
+msgstr "Ne continuez qu’après avoir vérifié la session et ses mouvements. Répéter une opération déjà enregistrée peut la dupliquer."
+
+msgid "Open a cash shift"
+msgstr "Ouvrir une session de caisse"
+
+msgid "Till"
+msgstr "Caisse"
+
+msgid "Opening float (MAD)"
+msgstr "Fond de caisse (MAD)"
+
+msgid "Notes"
+msgstr "Observations"
+
+msgid "Open shift"
+msgstr "Ouvrir la session"
+
+msgid "Open this cash shift?"
+msgstr "Ouvrir cette session de caisse ?"
+
+msgid "Recent cash shifts"
+msgstr "Sessions de caisse récentes"
+
+msgid "Showing up to 50 recent shifts."
+msgstr "Affichage des 50 sessions les plus récentes au maximum."
+
+msgid "No cash shifts."
+msgstr "Aucune session de caisse."
+
+msgid "Closed"
+msgstr "Clôturée"
+
+msgid "Cash shift"
+msgstr "Session de caisse"
+
+msgid "Expected cash"
+msgstr "Espèces attendues"
+
+msgid "Expected all methods"
+msgstr "Total attendu tous modes"
+
+msgid "Expected"
+msgstr "Attendu"
+
+msgid "Counted cash"
+msgstr "Espèces comptées"
+
+msgid "Variance"
+msgstr "Écart"
+
+msgid "No movements."
+msgstr "Aucun mouvement."
+
+msgid "Manual movement"
+msgstr "Mouvement manuel"
+
+msgid "Cash in"
+msgstr "Entrée"
+
+msgid "Cash out"
+msgstr "Sortie"
+
+msgid "Bank transfer"
+msgstr "Virement"
+
+msgid "Cheque"
+msgstr "Chèque"
+
+msgid "Amount (MAD)"
+msgstr "Montant (MAD)"
+
+msgid "Reference"
+msgstr "Référence"
+
+msgid "Record movement"
+msgstr "Enregistrer le mouvement"
+
+msgid "Record this movement?"
+msgstr "Enregistrer ce mouvement ?"
+
+msgid "Close cash shift"
+msgstr "Clôturer la caisse"
+
+msgid "This records counted cash only. Other payment methods are not counted in this form."
+msgstr "Ce formulaire enregistre uniquement les espèces comptées. Les autres modes de paiement ne sont pas comptés ici."
+
+msgid "Counted cash (MAD)"
+msgstr "Espèces comptées (MAD)"
+
+msgid "Closing notes"
+msgstr "Observations de clôture"
+
+msgid "Close shift"
+msgstr "Clôturer la session"
+
+msgid "Close this cash shift?"
+msgstr "Clôturer cette session de caisse ?"
+
+msgid "The server recalculates the expected amount at closing. Stop other movements before closing; concurrent changes may not be included."
+msgstr "Le serveur recalcule le montant attendu à la clôture. Arrêtez les autres mouvements avant de clôturer ; des changements simultanés pourraient ne pas être inclus."
+
+msgid "Attendance settings"
+msgstr "Paramètres Présence"
+
+msgid "Company"
+msgstr "Entreprise"
+
+msgid "Company attendance module"
+msgstr "Module de présence de l’entreprise"
+
+msgid "Configure attendance for the company."
+msgstr "Configurer la présence pour l’entreprise."
+
+msgid "Enable attendance"
+msgstr "Activer la présence"
+
+msgid "Attendance module"
+msgstr "Module de présence"
+
+msgid "Checking attendance status…"
+msgstr "Vérification de l’état de présence…"
+
+msgid "Attendance is enabled."
+msgstr "La présence est activée."
+
+msgid "Attendance status is unknown."
+msgstr "L’état de la présence est inconnu."
+
+msgid "Open attendance settings"
+msgstr "Ouvrir les paramètres Présence"
+
+msgid "Update checks are temporarily limited. Try again in one minute."
+msgstr "Les vérifications de mises à jour sont temporairement limitées. Réessayez dans une minute."
+
+msgid "Owner contribution"
+msgstr "Apport du propriétaire"
+
+msgid "Owner draw"
+msgstr "Retrait du propriétaire"
+
+msgid "Ledger inflows"
+msgstr "Entrées du journal"
+
+msgid "Ledger outflows"
+msgstr "Sorties du journal"
+
+msgid "Net ledger movements"
+msgstr "Mouvements nets du journal"
+
+msgid "Ledger write outcome uncertain"
+msgstr "Résultat de l'écriture incertain"
+
+msgid "The server may have recorded this entry. Verify the ledger before trying again; retrying can create a duplicate."
+msgstr "Le serveur a peut-être enregistré cette écriture. Vérifiez le journal avant de réessayer ; une nouvelle tentative peut créer un doublon."
+
+msgid "I will verify before retrying"
+msgstr "Je vérifierai avant de réessayer"
+
+msgid "Review uncertain write"
+msgstr "Examiner l'écriture incertaine"
+
+msgid "These totals cover loaded ledger entries only; they are not the treasury balance."
+msgstr "Ces totaux couvrent uniquement les écritures chargées ; ils ne correspondent pas au solde de trésorerie."
+
+msgid "Secretary"
+msgstr "Secrétaire"
+
+msgid "Warehouse keeper"
+msgstr "Magasinier"
+
+msgid "This list is not available in desktop yet."
+msgstr "Cette liste n'est pas encore disponible sur ordinateur."
+
+msgid "What's new and updates"
+msgstr "Nouveautés et mises à jour"
+
+msgid "The list contains up to 100 recent requests and may be cached. Open a request to read its current state."
+msgstr "La liste contient jusqu’à 100 demandes récentes et peut provenir du cache. Ouvrez une demande pour connaître son état actuel."
+
+msgid "Pending"
+msgstr "En attente"
+
+msgid "Completed"
+msgstr "Terminées"
+
+msgid "All"
+msgstr "Toutes"
+
+msgid "No mobile actions"
+msgstr "Aucune action mobile"
+
+msgid "Mobile requests will appear here."
+msgstr "Les demandes mobiles apparaîtront ici."
+
+msgid "Open request"
+msgstr "Ouvrir la demande"
+
+msgid "The server may have processed the request. Read its current state before continuing; the list may be cached."
+msgstr "Le serveur a peut-être traité la demande. Consultez son état actuel avant de continuer ; la liste peut provenir du cache."
+
+msgid "Verify current request state"
+msgstr "Vérifier l’état actuel de la demande"
+
+msgid "I have reviewed the current state"
+msgstr "J’ai vérifié l’état actuel"
+
+msgid "Marking handled does not create a product or invoice and does not apply stock. Review the request before continuing."
+msgstr "Marquer comme traité ne crée ni produit ni facture et ne modifie pas le stock. Vérifiez la demande avant de continuer."
+
+msgid "Mark handled"
+msgstr "Marquer traité"
+
+msgid "Mark request handled?"
+msgstr "Marquer la demande comme traitée ?"
+
+msgid "No product, invoice or stock change will be created. Another operator may modify this request concurrently."
+msgstr "Aucun produit, facture ou mouvement de stock ne sera créé. Un autre opérateur peut modifier cette demande simultanément."
+
+msgid "Reason for rejection"
+msgstr "Motif du refus"
+
+msgid "Reject request"
+msgstr "Refuser la demande"
+
+msgid "Reject this request?"
+msgstr "Refuser cette demande ?"
+
+msgid "The reason is visible to the requester. Another operator may modify this request concurrently."
+msgstr "Le motif est visible par le demandeur. Un autre opérateur peut modifier cette demande simultanément."
+
+msgid "Request updated."
+msgstr "Demande mise à jour."
+
+msgid "Product, invoice and stock approvals are not available here yet. Use the web workflow to process them."
+msgstr "Les validations de produits, factures et stock ne sont pas encore disponibles ici. Utilisez le parcours web pour les traiter."
+
+msgid "Payroll CNSS / AMO"
+msgstr "Paie CNSS / AMO"
+
+msgid "Read-only payroll overview. Create, edit, close and export payroll runs in the web application."
+msgstr "Consultation de la paie uniquement. Créez, modifiez, clôturez et exportez les lots dans l’application web."
+
+msgid "Payroll runs"
+msgstr "Lots de paie"
+
+msgid "closed"
+msgstr "clôturés"
+
+msgid "Current indicative rates"
+msgstr "Taux indicatifs actuels"
+
+msgid "CNSS ceiling"
+msgstr "Plafond CNSS"
+
+msgid "No payroll runs"
+msgstr "Aucun lot de paie"
+
+msgid "Payroll runs created on the web appear here."
+msgstr "Les lots créés sur le web apparaîtront ici."
+
+msgid "Corrective"
+msgstr "Correctif"
+
+msgid "Regular"
+msgstr "Mensuel"
+
+msgid "Payroll run"
+msgstr "Lot de paie"
+
+msgid "Corrects run"
+msgstr "Corrige le lot"
+
+msgid "Gross payroll"
+msgstr "Masse brute"
+
+msgid "Employee CNSS"
+msgstr "CNSS salarié"
+
+msgid "Employee AMO"
+msgstr "AMO salarié"
+
+msgid "Income tax"
+msgstr "IGR"
+
+msgid "Net pay"
+msgstr "Net à payer"
+
+msgid "Employer cost"
+msgstr "Coût employeur"
+
+msgid "days"
+msgstr "jours"
+
+msgid "overtime hours"
+msgstr "heures supplémentaires"
+
+msgid "Base salary"
+msgstr "Salaire de base"
+
+msgid "Attendance adjustment"
+msgstr "Ajustement de présence"
+
+msgid "Bonuses"
+msgstr "Primes"
+
+msgid "Overtime"
+msgstr "Heures supplémentaires"
+
+msgid "Advances deducted"
+msgstr "Avances déduites"
+
+msgid "Requested by"
+msgstr "Demandé par"
+
+msgid "Handled by"
+msgstr "Traité par"
+
+msgid "Proposed stock"
+msgstr "Stock proposé"
+
+msgid "System stock"
+msgstr "Stock système"
+
+msgid "Inventory lines"
+msgstr "Lignes d’inventaire"
+
+msgid "Treasury totals come from the server dashboard and may be cached; the movements list is separate."
+msgstr "Les totaux de trésorerie proviennent du tableau de bord du serveur et peuvent être en cache ; la liste des mouvements est distincte."
+
+msgid "Inflows"
+msgstr "Entrées"
+
+msgid "Outflows"
+msgstr "Sorties"
+
+msgid "Net cash flow"
+msgstr "Flux net"
+
+msgid "Later"
+msgstr "Plus tard"
+
+msgid "Size and SHA-256 are not provided by this manifest."
+msgstr "Taille et SHA-256 non indiqués par ce manifeste."
+
+msgid "CDN installation is not available yet."
+msgstr "L’installation CDN n’est pas encore disponible."
+
+msgid "GitHub · Size and SHA-256 are not provided by this manifest."
+msgstr "GitHub · Taille et SHA-256 non indiqués par ce manifeste."

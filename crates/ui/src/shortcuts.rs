@@ -8,7 +8,6 @@
 //! * `Ctrl/⌘+Shift+K` — open and focus the stock search, while the window is active,
 //! * `Ctrl/⌘+R` and `F5` — reload the current screen's data,
 //! * `Ctrl/⌘+F` — focus the title-bar product search,
-//! * `Ctrl/⌘+,` — open Settings,
 //! * `F2` — open the quick-sale screen,
 //! * `Ctrl/⌘+P` — print the open document,
 //! * `Escape` — dismiss the topmost overlay, then release text focus.
@@ -56,8 +55,6 @@ pub enum PaletteTarget {
     NewExpense,
     NewDelivery,
     FocusSearch,
-    SettingsProfile,
-    SettingsGeneral,
     SignOut,
 }
 
@@ -71,11 +68,7 @@ pub(crate) fn target_allowed(policy: crate::state::RolePolicy, target: PaletteTa
         PaletteTarget::NewVendor => policy.allows_route(Route::Vendors),
         PaletteTarget::NewExpense => policy.allows_route(Route::Expenses),
         PaletteTarget::NewDelivery => policy.allows_route(Route::DeliveryNotes),
-        PaletteTarget::Refresh
-        | PaletteTarget::FocusSearch
-        | PaletteTarget::SettingsProfile
-        | PaletteTarget::SettingsGeneral
-        | PaletteTarget::SignOut => true,
+        PaletteTarget::Refresh | PaletteTarget::FocusSearch | PaletteTarget::SignOut => true,
     }
 }
 
@@ -169,16 +162,6 @@ pub fn entries(locale: Locale) -> Vec<PaletteEntry> {
             None,
         ),
         (
-            PaletteTarget::SettingsProfile,
-            t!(locale, "My profile").into_owned(),
-            None,
-        ),
-        (
-            PaletteTarget::SettingsGeneral,
-            t!(locale, "Settings").into_owned(),
-            None,
-        ),
-        (
             PaletteTarget::SignOut,
             t!(locale, "Sign out").into_owned(),
             None,
@@ -245,6 +228,14 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
 
     // Escape always wins: dialog → palette → popover → editor → text focus.
     if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+        let notification_id = egui::Id::new("notification-popover-open");
+        let notification_open =
+            ctx.data(|data| data.get_temp::<bool>(notification_id).unwrap_or(false));
+        if notification_open && !app.modal_open() && !app.palette_open && !app.profile_menu_open {
+            ctx.data_mut(|data| data.insert_temp(notification_id, false));
+            clear_focus(ctx);
+            return;
+        }
         app.dismiss_top_overlay();
         // Whatever was open no longer owns the keyboard: surrender focus so
         // the next keystroke cannot land in a now-hidden text field.
@@ -266,7 +257,9 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
         if palette_was_open {
             clear_focus(ctx);
         }
-        app.refresh_current_route();
+        if crate::buttons::claim_refresh(ctx) {
+            app.refresh_current_route();
+        }
         return;
     }
 
@@ -329,18 +322,19 @@ pub fn handle_shortcuts(app: &mut AtlasApp, ctx: &egui::Context) {
     }
 
     if ctx.input(|input| input.key_pressed(egui::Key::R)) {
-        app.refresh_current_route();
+        if crate::buttons::claim_refresh(ctx) {
+            app.refresh_current_route();
+        }
         return;
     }
 
     if ctx.input(|input| input.key_pressed(egui::Key::F)) {
-        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("titlebar-search")));
-        return;
-    }
-
-    // Ctrl/Cmd+, opens Settings (master parity spec §8).
-    if ctx.input(|input| input.key_pressed(egui::Key::Comma)) {
-        app.go(Route::Settings);
+        if app.role_policy().allows_route(Route::Products) {
+            app.go(Route::Products);
+            ctx.memory_mut(|memory| {
+                memory.request_focus(crate::screens::products::product_search_id())
+            });
+        }
         return;
     }
 
@@ -498,6 +492,21 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
                 .show(ui, |ui| ui.set_height(1.0));
             ui.add_space(8.0);
 
+            // Business search remains available alongside command navigation.
+            // Never start a network request until the user explicitly chooses it.
+            let query = app.palette_query.trim().to_owned();
+            if !query.is_empty() {
+                let label = format!("{} : {}", t!(app.locale, "Search business data"), query);
+                let clicked = widgets::secondary_button(ui, label, palette);
+                if clicked || (activate && matches.is_empty()) {
+                    app.close_palette();
+                    clear_focus(ctx);
+                    app.search_business(query);
+                    return;
+                }
+                ui.add_space(8.0);
+            }
+
             if matches.is_empty() {
                 ui.add_space(8.0);
                 ui.label(
@@ -547,9 +556,14 @@ pub fn draw_palette(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, 
 }
 
 fn run_target(app: &mut AtlasApp, ctx: &egui::Context, target: PaletteTarget) {
+    if matches!(target, PaletteTarget::Refresh) && !crate::buttons::claim_refresh(ctx) {
+        return;
+    }
     if app.run_palette_target(target) {
         // The product search explicitly takes the focus over.
-        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("titlebar-search")));
+        ctx.memory_mut(|memory| {
+            memory.request_focus(crate::screens::products::product_search_id())
+        });
     } else {
         // Every other action leaves the palette: its field must not stay
         // focused and suppress the next global shortcut.
@@ -670,7 +684,6 @@ mod tests {
         assert_eq!(routes.len(), 8);
         // The title-bar sections are not in the rail's digit range.
         assert!(!routes.contains(&Route::Notifications));
-        assert!(!routes.contains(&Route::Settings));
         assert!(!routes.contains(&Route::Agent));
         assert!(!routes.contains(&Route::Catalog));
         assert_eq!(rail_route_at(0), Some(Route::Dashboard));
@@ -692,11 +705,6 @@ mod tests {
             filter_entries("ventes", &entries)
                 .iter()
                 .any(|index| entries[*index].target == PaletteTarget::Route(Route::Sales))
-        );
-        assert!(
-            filter_entries("reglages", &entries)
-                .iter()
-                .any(|index| entries[*index].target == PaletteTarget::Route(Route::Settings))
         );
     }
 

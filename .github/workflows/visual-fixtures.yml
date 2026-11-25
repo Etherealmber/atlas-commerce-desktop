@@ -6,7 +6,7 @@ on:
       - '.github/workflows/visual-fixtures.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   screenshots:
     name: Offline desktop screenshots
@@ -28,15 +28,29 @@ jobs:
         run: |
           mkdir -p visual-output
           xvfb-run -a -s '-screen 0 1280x800x24' bash -eu -o pipefail -c '
-            for page in dashboard stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-wait login-qr login-v2 clients clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings delivery agent; do
+            for page in login-reference-default-light-1280x800 login-reference-default-dark-1280x800 login-reference-focus-light-1280x800 login-reference-focus-dark-1280x800 login-reference-checked-light-1280x800 login-reference-checked-dark-1280x800 login-reference-error-light-1280x800 login-reference-error-dark-1280x800 login-reference-otp-light-1280x800 login-reference-otp-dark-1280x800 login-reference-claimed-light-1280x800 login-reference-claimed-dark-1280x800  dashboard dashboard-dark alerts-popover attendance attendance-disabled inventory-ops cash-shifts payroll mobile-actions stock-report palette-narrow stock-shortcut vendor-payables client-receivables login login-dark login-wait login-qr login-v2 clients clients-dark clients-narrow client-editor client-wizard client-invoices products products-narrow product-wizard stock sales quotes expenses finance-report vendors employees employee-editor employee-editor-narrow employee-wizard settings settings-narrow settings-dark update-dialog update-dialog-dark delivery agent; do
+              echo "Rendering fixture: $page"
               ATLAS_FIXTURE_WIZARD=1 ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
               pid=$!
               sleep 8
               xwininfo -root -tree > "visual-output/$page.windows" || true
               if ! kill -0 "$pid" 2>/dev/null; then cat "visual-output/$page.log"; exit 1; fi
-              import -window root "visual-output/$page.png"
+              if [[ "$page" = login-reference-* ]]; then
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                import -window "$window" "visual-output/$page.png"
+              else
+                import -window root "visual-output/$page.png"
+              fi
               colors=$(identify -format "%k" "visual-output/$page.png")
               if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page ($colors colors)"; kill "$pid"; exit 1; fi
+              if [ "$page" = dashboard ] || [ "$page" = dashboard-dark ]; then
+                # A nonblank window alone is insufficient: the sidebar can be
+                # visible while the page body has accidentally been clipped.
+                body_colors=$(convert "visual-output/$page.png" -crop 900x500+250+120 +repage -format "%k" info:)
+                if [ "$body_colors" -lt 80 ]; then
+                  echo "Dashboard body is blank: $page ($body_colors colors)"; kill "$pid"; exit 1
+                fi
+              fi
               if [ "$page" = login-qr ]; then
                 # Decode the actual rendered, branded QR, not just its source data.
                 decoded=$(zbarimg --quiet --raw "visual-output/login-qr.png" 2>/dev/null || true)
@@ -58,8 +72,28 @@ jobs:
                 sleep 1
                 import -window root visual-output/employee-editor-narrow-closed.png
                 changed=$(compare -metric AE "visual-output/employee-editor-narrow.png" visual-output/employee-editor-narrow-closed.png null: 2>&1 || true)
-                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 10000) }"; then
                   echo "Employee dialog did not close from its backdrop: $changed"; kill "$pid"; exit 1
+                fi
+              fi
+              if [ "$page" = alerts-popover ]; then
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window" key Escape
+                sleep 1
+                import -window root visual-output/alerts-popover-closed.png
+                changed=$(compare -metric AE visual-output/alerts-popover.png visual-output/alerts-popover-closed.png null: 2>&1 || true)
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 1000) }"; then
+                  echo "Notification popover did not close with Escape: $changed"; kill "$pid"; exit 1
+                fi
+              fi
+              if [ "$page" = update-dialog ] || [ "$page" = update-dialog-dark ]; then
+                window=$(xdotool search --name "Atlas fixture" | head -n 1)
+                xdotool windowfocus "$window" key Escape
+                sleep 1
+                import -window root "visual-output/$page-closed.png"
+                changed=$(compare -metric AE "visual-output/$page.png" "visual-output/$page-closed.png" null: 2>&1 || true)
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 10000) }"; then
+                  echo "Update dialog did not close with Escape: $changed"; kill "$pid"; exit 1
                 fi
               fi
               if [ "$page" = palette-narrow ]; then
@@ -69,7 +103,7 @@ jobs:
                 sleep 1
                 import -window root visual-output/palette-narrow-closed.png
                 changed=$(compare -metric AE visual-output/palette-narrow.png visual-output/palette-narrow-closed.png null: 2>&1 || true)
-                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 10000) }"; then
                   echo "Narrow palette did not close: $changed"; kill "$pid"; exit 1
                 fi
               fi
@@ -99,7 +133,7 @@ jobs:
                 count=2
                 if [ "$page" = product-wizard ] || [ "$page" = employee-wizard ]; then count=4; fi
                 for step in $(seq 1 "$count"); do
-                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1)
+                  pos=$(grep "FIXTURE_NEXT_POSITION" "visual-output/$page.log" | tail -n 1 || true)
                   read -r _ x y <<< "$pos"
                   if [ -z "${x:-}" ] || [ -z "${y:-}" ]; then echo "Next button not found"; kill "$pid"; exit 1; fi
                   xdotool mousemove --window "$window" "$x" "$y" click 1
@@ -119,8 +153,8 @@ jobs:
                 sleep 1
                 import -window root visual-output/client-editor-cancelled.png
                 changed=$(compare -metric AE "visual-output/client-editor.png" visual-output/client-editor-cancelled.png null: 2>&1 || true)
-                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
-                  echo "Client editor Escape did not close the dialog: $changed"; kill "$pid"; exit 1
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 10000) }"; then
+                  echo "::error title=Client editor Escape::Pixel difference: $changed"; kill "$pid"; exit 1
                 fi
               fi
               if [ "$page" = agent ]; then
@@ -129,10 +163,24 @@ jobs:
                 sleep 2
                 import -window root visual-output/agent-closed.png
                 changed=$(compare -metric AE "visual-output/agent.png" visual-output/agent-closed.png null: 2>&1 || true)
-                if ! [[ "$changed" =~ ^[0-9]+$ ]] || [ "$changed" -lt 10000 ]; then
+                if ! awk -v n="$changed" "BEGIN { exit !(n ~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ && n >= 10000) }"; then
                   echo "Agent close click did not change the screen: $changed"; kill "$pid"; exit 1
                 fi
               fi
+              kill "$pid"
+              wait "$pid" || true
+            done
+          '
+          # Exercise the top-band placement separately at a genuinely wide viewport.
+          xvfb-run -a -s '-screen 0 1920x900x24' bash -eu -o pipefail -c '
+            for page in dashboard-wide products-wide expenses-wide; do
+              ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
+              pid=$!
+              sleep 8
+              if ! kill -0 "$pid" 2>/dev/null; then cat "visual-output/$page.log"; exit 1; fi
+              import -window root "visual-output/$page.png"
+              colors=$(identify -format "%k" "visual-output/$page.png")
+              if [ "$colors" -lt 20 ]; then echo "Blank screenshot: $page"; kill "$pid"; exit 1; fi
               kill "$pid"
               wait "$pid" || true
             done
@@ -141,12 +189,37 @@ jobs:
       - name: Surface fixture errors
         if: failure()
         run: |
+          echo "::error title=Fixture files::$(find visual-output -maxdepth 1 -type f -printf '%f ' | sort)"
           for file in visual-output/*.log visual-output/*.windows; do
             if [ -f "$file" ]; then
               echo "::error title=Fixture $(basename "$file")::$(tail -c 1800 "$file" | base64 -w0)"
             fi
           done
+      - name: Upload fixture diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-fixture-failure-diagnostics
+          path: visual-output/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Render large login fixtures
+        run: |
+          xvfb-run -a -s '-screen 0 1440x900x24' bash -eu -o pipefail -c '
+            for theme in light dark; do
+              page="login-reference-default-$theme-1440x900"
+              ./target/debug/examples/visual_fixture "$page" >"visual-output/$page.log" 2>&1 &
+              pid=$!
+              sleep 8
+              if ! kill -0 "$pid" 2>/dev/null; then cat "visual-output/$page.log"; exit 1; fi
+              import -window root "visual-output/$page.png"
+              kill "$pid"
+              wait "$pid" || true
+            done
+          '
       - name: Review login fallback screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -156,6 +229,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review login waiting screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login-wait.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -165,6 +240,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review dashboard screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/dashboard.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -174,6 +251,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review stock report screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/stock-report.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -183,6 +262,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review narrow command palette
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/palette-narrow.png -crop 640x480+0+0 -resize 480x360 -quality 25 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -192,6 +273,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review payables screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/vendor-payables.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -201,6 +284,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review receivables screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-receivables.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -210,6 +295,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review quote list screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/quotes.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -219,6 +306,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review client invoice screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-invoices-scrolled.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -228,6 +317,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review clients screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/clients.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -237,6 +328,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review products screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/products.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -246,6 +339,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review vendors screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/vendors.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -255,6 +350,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review stock screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/stock.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -264,6 +361,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review agent screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/agent.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -273,6 +372,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review closed agent screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/agent-closed.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -282,6 +383,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review sales screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/sales.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -291,6 +394,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review expenses screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/expenses.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -300,6 +405,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review employees screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/employees.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -309,6 +416,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review QR status screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/login-qr.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -318,6 +427,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review settings screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/settings.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -327,6 +438,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review delivery screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/delivery.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -336,6 +449,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/review.parts
       - name: Review client-editor screenshot
+        if: always()
+        continue-on-error: true
         run: |
           convert visual-output/client-editor.png -resize 640x400 -quality 30 /tmp/review.jpg
           base64 -w0 /tmp/review.jpg | fold -w 2500 > /tmp/review.parts
@@ -344,12 +459,37 @@ jobs:
             printf '::notice title=FixtureImage-client-editor-%03d::%s\n' "$count" "$line"
             count=$((count + 1))
           done < /tmp/review.parts
+      - name: Compare login reference images
+        if: always()
+        run: |
+          mkdir -p visual-output
+          for reference in tests/visual/login-reference/*.png; do
+            name=$(basename "$reference" .png)
+            actual="visual-output/login-reference-$name.png"
+            if [ -s "$actual" ]; then
+              convert "$reference" "$actual" +append "visual-output/login-compare-$name.png"
+              compare -metric AE "$reference" "$actual" "visual-output/login-diff-$name.png" 2>"visual-output/login-diff-$name.txt" || test "$?" -eq 1
+            fi
+          done
       - name: Publish offline screenshots
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: offline-desktop-screenshots
           path: visual-output/*.png
+          if-no-files-found: warn
           retention-days: 14
+      - name: Verify required screenshots exist
+        if: always()
+        run: |
+          missing=0
+          for page in login login-dark dashboard dashboard-dark clients clients-dark settings settings-dark update-dialog update-dialog-dark delivery client-editor; do
+            if [ ! -s "visual-output/$page.png" ]; then
+              echo "::error::Missing required screenshot: $page.png"
+              missing=1
+            fi
+          done
+          exit "$missing"
       - name: Exercise the isolated WebKitGTK window
         run: |
           # Ubuntu's runner restricts unprivileged namespaces via AppArmor,
@@ -366,3 +506,30 @@ jobs:
             done
           fi
           exit "$result"
+
+      - name: Commit fictional screenshots to this branch
+        if: always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          # Never publish on top of an unseen change or to a fork/default branch.
+          if [ "$HEAD_BRANCH" != "arena/7ea606a3-atlas-commerce-desktop" ]; then
+            echo "Skipping screenshot publication outside this PR branch."
+            exit 0
+          fi
+          git fetch origin "$HEAD_BRANCH"
+          if [ "$(git rev-parse FETCH_HEAD)" != "$EXPECTED_SHA" ]; then
+            echo "::error::Branch moved during rendering; refusing to overwrite newer screenshots."
+            exit 1
+          fi
+          git checkout -B "$HEAD_BRANCH" "$EXPECTED_SHA"
+          mkdir -p docs/parity/shots
+          find visual-output -maxdepth 1 -type f -name '*.png' -exec cp -f -t docs/parity/shots -- {} +
+          git add -- docs/parity/shots/*.png
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Capturer les images de parité [skip ci]'
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"

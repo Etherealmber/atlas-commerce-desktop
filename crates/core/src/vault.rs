@@ -92,7 +92,7 @@ fn digest(parts: &[&str]) -> String {
         hash.update((part.len() as u64).to_be_bytes());
         hash.update(part.as_bytes());
     }
-    format!("{:x}", hash.finalize())
+    hex::encode(hash.finalize())
 }
 
 fn active_key(server: &str) -> String {
@@ -176,6 +176,14 @@ pub fn remove(session: &SessionRecord) -> Result<(), VaultError> {
 mod tests {
     use super::*;
     use std::{cell::RefCell, collections::HashMap};
+
+    #[test]
+    fn existing_vault_key_remains_stable_after_sha_upgrade() {
+        assert_eq!(
+            active_key("https://example.com"),
+            "active-8a2c3bf37594cdd0e218467ebf0444f9645adc720496dd57903cc1bf6e56c3b4"
+        );
+    }
 
     #[derive(Default)]
     struct MemoryStore(RefCell<HashMap<String, String>>);

@@ -8,7 +8,6 @@
 
 pub mod app;
 pub mod branding;
-mod browser_auth;
 mod business_search;
 pub mod buttons;
 mod client_invoices;
@@ -28,10 +27,6 @@ pub mod state;
 pub mod theme;
 pub mod tray;
 pub mod update;
-#[cfg(target_os = "windows")]
-mod webview_auth;
-#[cfg(target_os = "linux")]
-mod webview_auth_linux;
 pub mod widgets;
 
 pub use app::EframeShell;

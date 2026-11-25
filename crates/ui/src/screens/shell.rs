@@ -12,17 +12,17 @@ use crate::widgets::{danger_button, secondary_button};
 use crate::{t, widgets};
 
 mod sidebar;
+mod top_page_actions;
 mod topbar;
 
 #[cfg(test)]
 use topbar::search_destination;
 
-/// Height of the custom caption row (web topbar: 56 px).
-const TITLEBAR_HEIGHT: f32 = 56.0;
+/// Caption area accommodating the 58 px dock and its vertical margins.
+const TITLEBAR_HEIGHT: f32 = 78.0;
 /// Compact labelled rail and icon-only rail at narrower window widths.
-const RAIL_WIDTH_EXPANDED: f32 = 224.0;
-const RAIL_WIDTH_COLLAPSED: f32 = 72.0;
-const RAIL_COLLAPSE_BELOW: f32 = 1180.0;
+const RAIL_WIDTH_EXPANDED: f32 = 280.0;
+const RAIL_WIDTH_COLLAPSED: f32 = 64.0;
 
 /// Localized label + icon of every rail destination. Shared with the Ctrl+K
 /// command palette so navigation labels never diverge and the English locale
@@ -34,13 +34,17 @@ pub(crate) fn route_meta(locale: Locale, route: Route) -> (Icon, String) {
         Route::Catalog => (Icon::Boxes, t!(locale, "Catalog").into_owned()),
         Route::Clients => (Icon::Users, t!(locale, "Clients").into_owned()),
         Route::Vendors => (Icon::Store, t!(locale, "Vendors").into_owned()),
-        Route::Expenses => (Icon::Wallet, t!(locale, "Expenses").into_owned()),
+        Route::Expenses => (Icon::Wallet, t!(locale, "Balance and income").into_owned()),
         Route::DeliveryNotes => (Icon::Truck, t!(locale, "Delivery notes").into_owned()),
         Route::Sales => (Icon::Receipt, t!(locale, "Sales").into_owned()),
         Route::Employees => (Icon::Users, t!(locale, "Employees").into_owned()),
+        Route::Attendance => (Icon::Clock, t!(locale, "Attendance").into_owned()),
+        Route::Payroll => (Icon::Wallet, t!(locale, "Payroll CNSS / AMO").into_owned()),
+        Route::InventoryOps => (Icon::Boxes, t!(locale, "Stock operations").into_owned()),
+        Route::CashShifts => (Icon::Wallet, t!(locale, "Cash shifts").into_owned()),
+        Route::Actions => (Icon::CircleCheck, t!(locale, "Mobile actions").into_owned()),
         Route::Agent => (Icon::Bot, t!(locale, "AI Agent").into_owned()),
         Route::Notifications => (Icon::Bell, t!(locale, "Notifications").into_owned()),
-        Route::Settings => (Icon::Settings, t!(locale, "Settings").into_owned()),
     }
 }
 
@@ -49,59 +53,35 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     // Ctrl+F and Escape, all suppressed while a text field owns the keys.
     crate::shortcuts::handle_shortcuts(app, ctx);
 
-    // Dedicated panels, not a hand-rolled horizontal layout: a `Panel::left`
-    // with an exact size reserves its width up front, so the rail can never
-    // expand to the full window and starve the central column (the blank
-    // shell bug came from Frame + set_min_size, whose minimum width did not
-    // stop rows calling available_width() from growing the frame).
-    egui::Panel::top(egui::Id::new("shell-titlebar"))
-        .exact_size(TITLEBAR_HEIGHT)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(
-            // Same lifted chrome as the rail, with a single hairline on the
-            // bottom edge so the title bar reads as one piece with the rail
-            // instead of blending into the content background.
-            egui::Frame::NONE
-                .fill(palette.panel)
-                .inner_margin(egui::Margin::same(0)),
-        )
-        .show(ui, |ui| {
-            topbar::draw_titlebar(app, ui, ctx, palette);
-            let bottom = ui.min_rect().bottom();
-            let left = egui::pos2(ui.min_rect().left(), bottom);
-            let right = egui::pos2(ui.max_rect().right(), bottom);
-            ui.painter()
-                .line_segment([left, right], egui::Stroke::new(1.0, palette.outline));
-        });
-
-    // Below the 1180 px breakpoint the rail drops its labels and becomes
-    // the 72 px icon strip, mirroring the web sidebar's collapsed state.
     let viewport_width = ctx.input(|input| input.viewport_rect().width());
-    let rail_collapsed = ctx
-        .data(|data| data.get_temp::<bool>(egui::Id::new("rail-collapsed")))
-        .unwrap_or(viewport_width < RAIL_COLLAPSE_BELOW);
+    let rail_collapsed = app.settings.sidebar_collapsed;
     let rail_width = if rail_collapsed {
         RAIL_WIDTH_COLLAPSED
     } else {
         RAIL_WIDTH_EXPANDED
     };
-    let rail_frame = egui::Frame::NONE
-        .fill(palette.panel)
-        .inner_margin(if rail_collapsed {
-            // Twelve-pixel gutters keep a full-width accessible row.
-            egui::Margin::symmetric(12, 14)
-        } else {
-            egui::Margin::symmetric(10, 14)
-        });
     egui::Panel::left(egui::Id::new("shell-rail"))
         .exact_size(rail_width)
         .resizable(false)
         .show_separator_line(false)
-        .frame(rail_frame)
+        .frame(egui::Frame::NONE.fill(if palette.dark {
+            egui::Color32::from_rgb(17, 17, 19)
+        } else {
+            egui::Color32::WHITE
+        }))
         .show(ui, |ui| {
-            sidebar::draw_rail(app, ui, palette, rail_collapsed);
+            sidebar::draw_rail(app, ui, palette, rail_collapsed)
         });
+
+    // Transparent reserved space keeps content from sliding under controls;
+    // the command surface itself is painted by the topbar, not a full slab.
+    let mut topbar_rect = egui::Rect::NOTHING;
+    egui::Panel::top(egui::Id::new("shell-top-controls"))
+        .exact_size(TITLEBAR_HEIGHT)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(egui::Frame::NONE)
+        .show(ui, |ui| topbar_rect = ui.max_rect());
 
     let agent_available = matches!(
         app.screen,
@@ -113,6 +93,12 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 | Route::Expenses
                 | Route::DeliveryNotes
                 | Route::Sales
+                | Route::Employees
+                | Route::Attendance
+                | Route::Payroll
+                | Route::InventoryOps
+                | Route::CashShifts
+                | Route::Actions
                 | Route::Catalog
         )
     );
@@ -120,6 +106,15 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
     let drawer_width = (viewport_width * 0.42)
         .clamp(280.0, 440.0)
         .min((viewport_width - rail_width - 32.0).max(1.0));
+    let top_actions_slot =
+        if viewport_width >= 1360.0 && !drawer_visible && topbar_rect.is_positive() {
+            let footprint = fastframe_titlebar::footprint(ctx, TITLEBAR_HEIGHT);
+            top_page_actions::required_top_width(app, ui, palette).and_then(|width| {
+                top_page_actions::top_slot(topbar_rect, footprint.left, footprint.right, width)
+            })
+        } else {
+            None
+        };
     if drawer_visible {
         egui::Panel::right(egui::Id::new("agent-drawer"))
             .exact_size(drawer_width)
@@ -175,9 +170,34 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
             ui.set_clip_rect(ui.clip_rect().intersect(bounds));
             widgets::overlay_at(ui, bounds, |ui| {
                 ui.set_clip_rect(ui.clip_rect().intersect(bounds));
-                draw_content(app, ui, ctx, palette);
+                draw_content(app, ui, ctx, palette, top_actions_slot.is_some());
             });
         });
+
+    if topbar_rect.is_positive() {
+        egui::Area::new(egui::Id::new("shell-floating-topbar"))
+            .order(egui::Order::Middle)
+            .fixed_pos(topbar_rect.min)
+            .constrain(false)
+            .show(ctx, |ui| {
+                ui.set_min_size(topbar_rect.size());
+                ui.set_max_size(topbar_rect.size());
+                topbar::draw_titlebar(app, ui, ctx, palette);
+            });
+    }
+
+    if let Some(rect) = top_actions_slot {
+        egui::Area::new(egui::Id::new("shell-floating-page-actions"))
+            .order(egui::Order::Middle)
+            .fixed_pos(rect.min)
+            .constrain(false)
+            .show(ctx, |ui| {
+                ui.set_min_size(rect.size());
+                ui.set_max_size(rect.size());
+                ui.set_clip_rect(ui.clip_rect().intersect(rect));
+                top_page_actions::draw(app, ui, palette);
+            });
+    }
 
     // Global agent entry point, mirroring the web's floating Atlas Agent:
     // one FAB on every shell screen except the agent itself (which carries
@@ -238,18 +258,284 @@ pub fn draw_shell(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pa
                 }
             });
     }
-    crate::shortcuts::draw_palette(app, ui, ctx, palette);
+    if app.palette_open {
+        let screen = ctx.input(|input| input.viewport_rect());
+        egui::Area::new(egui::Id::new("command-palette-layer"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                ui.set_min_size(screen.size());
+                crate::shortcuts::draw_palette(app, ui, ctx, palette);
+            });
+    }
 
-    if app.confirm_dialog.is_some() {
-        draw_confirm_dialog(app, ui, palette);
+    if app.settings_dialog_open {
+        draw_settings_dialog(app, ctx, palette);
+    } else {
+        ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new(super::settings::SETTINGS_OPEN_ID), false)
+        });
+    }
+    if app.confirm_dialog.is_none() {
+        ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::new("signout-cancel-focus-initialized"), false)
+        });
+    }
+    if app.confirm_dialog.is_some() && !app.settings_dialog_open {
+        let screen = ctx.input(|input| input.viewport_rect());
+        egui::Area::new(egui::Id::new("confirmation-layer"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                ui.set_min_size(screen.size());
+                draw_confirm_dialog(app, ui, palette);
+            });
+    }
+    if app.language_dialog_open {
+        draw_language_dialog(app, ctx, palette);
+    }
+    if app.update.dialog_open {
+        draw_update_dialog(app, ctx, palette);
     }
 }
 
-// ── Custom title bar ───────────────────────────────────────────────────────
+/// The account language entry is informational: it never changes the locale.
+fn draw_language_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    let screen = ctx.input(|input| input.viewport_rect());
+    let rect = egui::Rect::from_center_size(
+        screen.center(),
+        vec2(
+            420.0_f32.min(screen.width()),
+            335.0_f32.min(screen.height()),
+        ),
+    );
+    egui::Area::new(egui::Id::new("language-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            if widgets::scrim_clicked(ui, screen, rect, egui::Id::new("language-dialog-scrim")) {
+                app.language_dialog_open = false;
+                return;
+            }
+            widgets::overlay_at(ui, rect, |ui| {
+                widgets::dialog_frame(palette).show(ui, |ui| {
+                    ui.set_min_width((rect.width() - 44.0).max(0.0));
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new("Langue")
+                                .font(crate::fonts::bold(18.0))
+                                .color(palette.text),
+                        );
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("×").clicked() {
+                                app.language_dialog_open = false;
+                            }
+                        });
+                    });
+                    ui.label(
+                        RichText::new("Bientôt disponible — l’arabe et l’anglais arrivent.")
+                            .color(palette.secondary)
+                            .size(13.0),
+                    );
+                    ui.add_space(12.0);
+                    for (name, subtitle, badge) in [
+                        ("Français", "Langue actuelle", "✓"),
+                        ("العربية", "Arabe", "Bientôt"),
+                        ("English", "Anglais", "Bientôt"),
+                    ] {
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(name)
+                                        .font(crate::fonts::semibold(14.0))
+                                        .color(palette.text),
+                                );
+                                ui.label(
+                                    RichText::new(subtitle).color(palette.secondary).size(12.0),
+                                );
+                            });
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                widgets::pill(ui, badge, palette.surface_hover, palette.secondary);
+                            });
+                        });
+                        ui.add_space(8.0);
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if crate::widgets::primary_button(ui, "Compris", palette, true) {
+                            app.language_dialog_open = false;
+                        }
+                    });
+                });
+            });
+        });
+}
+
+/// Settings is an overlay, not navigation: the active page and its draft
+/// remain intact. Clicking the scrim does not discard settings in progress.
+fn draw_settings_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    let screen = ctx.input(|input| input.viewport_rect());
+    let width = (screen.width() - 32.0).clamp(1.0, 1080.0);
+    let height = (screen.height() - 32.0).clamp(1.0, 740.0);
+    let dialog = egui::Rect::from_center_size(screen.center(), vec2(width, height));
+    egui::Area::new(egui::Id::new("settings-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            let _ = ui.interact(
+                screen,
+                egui::Id::new("settings-dialog-scrim"),
+                egui::Sense::click(),
+            );
+            ui.painter()
+                .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(133));
+            widgets::overlay_at(ui, dialog, |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(dialog));
+                egui::Frame::NONE
+                    .fill(palette.overlay)
+                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                    .corner_radius(20.0)
+                    .shadow(crate::theme::elevation_shadow(palette))
+                    .inner_margin(egui::Margin::same(16))
+                    .show(ui, |ui| {
+                        ui.set_width((width - 32.0).max(1.0));
+                        ui.set_height((height - 32.0).max(1.0));
+                        super::settings::draw(app, ui, ctx, palette);
+                    });
+            });
+            if app.created_key.is_some() {
+                super::settings::draw_created_key_modal(app, ui, palette);
+            }
+            if app.confirm_dialog.is_some() {
+                draw_confirm_dialog(app, ui, palette);
+            }
+        });
+}
+
+/// The feed describes metadata only; the existing updater performs the actual
+/// verified GitHub handoff after the user explicitly starts installation.
+fn draw_update_dialog(app: &mut AtlasApp, ctx: &egui::Context, palette: &Palette) {
+    let Some(manifest) = app.update.last_manifest.clone() else {
+        app.update.dialog_open = false;
+        return;
+    };
+    let screen = ctx.input(|input| input.viewport_rect());
+    let width = (screen.width() - 32.0).clamp(1.0, 520.0);
+    let height = (screen.height() - 32.0).clamp(1.0, 600.0);
+    let dialog = egui::Rect::from_center_size(screen.center(), vec2(width, height));
+    egui::Area::new(egui::Id::new("update-dialog-layer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            let _ = ui.interact(screen, egui::Id::new("update-scrim"), egui::Sense::click());
+            ui.painter()
+                .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(133));
+            widgets::overlay_at(ui, dialog, |ui| {
+                egui::Frame::NONE
+                    .fill(palette.overlay)
+                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                    .corner_radius(20.0)
+                    .shadow(crate::theme::elevation_shadow(palette))
+                    .inner_margin(egui::Margin::same(20))
+                    .show(ui, |ui| {
+                        ui.set_width((width - 40.0).max(1.0));
+                        ui.set_height((height - 40.0).max(1.0));
+                        ui.label(
+                            egui::RichText::new(t!(app.locale, "Update available"))
+                                .size(20.0)
+                                .strong()
+                                .color(palette.text),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "v{} → v{}",
+                                env!("CARGO_PKG_VERSION"),
+                                manifest.version
+                            ))
+                            .strong()
+                            .color(palette.text),
+                        );
+                        let channel = match app.settings.update_channel {
+                            atlas_core::settings::UpdateChannel::Stable => t!(app.locale, "Stable"),
+                            atlas_core::settings::UpdateChannel::Prerelease => {
+                                t!(app.locale, "Pre-release")
+                            }
+                        };
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} · {}",
+                                channel,
+                                if manifest.published_at.is_empty() {
+                                    "—"
+                                } else {
+                                    &manifest.published_at
+                                }
+                            ))
+                            .color(palette.secondary),
+                        );
+                        ui.add_space(8.0);
+                        widgets::update_metadata(
+                            ui,
+                            app.update.desktop_release.as_ref(),
+                            palette,
+                            app.locale,
+                        );
+                        ui.add_space(8.0);
+                        if !manifest.notes.trim().is_empty() {
+                            widgets::release_notes(
+                                ui,
+                                &manifest.notes,
+                                palette,
+                                (height - 260.0).clamp(40.0, 260.0),
+                            );
+                        }
+                        if let Some((received, total)) = app.update.progress {
+                            ui.label(
+                                egui::RichText::new(&app.update.stage).color(palette.secondary),
+                            );
+                            let value = if total > 0 {
+                                (received as f32 / total as f32).clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            };
+                            ui.add(egui::ProgressBar::new(value).show_percentage());
+                        }
+                        if let Some(error) = &app.update.error {
+                            widgets::error_banner(ui, error, palette);
+                        }
+                        ui.add_space(12.0);
+                        ui.horizontal_wrapped(|ui| {
+                            if widgets::primary_button(
+                                ui,
+                                t!(app.locale, "Download and install update"),
+                                palette,
+                                app.update.progress.is_none(),
+                            ) {
+                                app.start_update_download();
+                            }
+                            ui.add_enabled_ui(app.update.mandatory.is_none(), |ui| {
+                                if widgets::secondary_button(ui, t!(app.locale, "Later"), palette) {
+                                    app.update.dialog_open = false;
+                                }
+                            });
+                        });
+                    });
+            });
+        });
+}
 
 // ── Routed content ─────────────────────────────────────────────────────────
 
-fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, palette: &Palette) {
+fn draw_content(
+    app: &mut AtlasApp,
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    palette: &Palette,
+    actions_in_top_band: bool,
+) {
     // Web-style entrance: each navigation replays the standard 320 ms
     // cubic-bezier(0.2, 0, 0, 1) fade while the content rises ~18 px into
     // place. The id carries the animation token, so a fresh navigation
@@ -266,10 +552,25 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
             crate::motion::standard,
         )
     };
+    if !actions_in_top_band {
+        // Right-to-left actions center within their available height. Bound the
+        // row explicitly so it cannot consume the entire page before the
+        // route scroll area is laid out.
+        ui.allocate_ui_with_layout(
+            vec2(ui.available_width(), 56.0),
+            Layout::top_down(Align::Min),
+            |ui| {
+                ui.set_max_height(56.0);
+                top_page_actions::draw(app, ui, palette);
+            },
+        );
+    }
     // Vertical-only scrolling: every screen wraps inside the viewport, so a
     // horizontal scrollbar must never appear (content overflow would paint
     // under the rail instead of reflowing).
-    egui::ScrollArea::vertical()
+    let route_id = format!("{:?}", app.screen);
+    let scroll = egui::ScrollArea::vertical()
+        .id_salt(("shell-route-content", route_id))
         .max_width(ui.available_width())
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -307,18 +608,31 @@ fn draw_content(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &egui::Context, pale
                 Screen::Shell(Route::Employees) => {
                     super::employees::draw(app, ui, palette);
                 }
+                Screen::Shell(Route::Attendance) => {
+                    super::attendance::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Payroll) => {
+                    super::payroll::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::InventoryOps) => {
+                    super::inventory_ops::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::CashShifts) => {
+                    super::cash_shifts::draw(app, ui, palette);
+                }
+                Screen::Shell(Route::Actions) => {
+                    super::actions::draw(app, ui, palette);
+                }
                 Screen::Shell(Route::Agent) => {
                     super::agent::draw(app, ui, palette);
                 }
                 Screen::Shell(Route::Notifications) => {
                     super::notifications::draw(app, ui, palette);
                 }
-                Screen::Shell(Route::Settings) => {
-                    super::settings::draw(app, ui, ctx, palette);
-                }
                 _ => {}
             }
         });
+    topbar::record_scroll(app, ctx, scroll.state.offset.y);
 }
 
 /// Results are explicitly scoped: products are server-filtered (max 200),
@@ -355,8 +669,8 @@ fn draw_business_search(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
                         Route::Vendors => { app.vendor_search.clear(); app.selected_vendor = Some(hit.id); app.go(Route::Vendors); app.load_vendors(); }
                         Route::DeliveryNotes => { app.delivery_search = hit.label.clone(); app.go(Route::DeliveryNotes); app.load_delivery_notes(); }
                         Route::Expenses => { app.bills_open = true; app.bill_search = hit.label.clone(); app.go(Route::Expenses); app.load_bills(); }
-                        Route::Sales if hit.receipt => { app.receipts_open = true; app.receipt_search = hit.label.clone(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Sales); app.load_receipts(); }
-                        Route::Sales => { app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
+                        Route::Sales if hit.receipt => { app.quotes_open = false; app.refunds_open = false; app.quick_sale_open = false; app.receipts_open = true; app.receipt_search = hit.label.clone(); app.invoice_detail_id = None; app.invoice_detail = Default::default(); app.go(Route::Sales); app.load_receipts(); }
+                        Route::Sales => { app.quotes_open = false; app.refunds_open = false; app.quick_sale_open = false; app.receipts_open = false; app.invoice_search.clear(); app.go(Route::Sales); app.open_invoice_detail(hit.id); }
                         _ => {}
                     }
                 }
@@ -373,7 +687,8 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         return;
     };
     let screen = ui.ctx().input(|i| i.viewport_rect());
-    let width = 420.0;
+    let is_sign_out = matches!(dialog.action, ConfirmAction::SignOut);
+    let width = if is_sign_out { 380.0 } else { 420.0 };
     let height = 210.0;
     let rect = egui::Rect::from_center_size(screen.center(), vec2(width, height));
 
@@ -388,11 +703,23 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                 .max_height((rect.height() - 46.0).max(1.0))
                 .show(ui, |ui| {
                     ui.set_min_size(vec2(width - 44.0, 0.0));
-                    ui.label(
-                        RichText::new(dialog.title.clone())
-                            .color(palette.text)
-                            .font(crate::fonts::semibold(17.0)),
-                    );
+                    ui.horizontal(|ui| {
+                        if is_sign_out {
+                            widgets::icon(ui, Icon::LogOut, palette.finance_danger, 20.0);
+                        }
+                        ui.label(
+                            RichText::new(dialog.title.clone())
+                                .color(palette.text)
+                                .font(crate::fonts::semibold(17.0)),
+                        );
+                        if is_sign_out {
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui.button("×").clicked() {
+                                    app.confirm_dialog = None;
+                                }
+                            });
+                        }
+                    });
                     ui.add_space(8.0);
                     ui.label(
                         RichText::new(dialog.body.clone())
@@ -406,7 +733,25 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
                         } else {
                             crate::widgets::primary_button(ui, &dialog.confirm_label, palette, true)
                         };
-                        let dismissed = secondary_button(ui, t!(app.locale, "Cancel"), palette);
+                        let dismissed = if is_sign_out {
+                            let response = ui.add(
+                                egui::Button::new(RichText::new("Annuler").color(palette.text))
+                                    .min_size(vec2(0.0, crate::theme::TARGET_MIN_HEIGHT))
+                                    .stroke(egui::Stroke::new(1.0, palette.outline))
+                                    .corner_radius(crate::theme::RADIUS_CONTROL as f32),
+                            );
+                            let focused_id = egui::Id::new("signout-cancel-focus-initialized");
+                            if !ui
+                                .ctx()
+                                .data(|data| data.get_temp::<bool>(focused_id).unwrap_or(false))
+                            {
+                                response.request_focus();
+                                ui.ctx().data_mut(|data| data.insert_temp(focused_id, true));
+                            }
+                            response.clicked()
+                        } else {
+                            secondary_button(ui, t!(app.locale, "Cancel"), palette)
+                        };
                         if dismissed {
                             app.confirm_dialog = None;
                         }
@@ -422,6 +767,41 @@ fn draw_confirm_dialog(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
 
 fn run_confirm_action(app: &mut AtlasApp, action: ConfirmAction) {
     match action {
+        ConfirmAction::EnableAttendance => app.enable_attendance(),
+        ConfirmAction::CompleteMobileAction(id) => app.submit_mobile_action(id, None),
+        ConfirmAction::RejectMobileAction { id, reason } => {
+            app.submit_mobile_action(id, Some(reason))
+        }
+        ConfirmAction::AcknowledgeInventoryUncertainty => {
+            app.inventory_action.error = None;
+            app.inventory_action.last_error = None;
+        }
+        ConfirmAction::AcknowledgeCashShiftUncertainty => {
+            app.cash_shift_action.error = None;
+            app.cash_shift_action.last_error = None;
+        }
+        ConfirmAction::AcknowledgeLedgerUncertainty => app.ledger_uncertain = false,
+        ConfirmAction::OpenCashShift {
+            till,
+            opening,
+            notes,
+        } => app.open_cash_shift(till, opening, notes),
+        ConfirmAction::CashShiftMovement {
+            id,
+            direction,
+            method,
+            amount,
+            label,
+            reference,
+        } => app.cash_movement(id, direction, method, amount, label, reference),
+        ConfirmAction::CloseCashShift { id, amount, notes } => {
+            app.close_cash_shift(id, amount, notes)
+        }
+        ConfirmAction::CountInventory {
+            product_id,
+            quantity,
+            note,
+        } => app.count_inventory(product_id, quantity, note),
         ConfirmAction::SignOut => app.sign_out(),
         ConfirmAction::DiscardEditor => {
             app.product_editor = None;
@@ -461,7 +841,7 @@ mod search_tests {
     #[test]
     fn recognizes_navigation_but_leaves_product_queries_intact() {
         assert_eq!(search_destination(" Factures "), Some(Route::Sales));
-        assert_eq!(search_destination("Réglages"), Some(Route::Settings));
+        assert_eq!(search_destination("Réglages"), None);
         assert_eq!(search_destination("Situation"), Some(Route::Clients));
         assert_eq!(search_destination("café 1kg"), None);
     }

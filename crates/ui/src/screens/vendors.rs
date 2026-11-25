@@ -89,17 +89,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
 
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Vendors"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "New vendor"), palette, true) {
-                app.vendor_editor = Some(VendorEditor::new());
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_vendors();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Vendors"), palette);
     ui.add_space(12.0);
 
     if let Some(error) = app.vendors.error.clone() {
@@ -156,7 +146,7 @@ fn draw_payables_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(t!(app.locale, "Supplier payables report")).strong().size(16.0).color(palette.text));
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_payables_report();
             }
             if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
@@ -194,6 +184,9 @@ fn vendor_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 
     if app.vendors.loading && app.vendors.data.is_none() {
         super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+        return;
+    }
+    if app.vendors.error.is_some() && app.vendors.data.is_none() {
         return;
     }
     let vendors = app.vendors.data.clone().unwrap_or_default();

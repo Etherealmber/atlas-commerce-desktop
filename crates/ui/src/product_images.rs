@@ -144,7 +144,7 @@ async fn fetch(
     image.write_to(&mut output, image::ImageFormat::Png).ok()?;
     let digest = Sha256::digest(key.as_bytes());
     Some((
-        format!("bytes://product-{digest:x}.png"),
+        format!("bytes://product-{}.png", hex::encode(digest)),
         output.into_inner(),
     ))
 }

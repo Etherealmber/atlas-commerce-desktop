@@ -274,6 +274,116 @@ impl AtlasApp {
         self.vendors.start(job);
     }
 
+    pub fn load_inventory_ops(&mut self) {
+        if !self.role_policy().allows_route(Route::InventoryOps)
+            || self.inventory_ops.loading
+            || self.inventory_action.loading
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.inventory_ops.start(
+            self.runner
+                .spawn(async move { api.inventory_overview().await }),
+        );
+    }
+
+    pub(crate) fn create_inventory_location(&mut self, code: String, name: String) {
+        if !self.role_policy().allows_route(Route::InventoryOps)
+            || self.inventory_ops.loading
+            || self.inventory_ops.error.is_some()
+            || self.inventory_action.loading
+            || self.inventory_action.error.is_some()
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.inventory_action.start(self.runner.spawn(async move {
+            api.create_stock_location(&code, &name)
+                .await
+                .map(crate::screens::inventory_ops::InventoryAction::LocationCreated)
+        }));
+    }
+
+    pub(crate) fn count_inventory(&mut self, product_id: i64, quantity: f64, note: String) {
+        if !self.role_policy().allows_route(Route::InventoryOps)
+            || self.inventory_ops.loading
+            || self.inventory_ops.error.is_some()
+            || self.inventory_action.loading
+            || self.inventory_action.error.is_some()
+            || !self.inventory_ops.data.as_ref().is_some_and(|data| {
+                data.products
+                    .iter()
+                    .any(|p| p.id == product_id && p.tracks_inventory())
+            })
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.inventory_action.start(self.runner.spawn(async move {
+            api.cycle_count(product_id, quantity, &note)
+                .await
+                .map(|()| crate::screens::inventory_ops::InventoryAction::Counted)
+        }));
+    }
+
+    pub fn load_attendance(&mut self) {
+        if !self.role_policy().allows_route(Route::Attendance)
+            || self.attendance.loading
+            || self.attendance_action.loading
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.attendance.start(
+            self.runner
+                .spawn(async move { api.attendance_today().await }),
+        );
+    }
+
+    pub(crate) fn enable_attendance(&mut self) {
+        if !self.role_policy().allows_route(Route::Attendance)
+            || self.attendance.loading
+            || self.attendance_action.loading
+            || self.attendance_action.error.is_some()
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.attendance_action.start(
+            self.runner
+                .spawn(async move { api.enable_attendance().await }),
+        );
+    }
+
+    pub(crate) fn mark_attendance(&mut self, employee_id: i64, date: String, check_out: bool) {
+        if !self.role_policy().allows_route(Route::Attendance)
+            || self.attendance.loading
+            || self.attendance.error.is_some()
+            || self.attendance_action.loading
+            || self.attendance_action.error.is_some()
+        {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.attendance_action.start(
+            self.runner
+                .spawn(async move { api.attendance_mark(employee_id, &date, check_out).await }),
+        );
+    }
+
     pub fn load_employees(&mut self) {
         if !self.role_policy().allows_route(Route::Employees) {
             return;
@@ -846,31 +956,6 @@ impl AtlasApp {
         );
     }
 
-    /// Optional system-browser link to the web client's filtered list.
-    pub fn open_client_invoices_in_browser(&mut self, client: &atlas_api::models::Client) {
-        let Some(api) = self.client.clone() else {
-            return;
-        };
-        // Only the stable client ID goes in the query: a `q` name search
-        // would hide older invoices after the client is renamed (the web
-        // page treats `q` as an additional text filter, not part of the key).
-        let url = match url::Url::parse_with_params(
-            &format!("{}/invoices", api.base_url()),
-            &[("client", client.id.to_string())],
-        ) {
-            Ok(url) => url,
-            Err(error) => {
-                log::warn!("invalid invoices link: {error}");
-                self.notice(t!(self.locale, "Invalid report link.").into_owned());
-                return;
-            }
-        };
-        if let Err(error) = open::that(url.as_str()) {
-            log::warn!("open browser invoices: {error}");
-            self.notice(t!(self.locale, "The system could not open the browser.").into_owned());
-        }
-    }
-
     /// Show an offline, fictional receivables report in the visual fixture only.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
@@ -903,17 +988,6 @@ impl AtlasApp {
             self.native_login = crate::native_auth_v2::fictional(server.to_owned());
             self.login.busy = true;
         }
-    }
-
-    /// Display the pre-authorization waiting state without making a request.
-    #[cfg(feature = "visual-fixtures")]
-    #[doc(hidden)]
-    pub fn show_fictional_browser_wait(&mut self) {
-        self.browser_login = crate::browser_auth::fictional_wait(
-            self.server_store.selected_url().map(str::to_owned),
-        );
-        self.login.busy = true;
-        self.login.browser_auto_started = true;
     }
 
     /// Show an offline, fictional stock report in the visual fixture only.
@@ -992,6 +1066,22 @@ impl AtlasApp {
         self.receivables_report.start(
             self.runner
                 .spawn(async move { crate::client_report::fetch_receivables(&api).await }),
+        );
+    }
+
+    pub(crate) fn load_employee_situation(&mut self, id: i64) {
+        if id <= 0 || !self.role_policy().allows_route(Route::Employees) {
+            return;
+        }
+        let Some(api) = self.client.clone() else {
+            return;
+        };
+        self.employee_situation_id = Some(id);
+        self.employee_situation = Default::default();
+        self.employee_situation.start(
+            self.runner.spawn(async move {
+                crate::client_report::fetch_employee_situation(&api, id).await
+            }),
         );
     }
 
@@ -1149,8 +1239,15 @@ impl AtlasApp {
                 self.settings.update_channel,
                 atlas_core::settings::UpdateChannel::Prerelease
             );
+        if self.update.last_check_started.is_some_and(|(at, _)| {
+            !crate::state::update_check_cooldown_remaining(at.elapsed()).is_zero()
+        }) {
+            return;
+        }
+        self.update.last_check_started = Some((Instant::now(), prerelease));
         self.update.checking = true;
         self.update.error = None;
+        self.update.up_to_date_at = None;
         let cache = self.update.cache.clone();
         let cache_path = self.paths.update_state_file();
         let job = self.runner.spawn(async move {
@@ -1191,6 +1288,13 @@ impl AtlasApp {
         if Instant::now() < next {
             return;
         }
+        if let Some((at, _)) = self.update.last_check_started {
+            let remaining = crate::state::update_check_cooldown_remaining(at.elapsed());
+            if !remaining.is_zero() {
+                self.update.next_check_at = Some(Instant::now() + remaining);
+                return;
+            }
+        }
         self.check_for_updates(false);
         self.schedule_update_checks();
     }
@@ -1206,6 +1310,13 @@ impl AtlasApp {
     }
 
     fn begin_update_download(&mut self, auto: bool) {
+        if self.update.desktop_release.is_some() {
+            self.update.error = Some(
+                "Installation CDN1 non disponible : transfert vérifié non encore intégré."
+                    .to_owned(),
+            );
+            return;
+        }
         if self.update.progress.is_some() {
             return;
         }
@@ -1305,6 +1416,7 @@ impl AtlasApp {
             match result {
                 Ok(checked) => {
                     let not_modified = checked.not_modified;
+                    self.update.desktop_release = checked.desktop_release;
                     self.update.cache = checked.cache;
                     self.save_update_cache();
                     if let Some(manifest) = checked.manifest {
@@ -1323,6 +1435,7 @@ impl AtlasApp {
                     }
                 }
                 Err(error) => {
+                    self.update.up_to_date_at = None;
                     // Record failure as a check too, to avoid retrying every
                     // frame offline; preserve any quota reset learned by HTTP.
                     self.update.cache =
@@ -1395,6 +1508,12 @@ impl AtlasApp {
         }
         let decision = manifest.decision_for(env!("CARGO_PKG_VERSION"));
         match decision {
+            UpdateDecision::InvalidVersion => {
+                self.update.up_to_date_at = None;
+                self.update.last_manifest = None;
+                self.update.error =
+                    Some("Le manifeste de mise à jour contient une version invalide.".to_owned());
+            }
             UpdateDecision::UpToDate => {
                 // Surface an explicit status in the About card instead of
                 // silently swallowing the answer.
@@ -1402,26 +1521,39 @@ impl AtlasApp {
                 self.update.last_manifest = None;
                 self.update.ready_version = None;
                 self.update.mandatory = None;
+                self.update.dialog_open = false;
                 self.update.error = None;
                 self.leave_update_gate();
+            }
+            UpdateDecision::Mandatory { .. } if self.update.desktop_release.is_some() => {
+                // CDN installation is not implemented yet: never trap the user
+                // behind an update that this build cannot install.
+                self.update.mandatory = None;
+                self.leave_update_gate();
+                self.update.up_to_date_at = None;
+                self.update.last_manifest = Some(manifest);
+                self.update.dialog_open = false;
+                self.update.error = Some("Mise à jour obligatoire détectée, mais son installation CDN n'est pas encore disponible. L'application reste accessible.".to_owned());
             }
             UpdateDecision::Mandatory { .. } => {
                 self.update.up_to_date_at = None;
                 self.update.mandatory = Some(manifest.clone());
                 self.update.last_manifest = Some(manifest);
-                self.screen = Screen::UpdateGate;
+                if matches!(self.screen, Screen::Shell(_)) {
+                    self.update.dialog_open = true;
+                } else {
+                    self.screen = Screen::UpdateGate;
+                }
             }
             UpdateDecision::Optional { .. } => {
                 self.update.mandatory = None;
                 self.leave_update_gate();
                 self.update.up_to_date_at = None;
-                let auto = self.settings.update_auto_download;
+                // Checking only fetches release metadata. A binary download is
+                // always initiated explicitly by the user, even for old settings.
                 self.notice(format!("Mise à jour disponible : v{}", manifest.version));
+                self.update.dialog_open = matches!(self.screen, Screen::Shell(_));
                 self.update.last_manifest = Some(manifest);
-                if auto && self.update.progress.is_none() && self.update_download_job.is_none() {
-                    // Background download; installation stays explicit.
-                    self.begin_update_download(true);
-                }
             }
         }
     }
@@ -1500,8 +1632,6 @@ impl AtlasApp {
                 && !self.requires_password
                 && self.login.job_link.is_none()
             {
-                // A deep link supersedes an in-flight hosted login.
-                crate::browser_auth::cancel(self);
                 crate::native_auth_v2::cancel(self);
                 self.qr = Default::default();
                 self.login.pending_link = Some(link);
@@ -1511,7 +1641,6 @@ impl AtlasApp {
                 && !self.requires_password
                 && self.login.job_link.is_none()
             {
-                crate::browser_auth::cancel(self);
                 crate::native_auth_v2::cancel(self);
                 self.login.pending_link = None;
                 self.qr = Default::default();
@@ -1577,6 +1706,9 @@ impl AtlasApp {
         if self.receivables_report.poll() {
             ctx.request_repaint();
         }
+        if self.employee_situation.poll() {
+            ctx.request_repaint();
+        }
         if self.client_report.poll() {
             ctx.request_repaint();
         }
@@ -1593,6 +1725,114 @@ impl AtlasApp {
             ctx.request_repaint();
         }
         if self.employees.poll() {
+            ctx.request_repaint();
+        }
+        if self.payroll_runs.poll() {
+            ctx.request_repaint();
+        }
+        if self.payroll_detail.poll() {
+            ctx.request_repaint();
+        }
+        if self.payroll_settings.poll() {
+            ctx.request_repaint();
+        }
+        if self.mobile_actions.poll() {
+            ctx.request_repaint();
+        }
+        if self.mobile_action_detail.poll() {
+            ctx.request_repaint();
+        }
+        if self.mobile_action_write.poll() {
+            if self.mobile_action_write.last_error.is_none()
+                && let Some(updated) = self.mobile_action_write.data.take()
+            {
+                if let Some(rows) = &mut self.mobile_actions.data
+                    && let Some(row) = rows.iter_mut().find(|row| row.id == updated.id)
+                {
+                    *row = updated.clone();
+                }
+                self.actions_form.uncertain_id = None;
+                self.actions_form.reason.clear();
+                self.mobile_action_detail.data = Some(updated);
+                self.notice(t!(self.locale, "Request updated.").into_owned());
+            }
+            ctx.request_repaint();
+        }
+        if self.cash_shifts.poll() {
+            ctx.request_repaint();
+        }
+        if self.cash_shift_detail.poll() {
+            ctx.request_repaint();
+        }
+        if self.cash_shift_action.poll() {
+            if self.cash_shift_action.last_error.is_none()
+                && let Some(action) = self.cash_shift_action.data.take()
+            {
+                let id = match action {
+                    crate::screens::cash_shifts::CashShiftAction::Opened(id) => id,
+                    crate::screens::cash_shifts::CashShiftAction::Movement(id) => id,
+                    crate::screens::cash_shifts::CashShiftAction::Closed(id) => id,
+                };
+                self.cash_shift_form.amount.clear();
+                self.cash_shift_form.counted.clear();
+                self.cash_shift_form.reference.clear();
+                self.cash_shift_form.label.clear();
+                self.load_cash_shifts();
+                self.load_cash_shift_detail(id);
+            }
+            ctx.request_repaint();
+        }
+        if self.inventory_ops.poll() {
+            // Worker lists may be cached; a refresh cannot prove whether an
+            // interrupted mutation committed. Require explicit verification.
+            ctx.request_repaint();
+        }
+        if self.inventory_action.poll() {
+            match self.inventory_action.data.take() {
+                Some(crate::screens::inventory_ops::InventoryAction::LocationCreated(location))
+                    if self.inventory_action.last_error.is_none() =>
+                {
+                    if let Some(data) = &mut self.inventory_ops.data
+                        && !data
+                            .locations
+                            .iter()
+                            .any(|existing| existing.id == location.id)
+                    {
+                        data.locations.push(location);
+                    }
+                    self.inventory_form.location_code.clear();
+                    self.inventory_form.location_name.clear();
+                    self.notice(t!(self.locale, "Location created.").into_owned());
+                }
+                Some(crate::screens::inventory_ops::InventoryAction::Counted)
+                    if self.inventory_action.last_error.is_none() =>
+                {
+                    self.inventory_form.quantity.clear();
+                    self.inventory_form.note.clear();
+                    self.load_inventory_ops();
+                    self.notice(t!(self.locale, "Stock count recorded.").into_owned());
+                }
+                _ => {}
+            }
+            ctx.request_repaint();
+        }
+        if self.attendance.poll() {
+            let observed_state = self.attendance.last_error.is_none()
+                || self
+                    .attendance
+                    .last_error
+                    .as_ref()
+                    .is_some_and(|error| error.code.as_deref() == Some("ATTENDANCE_DISABLED"));
+            if observed_state && !self.attendance_action.loading {
+                self.attendance_action.error = None;
+                self.attendance_action.last_error = None;
+            }
+            ctx.request_repaint();
+        }
+        if self.attendance_action.poll() {
+            if self.attendance_action.last_error.is_none() {
+                self.load_attendance();
+            }
             ctx.request_repaint();
         }
         if self.employee_detail.poll() {
@@ -1704,6 +1944,19 @@ impl AtlasApp {
         let expired = [
             &self.dashboard.last_error,
             &self.products.last_error,
+            &self.attendance.last_error,
+            &self.attendance_action.last_error,
+            &self.inventory_ops.last_error,
+            &self.inventory_action.last_error,
+            &self.payroll_runs.last_error,
+            &self.payroll_detail.last_error,
+            &self.payroll_settings.last_error,
+            &self.mobile_actions.last_error,
+            &self.mobile_action_detail.last_error,
+            &self.mobile_action_write.last_error,
+            &self.cash_shifts.last_error,
+            &self.cash_shift_detail.last_error,
+            &self.cash_shift_action.last_error,
             &self.invoices.last_error,
             &self.alerts.last_error,
             &self.devices.last_error,
@@ -1754,6 +2007,8 @@ impl AtlasApp {
     }
 
     fn poll_agent_jobs(&mut self) {
+        self.agent.history_list.poll();
+        self.agent.history_detail.poll();
         if let Some(job) = &self.agent.job_policy
             && let Some(result) = job.poll()
         {
@@ -1781,6 +2036,25 @@ impl AtlasApp {
                         reply.reply
                     };
                     self.agent.push_message(false, text);
+                    if let Some(message) = self.agent.messages.last_mut() {
+                        message.proposals = reply.proposals.into_iter().take(20).collect();
+                        message.tools_used = reply
+                            .tool_trace
+                            .into_iter()
+                            .filter(|tool| tool.ok)
+                            .map(|tool| tool.name)
+                            .take(10)
+                            .collect();
+                    }
+                    // Usage is charged on the server; refresh its real quota after each response.
+                    if self.agent.job_policy.is_none()
+                        && let Some(client) = self.client.clone()
+                    {
+                        self.agent.job_policy = Some(
+                            self.runner
+                                .spawn(async move { client.agent_policy().await }),
+                        );
+                    }
                 }
                 Err(error) => {
                     self.agent
@@ -1842,8 +2116,22 @@ impl AtlasApp {
             || self.qr.job_complete.is_some()
             || self.server_form.probe_job.is_some()
             || self.dashboard.loading
+            || self.attendance.loading
+            || self.attendance_action.loading
+            || self.inventory_ops.loading
+            || self.inventory_action.loading
+            || self.payroll_runs.loading
+            || self.payroll_detail.loading
+            || self.payroll_settings.loading
+            || self.mobile_actions.loading
+            || self.mobile_action_detail.loading
+            || self.mobile_action_write.loading
+            || self.cash_shifts.loading
+            || self.cash_shift_detail.loading
+            || self.cash_shift_action.loading
             || self.products.loading
             || self.client_invoices.loading
+            || self.employee_situation.loading
             || self.client_report.loading
             || self.receivables_report.loading
             || self.payables_report.loading
@@ -1858,6 +2146,7 @@ impl AtlasApp {
             || self.invoices.loading
             || self.receipts.loading
             || self.alerts.loading
+            || self.nav_badges.loading
             || self.devices.loading
             || self.profile.loading
             || self.avatar_job.is_some()
@@ -1867,6 +2156,8 @@ impl AtlasApp {
             || self.key_create_job.is_some()
             || self.agent.busy
             || self.agent.job_policy.is_some()
+            || self.agent.history_list.loading
+            || self.agent.history_detail.loading
             || self.update.checking
             || self.update.progress.is_some()
     }
@@ -1900,10 +2191,6 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        if self.browser_login.embedded {
-            crate::browser_auth::cancel(self);
-        }
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
@@ -1944,6 +2231,22 @@ impl Resident for AtlasApp {
 
 // ── eframe wrapper ──────────────────────────────────────────────────────────
 
+// Resolve the same background for both the GPU clear and the panel. On
+// Windows a compositor can expose the clear colour between presented frames
+// (for example on restore); different auth colours make that flash visible.
+fn screen_palette(mut palette: crate::theme::Palette, screen: Screen) -> crate::theme::Palette {
+    if palette.dark
+        && matches!(
+            screen,
+            Screen::Login | Screen::ServerSetup | Screen::Onboarding
+        )
+    {
+        palette.window = egui::Color32::from_rgb(0x12, 0x13, 0x16);
+        palette.surface = egui::Color32::from_rgb(0x1e, 0x20, 0x25);
+    }
+    palette
+}
+
 #[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
 enum WindowsMaterial {
@@ -1959,12 +2262,6 @@ pub struct EframeShell {
     #[cfg(target_os = "windows")]
     material_request: Option<(bool, bool)>,
     first_frame: bool,
-    #[cfg(target_os = "windows")]
-    login_view: Option<crate::webview_auth::LoginView>,
-    #[cfg(target_os = "linux")]
-    login_view: Option<crate::webview_auth_linux::LoginView>,
-    #[cfg(target_os = "macos")]
-    login_view: Option<atlas_webview_macos::LoginView>,
 }
 
 impl EframeShell {
@@ -1978,6 +2275,7 @@ impl EframeShell {
         // palette and make the first frame skip theme::apply on that fresh
         // context, so every new context starts with an empty cache.
         held.applied_palette = None;
+        held.applied_ui_scale = None;
         held.applied_reduced_motion = None;
         crate::theme::install_fonts_and_icons(ctx);
         log::info!("Startup: fonts and image loaders ready");
@@ -1988,7 +2286,11 @@ impl EframeShell {
         // eframe asks for the clear colour before the first `logic` run, so
         // seed it at construction (the CreationContext already knows the
         // system theme) to avoid the dark fallback on even the first frame.
-        held.last_clear_color = Some(held.palette(ctx).window.to_normalized_gamma_f32());
+        held.last_clear_color = Some(
+            screen_palette(held.palette(ctx), held.screen.clone())
+                .window
+                .to_normalized_gamma_f32(),
+        );
         Self {
             held,
             first_frame: true,
@@ -1996,8 +2298,6 @@ impl EframeShell {
             material: None,
             #[cfg(target_os = "windows")]
             material_request: None,
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            login_view: None,
         }
     }
 }
@@ -2010,14 +2310,16 @@ impl eframe::App for EframeShell {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         // Match the active theme from the first frame on, so a light theme
         // never flashes the dark background before the first UI frame.
-        // The dark token (#111113) is only the pre-first-frame fallback.
+        // The default dark palette is only the pre-first-frame fallback.
         #[cfg(target_os = "windows")]
         if self.material.is_some() && matches!(self.held.screen, Screen::Shell(_)) {
             return [0.0, 0.0, 0.0, 0.0];
         }
-        self.held
-            .last_clear_color
-            .unwrap_or_else(|| egui::Color32::from_rgb(0x11, 0x11, 0x13).to_normalized_gamma_f32())
+        self.held.last_clear_color.unwrap_or_else(|| {
+            crate::theme::Palette::dark()
+                .window
+                .to_normalized_gamma_f32()
+        })
     }
 
     fn logic(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
@@ -2048,12 +2350,17 @@ impl eframe::App for EframeShell {
         // Keep egui's preference and the native window chrome aligned with
         // the app setting before resolving the palette for this frame.
         self.held.sync_egui_theme(ctx);
+        let scale = self.held.settings.ui_scale_percent.clamp(90, 125);
+        if self.held.applied_ui_scale != Some(scale) {
+            ctx.set_zoom_factor(f32::from(scale) / 100.0);
+            self.held.applied_ui_scale = Some(scale);
+        }
         // The native accent observer is off-thread; occasionally repaint so
         // system colour or high-contrast changes can reach an idle window.
         #[cfg(target_os = "windows")]
         ctx.request_repaint_after(Duration::from_secs(5));
         self.held.scrolling.apply(ctx);
-        let palette = self.held.palette(ctx);
+        let palette = screen_palette(self.held.palette(ctx), self.held.screen.clone());
         #[cfg(target_os = "windows")]
         if let Some(window) = frame.winit_window() {
             // Never expose the auth page or a custom palette through the
@@ -2104,6 +2411,12 @@ impl eframe::App for EframeShell {
             || self.held.applied_reduced_motion != Some(reduced_motion)
         {
             crate::theme::apply(ctx, &palette, reduced_motion);
+            #[cfg(not(target_os = "macos"))]
+            if self.held.applied_palette.map(|p| p.dark) != Some(palette.dark) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(std::sync::Arc::new(
+                    crate::tray::window_icon_for_theme(palette.dark),
+                ))));
+            }
             self.held.applied_palette = Some(palette);
             self.held.applied_reduced_motion = Some(reduced_motion);
         }
@@ -2126,132 +2439,6 @@ impl eframe::App for EframeShell {
         if let Some(at) = self.held.update.next_check_at {
             ctx.request_repaint_after(at.saturating_duration_since(Instant::now()));
         }
-        #[cfg(target_os = "windows")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else if let Some(window) = frame.winit_window() {
-                let size = window.inner_size();
-                let geometry = (size.width, size.height, window.scale_factor());
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    match crate::webview_auth::LoginView::open(
-                        window.as_ref(),
-                        geometry,
-                        &url,
-                        &server,
-                        &self.held.paths.dirs.cache,
-                    ) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
-                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = &self.login_view {
-                    view.resize(geometry.0, geometry.1, geometry.2);
-                }
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else {
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    let code = self
-                        .held
-                        .browser_login
-                        .pairing_code
-                        .as_deref()
-                        .unwrap_or_default();
-                    match crate::webview_auth_linux::LoginView::open(&url, &server, code) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(crate::webview_auth_linux::UNAVAILABLE) => {
-                            crate::browser_auth::fallback_to_browser(
-                                &mut self.held,
-                                url,
-                                crate::webview_auth_linux::UNAVAILABLE,
-                            );
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = self.login_view.as_mut() {
-                    match view.pump() {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            self.login_view = None;
-                            crate::browser_auth::cancel(&mut self.held);
-                        }
-                        Err(()) => {
-                            self.login_view = None;
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(
-                                "Connexion intégrée indisponible. Utilisez le navigateur système."
-                                    .to_owned(),
-                            );
-                        }
-                    }
-                }
-                if self.login_view.is_some() {
-                    ctx.request_repaint_after(Duration::from_millis(16));
-                }
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else if let Some(window) = frame.winit_window() {
-                let size = window.inner_size();
-                let geometry = (size.width, size.height, window.scale_factor());
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    match atlas_webview_macos::LoginView::open(
-                        window.as_ref(),
-                        geometry,
-                        &url,
-                        &server,
-                    ) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
-                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = &self.login_view {
-                    view.resize(geometry.0, geometry.1, geometry.2);
-                }
-            }
-        }
         // Unlike viewport.visible(), this also handles minimized, occluded,
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
@@ -2264,32 +2451,13 @@ impl eframe::App for EframeShell {
         // Keep repainting while any job runs, so spinners and poll results
         // appear without user input.
         if self.held.busy() {
-            // React promptly to the verified authorization URL, without
-            // continuously redrawing at high frequency during browser polling.
-            let delay = if self.held.browser_login.active
-                && self.held.browser_login.pairing_code.is_none()
-            {
-                30
-            } else {
-                250
-            };
-            ctx.request_repaint_after(Duration::from_millis(delay));
+            ctx.request_repaint_after(Duration::from_millis(250));
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let mut palette = self.held.palette(&ctx);
-        if palette.dark
-            && matches!(
-                self.held.screen,
-                Screen::Login | Screen::ServerSetup | Screen::Onboarding
-            )
-        {
-            // SOURCED-FROM: supplied authentication layout specification.
-            palette.window = egui::Color32::from_rgb(0x12, 0x13, 0x16);
-            palette.surface = egui::Color32::from_rgb(0x1e, 0x20, 0x25);
-        }
+        let palette = screen_palette(self.held.palette(&ctx), self.held.screen.clone());
         if !matches!(self.held.screen, Screen::Shell(_)) && fastframe_titlebar::enabled() {
             egui::Panel::top(egui::Id::new("auth-titlebar"))
                 .exact_size(48.0)
@@ -2332,54 +2500,6 @@ impl eframe::App for EframeShell {
                         },
                     );
                 });
-        }
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
-            #[cfg(target_os = "windows")]
-            let (loading, offer_browser) = self
-                .login_view
-                .as_ref()
-                .map(|view| (view.loading(), view.waiting_long()))
-                .unwrap_or_default();
-            #[cfg(target_os = "macos")]
-            let (loading, offer_browser) = (false, false);
-            #[cfg(target_os = "windows")]
-            if loading || !offer_browser {
-                ctx.request_repaint_after(Duration::from_millis(250));
-            }
-            let response = egui::CentralPanel::default()
-                .frame(
-                    egui::Frame::NONE
-                        .fill(palette.window)
-                        .inner_margin(egui::Margin::symmetric(16, 0)),
-                )
-                .show(ui, |ui| {
-                    // The WebView begins 48 points below the title bar.
-                    // Keep native controls in that reserved strip.
-                    ui.set_max_height(48.0);
-                    screens::auth::draw_embedded_header(
-                        &mut self.held,
-                        ui,
-                        &palette,
-                        loading,
-                        offer_browser,
-                    )
-                });
-            #[cfg(target_os = "windows")]
-            if response.inner
-                && let Some(view) = self.login_view.take()
-            {
-                let url = view.authorization_url();
-                drop(view);
-                crate::browser_auth::fallback_to_browser(
-                    &mut self.held,
-                    url,
-                    "Connexion poursuivie dans le navigateur.",
-                );
-            }
-            #[cfg(target_os = "macos")]
-            let _ = response;
-            return;
         }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it
@@ -2429,7 +2549,17 @@ impl eframe::App for EframeShell {
 
 #[cfg(test)]
 mod update_gate_recovery_tests {
-    use super::{Route, Screen, staged_version_matches, update_gate_destination};
+    use super::{Route, Screen, screen_palette, staged_version_matches, update_gate_destination};
+
+    #[test]
+    fn authentication_clear_colour_matches_its_rendered_palette() {
+        let dark = crate::theme::Palette::dark();
+        let auth = screen_palette(dark, Screen::Login);
+        assert_eq!(auth.window, egui::Color32::from_rgb(0x12, 0x13, 0x16));
+        assert_eq!(screen_palette(dark, Screen::Shell(Route::Dashboard)), dark);
+        let light = crate::theme::Palette::light();
+        assert_eq!(screen_palette(light, Screen::Login), light);
+    }
 
     #[test]
     fn staged_update_is_not_mislabelled_as_a_newer_release() {

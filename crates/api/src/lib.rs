@@ -3,7 +3,8 @@
 //! One [`ApiClient`] per selected server. Every request carries the headers
 //! the worker expects:
 //!
-//! - `X-Atlas-Client: native` — skips Cloudflare Turnstile for native apps,
+//! - `X-Atlas-Client: native` — identifies a legacy native client; it does
+//!   not establish that a server will waive any challenge requirement,
 //! - `X-Device-Fingerprint` — sessions are bound to `(IP, fingerprint)`,
 //! - a short, non-browser `User-Agent`,
 //! - `Authorization: Bearer <token>` once authenticated.
@@ -13,7 +14,11 @@
 //! directly (the body value is forwarded too for forward compatibility).
 
 pub mod agent;
+pub mod attendance;
 pub mod auth;
+pub mod auth_v3;
+pub mod auth_v3_account;
+pub mod cash_shifts;
 pub mod catalog;
 pub mod clients;
 pub mod commerce;
@@ -21,7 +26,10 @@ pub mod delivery_notes;
 pub mod error;
 pub mod expenses;
 pub mod integrations;
+pub mod inventory_ops;
+pub mod mobile_actions;
 pub mod models;
+pub mod payroll;
 pub mod probe;
 pub mod reports;
 pub mod scan;
@@ -73,7 +81,10 @@ impl ApiClient {
         &self.fingerprint
     }
 
+    /// Legacy client accepts bearer sessions only. Proof-bound v3 sessions
+    /// must never be stored here or emitted under the Bearer scheme.
     pub fn set_token(&self, token: Option<String>) {
+        let token = token.filter(|value| !value.trim_start().starts_with("nv3."));
         if let Ok(mut guard) = self.token.lock() {
             *guard = token;
         }
@@ -253,5 +264,22 @@ fn transport_error(error: reqwest::Error) -> ApiError {
         ApiError::transport("Connexion impossible au serveur. Vérifiez l'adresse et votre réseau.")
     } else {
         ApiError::transport(format!("Erreur réseau : {error}"))
+    }
+}
+
+#[cfg(test)]
+mod bearer_isolation_tests {
+    use super::ApiClient;
+
+    #[test]
+    fn rejects_v3_tokens_from_legacy_client() {
+        let client =
+            ApiClient::new("https://example.invalid", "test-device", "atlas-test").unwrap();
+        client.set_token(Some("legacy-token".to_owned()));
+        assert_eq!(client.token().as_deref(), Some("legacy-token"));
+        client.set_token(Some("nv3.example".to_owned()));
+        assert!(client.token().is_none());
+        client.set_token(Some(" nv3.example".to_owned()));
+        assert!(client.token().is_none());
     }
 }

@@ -62,17 +62,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
 
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Delivery notes"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "New delivery note"), palette, true) {
-                app.delivery_note_editor = Some(DeliveryNoteEditor::new());
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_delivery_notes();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Delivery notes"), palette);
     ui.add_space(12.0);
 
     if let Some(error) = app.delivery_notes.error.clone() {
@@ -84,6 +74,9 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.set_width(ui.available_width());
         if app.delivery_notes.loading && app.delivery_notes.data.is_none() {
             super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+            return;
+        }
+        if app.delivery_notes.error.is_some() && app.delivery_notes.data.is_none() {
             return;
         }
         let notes = app.delivery_notes.data.clone().unwrap_or_default();

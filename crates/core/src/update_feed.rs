@@ -32,6 +32,8 @@ pub struct UpdateManifest {
 /// What the interface should do about a fetched manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateDecision {
+    /// The feed or running version is not a valid semantic version.
+    InvalidVersion,
     /// Nothing newer than the running version.
     UpToDate,
     /// A normal, optional update the settings screen offers.
@@ -44,13 +46,24 @@ impl UpdateManifest {
     /// Compares the manifest against the running `current_version`.
     #[must_use]
     pub fn decision_for(&self, current_version: &str) -> UpdateDecision {
-        if !is_newer(&self.version, current_version) {
+        let (Ok(version), Ok(current)) = (
+            semver::Version::parse(&self.version),
+            semver::Version::parse(current_version),
+        ) else {
+            return UpdateDecision::InvalidVersion;
+        };
+        let minimum = match self.minimum_version.as_deref() {
+            Some(value) => match semver::Version::parse(value) {
+                Ok(value) if !value.cmp_precedence(&version).is_gt() => Some(value),
+                _ => return UpdateDecision::InvalidVersion,
+            },
+            None => None,
+        };
+        if !version.cmp_precedence(&current).is_gt() {
             return UpdateDecision::UpToDate;
         }
-        let forced_by_minimum = self
-            .minimum_version
-            .as_deref()
-            .is_some_and(|minimum| is_newer(minimum, current_version));
+        let forced_by_minimum =
+            minimum.is_some_and(|minimum| minimum.cmp_precedence(&current).is_gt());
         if self.mandatory || forced_by_minimum {
             UpdateDecision::Mandatory {
                 version: self.version.clone(),
@@ -65,31 +78,17 @@ impl UpdateManifest {
     }
 }
 
-/// Numeric semantic-version comparison: true when `candidate` is newer than
-/// `current`. Pre-release suffixes (`-rc.1`) sort below the same core version.
+/// Strict SemVer precedence, including prerelease identifiers. Invalid versions
+/// never compare as newer; callers handling feeds must report invalid input.
 #[must_use]
 pub fn is_newer(candidate: &str, current: &str) -> bool {
-    parse_semver(candidate).is_some_and(|candidate_parts| {
-        parse_semver(current).is_some_and(|current_parts| candidate_parts > current_parts)
-    })
-}
-
-fn parse_semver(value: &str) -> Option<(u64, u64, u64, u64)> {
-    let trimmed = value.trim().trim_start_matches('v');
-    let (core, pre) = trimmed.split_once('-').unwrap_or((trimmed, ""));
-    let mut numbers = core.split('.');
-    let major = numbers.next()?.parse().ok()?;
-    let minor = numbers
-        .next()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
-    let patch = numbers
-        .next()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
-    // A release without a suffix ranks above any pre-release.
-    let pre_rank = if pre.is_empty() { 1 } else { 0 };
-    Some((major, minor, patch, pre_rank))
+    match (
+        semver::Version::parse(candidate),
+        semver::Version::parse(current),
+    ) {
+        (Ok(candidate), Ok(current)) => candidate.cmp_precedence(&current).is_gt(),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -104,8 +103,37 @@ mod tests {
         assert!(!is_newer("0.1.0", "0.1.0"));
         assert!(!is_newer("0.1.0-rc.1", "0.1.0"));
         assert!(is_newer("0.1.0", "0.1.0-rc.1"));
-        assert!(is_newer("v0.2", "0.1.9"));
+        assert!(!is_newer("v0.2", "0.1.9"));
+        assert!(is_newer("0.2.0-beta.2", "0.2.0-beta.1"));
+        assert!(!is_newer("0.2.0-beta.01", "0.2.0-beta.1"));
+        assert!(!is_newer("0.2.0+build.2", "0.2.0+build.1"));
         assert!(!is_newer("not-a-version", "0.1.0"));
+    }
+
+    #[test]
+    fn invalid_manifest_never_reports_up_to_date() {
+        let mut manifest = UpdateManifest {
+            version: "not-semver".into(),
+            mandatory: false,
+            minimum_version: None,
+            notes: String::new(),
+            published_at: String::new(),
+        };
+        assert_eq!(
+            manifest.decision_for("0.1.0"),
+            UpdateDecision::InvalidVersion
+        );
+        manifest.version = "0.2.0".into();
+        manifest.minimum_version = Some("0.3.0".into());
+        assert_eq!(
+            manifest.decision_for("0.1.0"),
+            UpdateDecision::InvalidVersion
+        );
+        manifest.minimum_version = Some("garbage".into());
+        assert_eq!(
+            manifest.decision_for("0.1.0"),
+            UpdateDecision::InvalidVersion
+        );
     }
 
     #[test]

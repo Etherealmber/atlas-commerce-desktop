@@ -7,9 +7,9 @@
 resolver = "2"
 members = [
     "crates/core",
+    "crates/auth-core",
     "crates/api",
     "crates/ui",
-    "crates/webview-macos",
     "crates/webview-linux",
     "crates/app",
 ]
@@ -40,9 +40,10 @@ clap = { version = "4.5", features = ["derive"] }
 log = "0.4"
 
 # HTTP: rustls only, so no OpenSSL is needed on any platform.
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls-native-roots",
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
     "json",
+    "query",
     "gzip",
     "http2",
     "blocking",
@@ -51,7 +52,8 @@ reqwest = { version = "0.12", default-features = false, features = [
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 
 # Device fingerprint, QR rendering, links
-sha2 = "0.10"
+sha2 = "0.11"
+hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
 qrcode = "0.14"
 url = "2"
@@ -77,25 +79,25 @@ egui = "0.36.2"
 # (avatar URLs) with its built-in byte cache; reqwest is already a dependency.
 egui_extras = { version = "0.36.2", features = ["image", "svg", "http"] }
 
-# fastframe — every crate on the same git tag, v0.17.0.
-fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-titlebar = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-dirs = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-file = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-notifications = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0", features = ["reqwest"] }
-fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-power = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-autostart = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
-fastframe-desktop = { git = "https://github.com/crmne/fastframe", tag = "v0.17.0" }
+# fastframe — every crate on the same git tag, v0.17.1.
+fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-titlebar = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-dirs = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-file = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-notifications = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1", features = ["reqwest"] }
+fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-power = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-autostart = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
+fastframe-desktop = { git = "https://github.com/crmne/fastframe", tag = "v0.17.1" }
 
 [profile.release]
 # Small, fast binaries: sub-second startup, low RAM — no debug symbols in the

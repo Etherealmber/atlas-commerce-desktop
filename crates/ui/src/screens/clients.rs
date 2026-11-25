@@ -288,19 +288,24 @@ fn format_float(value: f64) -> String {
 
 pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_editor(app);
+    if let Some(id) = app.client_report_id {
+        let client = app
+            .clients
+            .data
+            .as_ref()
+            .and_then(|items| items.iter().find(|item| item.id == id))
+            .cloned();
+        if let Some(client) = client {
+            ui.add_space(8.0);
+            draw_client_report(app, ui, palette, &client);
+            return;
+        }
+        app.client_report_id = None;
+        app.client_report = Default::default();
+    }
 
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Clients"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if primary_button(ui, t!(app.locale, "New client"), palette, true) {
-                app.client_editor = Some(ClientEditor::new());
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_clients();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Clients"), palette);
     ui.add_space(12.0);
 
     if let Some(error) = app.clients.error.clone() {
@@ -409,6 +414,9 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
         return;
     }
+    if app.clients.error.is_some() && app.clients.data.is_none() {
+        return;
+    }
     let clients = app.clients.data.clone().unwrap_or_default();
     if clients.is_empty() {
         empty_state(
@@ -454,7 +462,7 @@ fn client_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             // Explicit bounded columns keep long names from consuming the
             // balance column or wrapping into a one-character-wide strip.
             let width = ui.available_width();
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 icon(ui, Icon::User, palette.secondary, 18.0);
                 let wide = width >= 850.0;
                 let text_width = (width - if wide { 550.0 } else { 160.0 }).max(40.0);
@@ -625,10 +633,6 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         blank(&client.address),
     );
     detail_row(ui, palette, t!(app.locale, "City"), blank(&client.city));
-    if app.client_report_id == Some(client.id) {
-        ui.add_space(14.0);
-        draw_client_report(app, ui, palette, client);
-    }
     if app.client_invoice_id == Some(client.id) {
         ui.add_space(14.0);
         ui.separator();
@@ -638,11 +642,8 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     .color(palette.text)
                     .strong(),
             );
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.open_client_invoices(client);
-            }
-            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) {
-                app.open_client_invoices_in_browser(client);
             }
         });
         if app.client_invoices.loading {
@@ -721,7 +722,7 @@ fn draw_receivables_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Pale
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(t!(app.locale, "Client receivables report")).strong().size(16.0).color(palette.text));
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_receivables_report();
             }
             if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {
@@ -749,7 +750,7 @@ fn draw_client_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette, 
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(t!(app.locale, "Client situation")).strong().size(16.0).color(palette.text));
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_client_report(client, app.client_report_full);
             }
             if secondary_button(ui, t!(app.locale, "Print / PDF"), palette) {

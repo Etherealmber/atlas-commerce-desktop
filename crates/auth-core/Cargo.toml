@@ -1,0 +1,26 @@
+[package]
+name = "atlas-auth-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Client-side Desktop v3 authentication protocol core for Atlas Commerce (PKCE, RFC 9449 DPoP ES256 proofs, origin validation, explicit state machine). Independent from atlas-finance-core."
+
+[lib]
+name = "atlas_auth_core"
+crate-type = ["rlib"]
+
+[dependencies]
+base64 = "0.22"
+base64ct = "=1.6.0"
+getrandom = "0.2"
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+url = "2"
+idna_adapter = "=1.2.0"
+utf8_iter = "=1.0.4"
+utf16_iter = "=1.0.5"
+zeroize = "=1.8.1"

@@ -40,7 +40,11 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         let (medallion, _) =
             ui.allocate_exact_size(egui::Vec2::splat(box_size), egui::Sense::hover());
         let center = medallion.center();
-        let pulse = (time * 2.2).sin() * 0.5 + 0.5;
+        let pulse = if app.settings.reduced_motion {
+            0.5
+        } else {
+            (time * 2.2).sin() * 0.5 + 0.5
+        };
         ui.painter().circle_filled(
             center,
             box_size * 0.47,
@@ -79,7 +83,11 @@ pub fn draw_splash(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         ui.painter()
             .rect_filled(track, 999.0, palette.surface_active);
         let span = 0.34;
-        let head = (time * 0.85).fract() * (1.0 - span);
+        let head = if app.settings.reduced_motion {
+            (1.0 - span) * 0.5
+        } else {
+            (time * 0.85).fract() * (1.0 - span)
+        };
         let segment = egui::Rect::from_min_size(
             egui::pos2(track.left() + track.width() * head, track.top()),
             egui::vec2(track.width() * span, track.height()),
@@ -806,159 +814,12 @@ enum LoginTab {
     Qr,
 }
 
-/// Native sign-in entry point. QR pairing is opt-in; the proof-bound desktop
-/// browser flow remains an explicit fallback for server-side challenges.
+/// Native sign-in entry point.
 pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
-    crate::native_auth_v2::poll(app);
-    if !matches!(app.screen, Screen::Login) {
-        return;
+    if matches!(app.screen, Screen::Login) {
+        super::login_reference::draw(app, ui, palette);
     }
-    if !app.requires_password
-        && !app.browser_login.active
-        && !app.login.busy
-        && let Some(link) = app.login.pending_link.take()
-    {
-        app.login.browser_auto_started = true;
-        start_verify_link(app, link);
-    }
-    // During the required v1 handshake, show a minimal cancellable status,
-    // not a second login page. The validated server page opens as soon as its
-    // authorization URL is available.
-    if app.browser_login.active && !app.qr.active {
-        ui.vertical_centered(|ui| {
-            ui.add_space((ui.available_height() * 0.3).max(20.0));
-            ui.spinner();
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
-                    .color(palette.secondary),
-            );
-            if let Some(code) = &app.browser_login.pairing_code {
-                ui.add_space(12.0);
-                ui.label(
-                    RichText::new(t!(app.locale, "Compare this code with your browser:"))
-                        .color(palette.secondary),
-                );
-                ui.label(
-                    RichText::new(code)
-                        .font(crate::fonts::mono_semibold(20.0))
-                        .color(palette.text),
-                );
-            }
-            if let Some(error) = &app.login.error {
-                ui.add_space(8.0);
-                ui.label(RichText::new(error).color(palette.danger));
-            }
-            ui.add_space(16.0);
-            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                crate::browser_auth::cancel(app);
-            }
-            ui.add_space(8.0);
-            if !app.requires_password
-                && secondary_button(ui, t!(app.locale, "Sign in with a QR code"), palette)
-            {
-                crate::browser_auth::cancel(app);
-                start_qr_session(app);
-            }
-        });
-        return;
-    }
-
-    // Native entry screen. The external browser fallback uses the server's
-    // unmodified page, and never injects credentials or scripts.
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.vertical_centered(|ui| {
-            // Keep the native sign-in surface centered on a large window and
-            // scrollable rather than clipped when the viewport is compact.
-            let estimated_height = if app.qr.active || app.native_login.active { 610.0 } else { 390.0 };
-            ui.add_space(((ui.available_height() - estimated_height) * 0.5).max(16.0));
-            let width = (ui.available_width() - 32.0).clamp(0.0, 460.0);
-            card(palette).show(ui, |ui| {
-                ui.set_width((width - 34.0).max(0.0));
-                ui.vertical_centered(|ui| {
-                    ui.add_space(8.0);
-                    crate::branding::mark(ui, palette, 36.0);
-                    ui.add_space(12.0);
-                    ui.label(
-                        RichText::new("Atlas Commerce")
-                            .font(crate::fonts::bold(21.0))
-                            .color(palette.text),
-                    );
-                    ui.add_space(6.0);
-                    ui.label(
-                        RichText::new(t!(app.locale, "Secure sign-in"))
-                            .color(palette.secondary)
-                            .size(13.0),
-                    );
-                    ui.add_space(20.0);
-                    if app.native_login.active {
-                        if let Some(url) = &app.native_login.qr_url {
-                            qr_image(ui, url, palette);
-                            ui.add_space(12.0);
-                            ui.label(RichText::new(t!(app.locale, "Scan with your signed-in phone, then compare this code on both devices:")).color(palette.secondary));
-                            if let Some(code) = &app.native_login.pairing_code {
-                                ui.label(RichText::new(code).font(crate::fonts::mono_semibold(20.0)).color(palette.text));
-                            }
-                            if let Some(server) = app.server_store.selected_url() {
-                                ui.label(RichText::new(server).color(palette.secondary).size(12.0));
-                            }
-                            ui.label(RichText::new(t!(app.locale, "Waiting for phone approval…")).color(palette.secondary));
-                        } else {
-                            ui.spinner();
-                            ui.label(RichText::new(t!(app.locale, "Preparing secure QR sign-in…")).color(palette.secondary));
-                        }
-                        ui.add_space(12.0);
-                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) { crate::native_auth_v2::cancel(app); }
-                    } else if app.qr.active {
-                        draw_qr(app, ui, palette);
-                        ui.add_space(12.0);
-                        if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                            app.qr = Default::default();
-                            app.login.browser_auto_started = true;
-                        }
-                    } else {
-                        if let Some(error) = &app.login.error {
-                            error_banner(ui, error, palette);
-                            ui.add_space(12.0);
-                        }
-                        if let Some(notice) = &app.login.notice {
-                            ui.label(RichText::new(notice).color(palette.secondary));
-                            ui.add_space(8.0);
-                        }
-                        if !app.requires_password
-                            && primary_button(ui, t!(app.locale, "Sign in with secure QR v2"), palette, !app.login.busy)
-                        {
-                            crate::native_auth_v2::start(app);
-                        }
-                        ui.add_space(8.0);
-                        if !app.requires_password && !app.login.busy
-                            && secondary_button(ui, t!(app.locale, "Use legacy QR"), palette)
-                        {
-                            start_qr_session(app);
-                        }
-                        ui.add_space(8.0);
-                        if app.login.busy {
-                            ui.spinner();
-                            ui.add_space(8.0);
-                        }
-                        ui.label(RichText::new(t!(app.locale, "Password and passkey sign-in use your browser until the server supports a secure native flow.")).color(palette.secondary).size(12.5));
-                        ui.add_space(8.0);
-                        ui.add_enabled_ui(!app.login.busy, |ui| {
-                            if secondary_button(
-                                ui,
-                                t!(app.locale, "Sign in with your browser"),
-                                palette,
-                            ) {
-                                crate::browser_auth::start(app);
-                            }
-                        });
-                    }
-                    ui.add_space(8.0);
-                });
-            });
-        });
-    });
 }
 
 // The earlier native login implementation is retained for its existing QR,
@@ -966,6 +827,7 @@ pub fn draw_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 #[allow(dead_code)]
 fn draw_legacy_login(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     poll_login_jobs(app);
+    crate::native_auth_v2::poll(app);
     if !matches!(app.screen, Screen::Login) {
         return;
     }
@@ -1072,41 +934,8 @@ fn draw_login_form_panel(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palett
                     .size(12.5),
             );
             ui.add_space(12.0);
-            if app.browser_login.active {
-                if let Some(code) = &app.browser_login.pairing_code {
-                    ui.label(
-                        RichText::new(t!(app.locale, "Compare this code with your browser:"))
-                            .color(palette.secondary),
-                    );
-                    ui.label(
-                        RichText::new(code)
-                            .font(crate::fonts::mono_semibold(20.0))
-                            .color(palette.text),
-                    );
-                } else {
-                    ui.label(
-                        RichText::new(t!(app.locale, "Preparing secure browser sign-in…"))
-                            .color(palette.secondary),
-                    );
-                }
-                if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                    crate::browser_auth::cancel(app);
-                }
-            } else {
-                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                if primary_button(
-                    ui,
-                    t!(app.locale, "Sign in inside Atlas"),
-                    palette,
-                    !app.login.busy,
-                ) {
-                    crate::browser_auth::start_embedded(app);
-                }
-                if secondary_button(ui, t!(app.locale, "Sign in with your browser"), palette)
-                    && !app.login.busy
-                {
-                    crate::browser_auth::start(app);
-                }
+            if secondary_button(ui, "Connexion QR v2", palette) {
+                crate::native_auth_v2::start(app);
             }
             ui.add_space(10.0);
             let width = (ui.available_width() - 48.0).clamp(180.0, 340.0);
@@ -1503,32 +1332,6 @@ fn draw_qr(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             );
         }
         ui.add_space(10.0);
-        if let Some(base) = app.server_store.selected_url()
-            && secondary_button(ui, t!(app.locale, "Sign in on the server website"), palette)
-            && let Ok(mut url) = url::Url::parse(base)
-        {
-            url.set_path("/login");
-            url.set_query(None);
-            url.set_fragment(None);
-            if let Err(error) = open::that(url.as_str()) {
-                log::warn!("Could not open browser: {:?}", error.kind());
-                app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
-            }
-        }
-        if !app.qr.expired
-            && let Some(base) = app.server_store.selected_url()
-            && let Some(url) = browser_approval_url(base, &app.qr.qr_url, &app.qr.token)
-            && secondary_button(ui, t!(app.locale, "Approve in your browser"), palette)
-            && let Err(error) = open::that(url.as_str())
-        {
-            log::warn!("Could not open browser: {:?}", error.kind());
-            app.login.error = Some(t!(app.locale, "Could not open your browser.").into_owned());
-        }
-        ui.label(
-            RichText::new(t!(app.locale, "First sign in to this server in your browser, then approve the request here. If the code expires, create a new one."))
-                .color(palette.dim)
-                .size(12.0),
-        );
         if secondary_button(ui, t!(app.locale, "New code"), palette) {
             start_qr_session(app);
         }
@@ -1567,7 +1370,7 @@ fn browser_approval_url(base: &str, raw: &str, token: &str) -> Option<url::Url> 
     Some(approval)
 }
 
-fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
+pub(super) fn qr_image(ui: &mut egui::Ui, url: &str, _palette: &Palette) {
     let code = match qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::H) {
         Ok(code) => code,
         Err(_) => return,
@@ -1702,7 +1505,6 @@ fn start_qr_poll(app: &mut AtlasApp) {
 // ── Job polling / state transitions ─────────────────────────────────────────
 
 pub fn poll_login_jobs(app: &mut AtlasApp) {
-    crate::browser_auth::poll(app);
     // Login (password).
     if let Some(job) = &app.login.job_login
         && let Some(result) = job.poll()
@@ -1995,58 +1797,6 @@ mod browser_approval_tests {
             assert!(browser_approval_url(base, url, "abc").is_none(), "{url}");
         }
     }
-}
-
-/// Keep the hosted page prominent while retaining the v1 comparison code
-/// on demand. The server's consent and the authorization protocol are unchanged.
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-pub(crate) fn draw_embedded_header(
-    app: &mut AtlasApp,
-    ui: &mut egui::Ui,
-    palette: &Palette,
-    loading: bool,
-    offer_browser: bool,
-) -> bool {
-    let mut open_browser = false;
-    ui.horizontal_centered(|ui| {
-        let server = app
-            .server_store
-            .selected_url()
-            .map(atlas_core::ServerUrl::host)
-            .unwrap_or_default();
-        let host_width = (ui.available_width() - 500.0).clamp(0.0, 300.0);
-        ui.add_sized(
-            [host_width, TARGET],
-            egui::Label::new(RichText::new(&server).color(palette.text).strong()).truncate(),
-        )
-        .on_hover_text(server);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if secondary_button(ui, t!(app.locale, "Cancel"), palette) {
-                crate::browser_auth::cancel(app);
-            }
-            if offer_browser && secondary_button(ui, t!(app.locale, "Open in browser"), palette) {
-                open_browser = true;
-            }
-            if loading {
-                ui.label(RichText::new(t!(app.locale, "Loading…")).color(palette.secondary));
-            }
-            if app.browser_login.pairing_code.is_some()
-                && secondary_button(ui, t!(app.locale, "Security code"), palette)
-            {
-                app.browser_login.show_pairing_code = !app.browser_login.show_pairing_code;
-            }
-            if app.browser_login.show_pairing_code
-                && let Some(code) = &app.browser_login.pairing_code
-            {
-                ui.label(
-                    RichText::new(format!("{} {code}", t!(app.locale, "Compare:")))
-                        .color(palette.text)
-                        .strong(),
-                );
-            }
-        });
-    });
-    open_browser
 }
 
 #[cfg(test)]

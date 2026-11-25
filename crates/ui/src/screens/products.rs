@@ -422,19 +422,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         return;
     }
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        page_title(ui, t!(app.locale, "Products"), palette);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if app.role_policy().can_edit_prices()
-                && primary_button(ui, t!(app.locale, "New product"), palette, true)
-            {
-                app.product_editor = Some(ProductEditor::new());
-            }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
-                app.load_products();
-            }
-        });
-    });
+    page_title(ui, t!(app.locale, "Products"), palette);
     ui.add_space(12.0);
 
     // Keep these tools available on demand, without embedding separate
@@ -460,7 +448,7 @@ pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     }
 
     if app.products.loading && app.products.data.is_none() {
-        super::list_skeleton(ui, palette, app.locale, app.settings.reduced_motion);
+        widgets::product_list_skeleton(ui, palette, app.settings.reduced_motion);
     } else if app
         .products
         .data
@@ -595,7 +583,7 @@ fn draw_stock_report(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if before != app.stock_report_location {
                 app.load_stock_report();
             }
-            if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.load_stock_report();
             }
             let printable = !app.stock_report.loading && app.stock_report.error.is_none() && app.stock_report.data.is_some() && app.report_job.is_none();
@@ -668,7 +656,7 @@ fn product_list(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         card(palette).show(ui, |ui| {
             ui.set_width(ui.available_width());
             let wide = ui.available_width() >= 1120.0;
-            ui.horizontal_centered(|ui| {
+            ui.horizontal(|ui| {
                 let source = product.image_url.as_deref().unwrap_or("");
                 let visible = ui.is_rect_visible(egui::Rect::from_min_size(
                     ui.next_widget_position(),
@@ -927,7 +915,9 @@ fn draw_history_page(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if secondary_button(ui, t!(app.locale, "Back to products"), palette) {
             app.stock_history = None;
         }
-        if app.stock_history.is_some() && secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+        if app.stock_history.is_some()
+            && crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette)
+        {
             load_history(app);
         }
     });
@@ -1265,7 +1255,7 @@ fn draw_images(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         });
     }
-    if secondary_button(ui, t!(locale, "Refresh"), palette) {
+    if crate::buttons::refresh_button(ui, t!(locale, "Refresh"), palette) {
         load_images(app);
     }
 }
@@ -1384,7 +1374,7 @@ fn draw_variants(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             }
         });
     }
-    if secondary_button(ui, t!(locale, "Refresh"), palette) {
+    if crate::buttons::refresh_button(ui, t!(locale, "Refresh"), palette) {
         load_variants(app);
     }
     let Some(editor) = app.product_editor.as_mut() else {

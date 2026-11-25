@@ -7,6 +7,247 @@ use egui::{Color32, RichText, Sense, Stroke, TextWrapMode, UiBuilder};
 use crate::icons::Icon;
 use crate::theme::Palette;
 
+/// Layouts used by the web's page-specific loading placeholders.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageSkeleton {
+    Dashboard,
+    Products,
+    Kpis3List,
+    Kpis4List,
+    TableOnly,
+    Balance,
+    Reports,
+    InventoryOps,
+    Payroll,
+    CashShifts,
+    Attendance,
+    Actions,
+    Settings,
+    About,
+    Changelog,
+    AgentThread,
+}
+
+/// Draw a structural, text-free loading state. Each block is clipped to its
+/// own bounds and the moving highlight is entirely disabled for
+/// reduced-motion users. `time` is egui's monotonic frame time in seconds.
+pub fn draw_page_skeleton(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    variant: PageSkeleton,
+    time: f64,
+    reduced_motion: bool,
+) {
+    if !reduced_motion {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(80));
+    }
+    let width = ui.available_width().max(0.0);
+    let metrics: usize = match variant {
+        PageSkeleton::Dashboard
+        | PageSkeleton::Kpis4List
+        | PageSkeleton::CashShifts
+        | PageSkeleton::Payroll
+        | PageSkeleton::Balance => 4,
+        PageSkeleton::Kpis3List | PageSkeleton::Attendance | PageSkeleton::InventoryOps => 3,
+        _ => 0,
+    };
+    if metrics > 0 {
+        let columns = if width >= 700.0 {
+            metrics
+        } else if width >= 360.0 {
+            2
+        } else {
+            1
+        };
+        let rows = metrics.div_ceil(columns);
+        for row in 0..rows {
+            let count = (metrics - row * columns).min(columns);
+            ui.columns(columns, |items| {
+                for column in items.iter_mut().take(count) {
+                    skeleton_block(column, palette, 92.0, time, reduced_motion, true);
+                }
+            });
+            ui.add_space(10.0);
+        }
+    }
+    match variant {
+        PageSkeleton::Dashboard => {
+            let (chart, _) = ui.allocate_exact_size(egui::vec2(width, 190.0), Sense::hover());
+            paint_skeleton_block(ui, palette, chart, time, reduced_motion, false);
+            let inner_width = (chart.width() - 32.0).max(0.0);
+            for (index, ratio) in [0.32, 0.55, 0.43, 0.7, 0.58, 0.8].into_iter().enumerate() {
+                let bar = egui::Rect::from_min_size(
+                    egui::pos2(
+                        chart.left() + 16.0 + index as f32 * inner_width / 6.0,
+                        chart.bottom() - 20.0 - 130.0 * ratio,
+                    ),
+                    egui::vec2(inner_width / 12.0, 130.0 * ratio),
+                );
+                ui.painter()
+                    .rect_filled(bar, 4.0, palette.secondary.gamma_multiply(0.22));
+            }
+            ui.add_space(10.0);
+            skeleton_rows(ui, palette, 3, 58.0, time, reduced_motion);
+        }
+        PageSkeleton::Products => product_list_skeleton(ui, palette, reduced_motion),
+        PageSkeleton::AgentThread => {
+            for index in 0..3 {
+                let row_width = width * if index % 2 == 0 { 0.86 } else { 0.68 };
+                let (row, _) = ui.allocate_exact_size(egui::vec2(width, 66.0), Sense::hover());
+                let x = if index % 2 == 0 {
+                    row.left()
+                } else {
+                    row.right() - row_width
+                };
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(x, row.top()),
+                    egui::vec2(row_width, 58.0),
+                );
+                paint_skeleton_block(ui, palette, rect, time, reduced_motion, true);
+            }
+        }
+        PageSkeleton::Settings => skeleton_rows(ui, palette, 5, 74.0, time, reduced_motion),
+        PageSkeleton::About | PageSkeleton::Changelog => {
+            skeleton_rows(ui, palette, 4, 96.0, time, reduced_motion)
+        }
+        PageSkeleton::Reports => skeleton_rows(ui, palette, 4, 100.0, time, reduced_motion),
+        PageSkeleton::Actions => skeleton_rows(ui, palette, 5, 76.0, time, reduced_motion),
+        PageSkeleton::InventoryOps => skeleton_rows(ui, palette, 4, 80.0, time, reduced_motion),
+        PageSkeleton::Balance
+        | PageSkeleton::Payroll
+        | PageSkeleton::CashShifts
+        | PageSkeleton::Attendance
+        | PageSkeleton::Kpis3List
+        | PageSkeleton::Kpis4List
+        | PageSkeleton::TableOnly => {
+            skeleton_rows(ui, palette, 5, 58.0, time, reduced_motion);
+        }
+    }
+}
+
+fn skeleton_rows(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    rows: usize,
+    height: f32,
+    time: f64,
+    reduced_motion: bool,
+) {
+    for _ in 0..rows {
+        skeleton_block(ui, palette, height, time, reduced_motion, true);
+        ui.add_space(6.0);
+    }
+}
+
+fn skeleton_block(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    height: f32,
+    time: f64,
+    reduced_motion: bool,
+    lines: bool,
+) {
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width().max(0.0), height),
+        Sense::hover(),
+    );
+    paint_skeleton_block(ui, palette, rect, time, reduced_motion, lines);
+}
+
+fn paint_skeleton_block(
+    ui: &egui::Ui,
+    palette: &Palette,
+    rect: egui::Rect,
+    time: f64,
+    reduced_motion: bool,
+    lines: bool,
+) {
+    ui.painter().rect_filled(rect, 14.0, palette.surface_active);
+    if lines {
+        let w = (rect.width() - 32.0).max(0.0);
+        for (y, fraction) in [(15.0, 0.48), (33.0, 0.30)] {
+            let line = egui::Rect::from_min_size(
+                rect.min + egui::vec2(16.0_f32.min(rect.width()), y),
+                egui::vec2((w * fraction).min(180.0), 8.0),
+            );
+            ui.painter()
+                .rect_filled(line, 4.0, palette.secondary.gamma_multiply(0.22));
+        }
+    }
+    if !reduced_motion && rect.width() > 0.0 && time.is_finite() {
+        let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+        let sweep_width = (rect.width() * 0.25).clamp(30.0, 120.0);
+        let travel = rect.width() + sweep_width * 2.0;
+        let center = rect.left() - sweep_width + (time as f32 * 100.0).rem_euclid(travel);
+        for i in 0..12 {
+            let position = (i as f32 + 0.5) / 12.0;
+            let alpha = ((1.0 - (position * 2.0 - 1.0).abs())
+                * if palette.dark { 12.0 } else { 20.0 }) as u8;
+            let stripe = egui::Rect::from_min_size(
+                egui::pos2(
+                    center - sweep_width / 2.0 + position * sweep_width,
+                    rect.top(),
+                ),
+                egui::vec2(sweep_width / 12.0 + 1.0, rect.height()),
+            );
+            painter.rect_filled(stripe, 0.0, Color32::from_white_alpha(alpha));
+        }
+    }
+}
+
+/// A loading placeholder for product rows, with a thumbnail, identity and
+/// action shapes matching the catalogue instead of generic text-only rows.
+pub fn product_list_skeleton(ui: &mut egui::Ui, palette: &Palette, reduced_motion: bool) {
+    if !reduced_motion {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(80));
+    }
+    let time = ui.input(|input| input.time);
+    let ink = palette.secondary.gamma_multiply(0.24);
+    let width = ui.available_width().max(0.0);
+    for _ in 0..5 {
+        let height = if width >= 1120.0 { 72.0 } else { 112.0 };
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), Sense::hover());
+        paint_skeleton_block(ui, palette, rect, time, reduced_motion, false);
+        let painter = ui.painter();
+        painter.rect_filled(
+            egui::Rect::from_min_size(rect.min + egui::vec2(16.0, 16.0), egui::vec2(36.0, 36.0)),
+            8.0,
+            ink,
+        );
+        let text_width = (width - 88.0).clamp(0.0, 220.0);
+        for (offset, ratio) in [(21.0, 1.0), (40.0, 0.6)] {
+            painter.rect_filled(
+                egui::Rect::from_min_size(
+                    rect.min + egui::vec2(64.0, offset),
+                    egui::vec2(text_width * ratio, 8.0),
+                ),
+                4.0,
+                ink,
+            );
+        }
+        if width > 220.0 {
+            let y = if height > 72.0 {
+                rect.bottom() - 26.0
+            } else {
+                rect.center().y - 6.0
+            };
+            let x = if height > 72.0 {
+                rect.left() + 16.0
+            } else {
+                rect.right() - 150.0
+            };
+            painter.rect_filled(
+                egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(110.0, 12.0)),
+                6.0,
+                ink,
+            );
+        }
+        ui.add_space(8.0);
+    }
+}
+
 /// Draws content inside a fixed rectangle without moving the parent's
 /// cursor: overlays, toasts and the custom title bar live outside the flow.
 pub fn overlay_at<R>(
@@ -62,22 +303,24 @@ pub fn no_wrap_scope<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -
 
 /// A compact status pill such as the web app's stock badges.
 pub fn pill(ui: &mut egui::Ui, text: impl AsRef<str>, fill: Color32, text_color: Color32) {
-    egui::Frame::NONE
-        .fill(fill)
-        .corner_radius(999.0)
-        .inner_margin(egui::Margin::symmetric(10, 3))
-        .stroke(Stroke::new(1.0, text_color.gamma_multiply(0.25)))
-        .show(ui, |ui| {
-            // A badge sizes to one line: a starved pill used to break its
-            // label across several lines instead of staying compact.
-            no_wrap_scope(ui, |ui| {
-                ui.label(
-                    RichText::new(text.as_ref())
-                        .color(text_color)
-                        .font(crate::fonts::semibold(12.0)),
-                );
-            });
-        });
+    // A frame in a centered horizontal row can inherit the row's entire
+    // available height. Allocate the badge from its measured text instead.
+    let galley = ui.painter().layout_no_wrap(
+        text.as_ref().to_owned(),
+        crate::fonts::semibold(12.0),
+        text_color,
+    );
+    let size = galley.size() + egui::vec2(20.0, 6.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter().rect_filled(rect, 999.0, fill);
+    ui.painter().rect_stroke(
+        rect,
+        999.0,
+        Stroke::new(1.0, text_color.gamma_multiply(0.25)),
+        egui::StrokeKind::Inside,
+    );
+    ui.painter()
+        .galley(rect.min + egui::vec2(10.0, 3.0), galley, text_color);
 }
 
 /// Draws a small square icon tinted for the current palette.
@@ -95,6 +338,40 @@ pub fn card(palette: &Palette) -> egui::Frame {
         .stroke(Stroke::new(1.0, palette.outline))
         .corner_radius(crate::theme::RADIUS_CARD as f32)
         .inner_margin(egui::Margin::same(16))
+}
+
+/// Consistent update metadata for the dialog and Settings. Checksums are
+/// metadata only: displaying one does not imply the binary has been verified.
+pub fn update_metadata(
+    ui: &mut egui::Ui,
+    release: Option<&atlas_core::desktop_update::DesktopRelease>,
+    palette: &Palette,
+    locale: crate::i18n::Locale,
+) {
+    if let Some(release) = release {
+        ui.label(
+            RichText::new(format!(
+                "CDN1 · {}",
+                atlas_core::desktop_update::format_installer_size(release.size_bytes)
+            ))
+            .color(palette.secondary),
+        );
+        let short: String = release.sha256.chars().take(16).collect();
+        ui.label(RichText::new(format!("SHA-256 : {short}…")).color(palette.secondary))
+            .on_hover_text(&release.sha256);
+        ui.label(
+            RichText::new(crate::t!(locale, "CDN installation is not available yet."))
+                .color(palette.warning),
+        );
+    } else {
+        ui.label(
+            RichText::new(crate::t!(
+                locale,
+                "GitHub · Size and SHA-256 are not provided by this manifest."
+            ))
+            .color(palette.secondary),
+        );
+    }
 }
 
 /// A floating menu card with a crisp border rather than a blurred halo.
@@ -320,10 +597,10 @@ pub fn icon_circle_button(
         palette.surface
     };
     let face = rect.shrink(3.0);
-    ui.painter().rect_filled(face, 8.0, fill);
+    ui.painter().rect_filled(face, 255.0, fill);
     ui.painter().rect_stroke(
         face,
-        8.0,
+        255.0,
         Stroke::new(1.0, palette.outline),
         egui::StrokeKind::Inside,
     );
@@ -460,10 +737,18 @@ pub fn switch(
     }
     let track_rect =
         egui::Rect::from_center_size(rect.center(), egui::vec2(TRACK_WIDTH, TRACK_HEIGHT));
-    let _ = reduced_motion;
-    let t = if *value { 1.0 } else { 0.0 };
+    let t = if reduced_motion {
+        if *value { 1.0 } else { 0.0 }
+    } else {
+        ui.ctx().animate_bool_with_time_and_easing(
+            response.id,
+            *value,
+            crate::motion::duration(crate::motion::FAST, false),
+            crate::motion::standard,
+        )
+    };
     let track_off = palette.surface_active;
-    let track = track_off.lerp_to_gamma(palette.accent, t);
+    let track = track_off.lerp_to_gamma(Color32::from_rgb(16, 185, 129), t);
     ui.painter()
         .rect_filled(track_rect, TRACK_HEIGHT / 2.0, track);
     let knob_radius = TRACK_HEIGHT / 2.0 - 3.0;
@@ -472,12 +757,25 @@ pub fn switch(
     ui.painter().circle_filled(
         knob_center,
         knob_radius,
-        if *value {
-            palette.on_accent
-        } else {
-            palette.text
-        },
+        if *value { Color32::WHITE } else { palette.text },
     );
+    if *value && t > 0.9 {
+        let stroke = Stroke::new(1.5, Color32::from_rgb(5, 120, 87));
+        ui.painter().line_segment(
+            [
+                knob_center + egui::vec2(-3.5, 0.0),
+                knob_center + egui::vec2(-1.0, 2.5),
+            ],
+            stroke,
+        );
+        ui.painter().line_segment(
+            [
+                knob_center + egui::vec2(-1.0, 2.5),
+                knob_center + egui::vec2(4.0, -2.5),
+            ],
+            stroke,
+        );
+    }
     response
 }
 
@@ -657,6 +955,7 @@ mod tests {
     /// closure's value, so the probe writes into a captured variable.
     fn run_headless<R: Default>(probe: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let ctx = egui::Context::default();
+        ctx.set_fonts(crate::fonts::definitions());
         let mut result = R::default();
         // run_ui takes an FnMut, so the FnOnce probe rides in an Option and
         // runs on the single headless frame.
@@ -680,6 +979,53 @@ mod tests {
         output.textures_delta.set.clear();
         output.textures_delta.free.clear();
         result
+    }
+
+    #[test]
+    fn skeleton_variants_lay_out_at_narrow_width_without_motion() {
+        for variant in [
+            PageSkeleton::Dashboard,
+            PageSkeleton::Products,
+            PageSkeleton::Kpis3List,
+            PageSkeleton::Kpis4List,
+            PageSkeleton::TableOnly,
+            PageSkeleton::Balance,
+            PageSkeleton::Reports,
+            PageSkeleton::InventoryOps,
+            PageSkeleton::Payroll,
+            PageSkeleton::CashShifts,
+            PageSkeleton::Attendance,
+            PageSkeleton::Actions,
+            PageSkeleton::Settings,
+            PageSkeleton::About,
+            PageSkeleton::Changelog,
+            PageSkeleton::AgentThread,
+        ] {
+            let height: f32 = run_headless(|ui| {
+                let start = ui.cursor().top();
+                draw_page_skeleton(ui, &Palette::dark(), variant, 1.0, true);
+                ui.cursor().top() - start
+            });
+            assert!(height > 0.0, "{variant:?} must reserve visible space");
+        }
+    }
+
+    #[test]
+    fn status_pill_stays_compact_in_a_tall_horizontal_row() {
+        let height = run_headless(|ui| {
+            ui.horizontal(|ui| {
+                pill(
+                    ui,
+                    "51 unités",
+                    egui::Color32::DARK_GREEN,
+                    egui::Color32::WHITE,
+                );
+            })
+            .response
+            .rect
+            .height()
+        });
+        assert!(height < 50.0, "pill unexpectedly filled row: {height}");
     }
 
     #[test]

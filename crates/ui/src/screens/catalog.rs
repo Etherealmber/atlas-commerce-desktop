@@ -173,7 +173,7 @@ fn tab_bar(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                     // Tabs are chrome: icon + one-line label, never a wrapped
                     // block when the window gets narrow.
                     widgets::no_wrap_scope(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
+                        ui.horizontal(|ui| {
                             icon(
                                 ui,
                                 which,
@@ -210,7 +210,7 @@ fn categories_tab(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if primary_button(ui, t!(app.locale, "New category"), palette, true) {
             app.category_editor = Some(CategoryEditor::new());
         }
-        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+        if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
             app.load_categories();
         }
     });
@@ -262,7 +262,7 @@ fn units_tab(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
         if primary_button(ui, t!(app.locale, "New unit"), palette, true) {
             app.unit_editor = Some(UnitEditor::new());
         }
-        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+        if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
             app.load_units();
         }
     });

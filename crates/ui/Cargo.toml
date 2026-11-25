@@ -26,6 +26,10 @@ chrono.workspace = true
 qrcode.workspace = true
 open.workspace = true
 reqwest.workspace = true
+# fastframe-update v0.17.1 exposes a reqwest 0.12 ClientBuilder. Keep this
+# compatibility dependency isolated to its updater transport.
+reqwest-updater = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots", "system-proxy"] }
+hex.workspace = true
 tokio.workspace = true
 url.workspace = true
 
@@ -54,12 +58,6 @@ fastframe-file.workspace = true
 [build-dependencies]
 fastframe-i18n = { workspace = true, features = ["build"] }
 
-# Windows uses the installed WebView2 runtime, never a bundled browser.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["UI_ViewManagement"] }
 window-vibrancy = "0.8.1"
-wry = { version = "=0.57.2", default-features = false }
-tempfile = "3"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-atlas-webview-macos = { path = "../webview-macos" }

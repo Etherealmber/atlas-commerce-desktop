@@ -10,10 +10,12 @@ description = "Platform services for Atlas Commerce Desktop: folders, device ide
 
 [dependencies]
 thiserror.workspace = true
+semver = "1.0"
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 sha2.workspace = true
+hex.workspace = true
 uuid.workspace = true
 url.workspace = true
 chrono.workspace = true

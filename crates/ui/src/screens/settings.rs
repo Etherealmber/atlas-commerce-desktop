@@ -14,7 +14,7 @@ use crate::icons::Icon;
 use crate::state::{ApiKeyScope, AtlasApp, Screen, SettingsFocus};
 use crate::theme::Palette;
 use crate::widgets::{
-    avatar, card, danger_button, error_banner, icon, info_banner, labelled_field, page_title, pill,
+    avatar, card, danger_button, error_banner, icon, info_banner, labelled_field, pill,
     primary_button, secondary_button, section_header, segmented, setting_row, switch_row,
 };
 use crate::{t, widgets};
@@ -24,101 +24,682 @@ pub(crate) const RELEASES_URL: &str =
     "https://github.com/Etherealmber/atlas-commerce-desktop/releases";
 const POLL_CHOICES: [u64; 4] = [30, 60, 120, 300];
 
-/// Readable measure for the settings column; cards no longer stretch across
-/// the whole window on large displays.
-const SETTINGS_WIDTH: f32 = 880.0;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SettingsPanel {
+    Profile,
+    #[default]
+    General,
+    Appearance,
+    Agent,
+    Attendance,
+    Server,
+    Integrations,
+    Security,
+    Updates,
+}
 
-pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, _ctx: &Context, palette: &Palette) {
-    // An avatar-menu entry may ask for a specific section; consume the focus
-    // once and bring that cursor into the scroll area's view.
-    let focus = app.settings_focus;
+const PANEL_ID: &str = "settings-active-panel";
+const SEARCH_ID: &str = "settings-navigation-search";
+const SEARCH_TARGET_ID: &str = "settings-search-target";
+const SEARCH_SCROLL_ID: &str = "settings-search-scroll-pending";
+pub(super) const SETTINGS_OPEN_ID: &str = "settings-dialog-session-open";
+
+// Only index controls that exist and have a corresponding scroll anchor.
+// This avoids presenting search results for settings the app cannot edit.
+const SEARCHABLE_SETTINGS: &[(SettingsPanel, &str)] = &[
+    (
+        SettingsPanel::General,
+        "Keep running in the notification area when closed",
+    ),
+    (SettingsPanel::General, "Start at login"),
+    (
+        SettingsPanel::General,
+        "Native notifications for stock alerts",
+    ),
+    (SettingsPanel::General, "Reduce animations"),
+    (SettingsPanel::General, "Refresh interval"),
+    (SettingsPanel::Appearance, "Interface size"),
+    (SettingsPanel::Appearance, "Language"),
+    (SettingsPanel::Appearance, "Theme"),
+    (SettingsPanel::Attendance, "Enable attendance"),
+    (SettingsPanel::Updates, "Check for updates automatically"),
+    (SettingsPanel::Updates, "Channel"),
+    (SettingsPanel::Updates, "Version history"),
+];
+
+fn settings_search_matches(needle: &str, source: &str, translated: &str) -> bool {
+    let needle = crate::shortcuts::normalize(needle.trim());
+    !needle.is_empty()
+        && (crate::shortcuts::normalize(source).contains(&needle)
+            || crate::shortcuts::normalize(translated).contains(&needle))
+}
+
+fn search_anchor(ui: &mut egui::Ui, palette: &Palette, locale: Locale, key: &'static str) {
+    let target = ui
+        .ctx()
+        .data(|data| data.get_temp::<String>(egui::Id::new(SEARCH_TARGET_ID)));
+    if target.as_deref() == Some(key) {
+        let response = ui.label(
+            RichText::new(crate::i18n::gettext(locale, key))
+                .strong()
+                .color(palette.copper),
+        );
+        let should_scroll = ui.ctx().data(|data| {
+            data.get_temp::<bool>(egui::Id::new(SEARCH_SCROLL_ID))
+                .unwrap_or(false)
+        });
+        if should_scroll {
+            response.scroll_to_me(Some(egui::Align::Center));
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(egui::Id::new(SEARCH_SCROLL_ID), false));
+        }
+    }
+}
+
+pub fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, ctx: &Context, palette: &Palette) {
+    let mut active = ctx
+        .data(|data| data.get_temp::<SettingsPanel>(egui::Id::new(PANEL_ID)))
+        .unwrap_or_default();
+    let previous_panel = active;
+    let first_frame = !ctx.data(|data| {
+        data.get_temp::<bool>(egui::Id::new(SETTINGS_OPEN_ID))
+            .unwrap_or(false)
+    });
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(SETTINGS_OPEN_ID), true));
+    match app.settings_focus {
+        SettingsFocus::Profile => active = SettingsPanel::Profile,
+        SettingsFocus::Integrations if is_admin(app) => active = SettingsPanel::Integrations,
+        SettingsFocus::Attendance if is_admin(app) => active = SettingsPanel::Attendance,
+        SettingsFocus::About => active = SettingsPanel::Updates,
+        _ => {}
+    }
     app.settings_focus = SettingsFocus::General;
+    if matches!(
+        active,
+        SettingsPanel::Integrations | SettingsPanel::Attendance
+    ) && !is_admin(app)
+    {
+        active = SettingsPanel::General;
+    }
+    if active == SettingsPanel::Attendance
+        && app.attendance.data.is_none()
+        && app.attendance.last_error.is_none()
+        && !app.attendance.loading
+        && !app.attendance_action.loading
+    {
+        app.load_attendance();
+    }
 
-    // Center a capped column instead of stretching the forms edge to edge.
-    let available_width = ui.available_width();
-    let content_width = available_width.min(SETTINGS_WIDTH);
-    let side_margin = ((available_width - content_width) * 0.5).max(0.0);
-    ui.horizontal(|ui| {
-        ui.add_space(side_margin);
-        ui.vertical(|ui| {
-            ui.set_min_width(content_width);
-            ui.set_max_width(content_width);
+    let width = ui.available_width();
+    let height = ui.available_height().max(1.0);
+    let left_width = 252.0_f32.min(width);
+    if width >= 620.0 {
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width(left_width);
+                ui.set_height(height);
+                settings_navigation(app, ui, ctx, palette, &mut active);
+            });
+            let x = ui.cursor().left() + 5.0;
+            let top = ui.cursor().top();
+            ui.painter().line_segment(
+                [egui::pos2(x, top), egui::pos2(x, top + height)],
+                egui::Stroke::new(1.0, palette.outline),
+            );
+            ui.add_space(12.0);
+            ui.vertical(|ui| {
+                ui.set_width((width - left_width - 20.0).max(1.0));
+                ui.set_height(height);
+                settings_content(app, ui, palette, active);
+            });
+        });
+    } else {
+        // Keep the close control and content accessible on small windows.
+        egui::ScrollArea::vertical()
+            .id_salt("settings-narrow-navigation")
+            .max_height((height * 0.36).max(1.0))
+            .show(ui, |ui| {
+                settings_navigation(app, ui, ctx, palette, &mut active)
+            });
+        ui.add_space(8.0);
+        settings_content(app, ui, palette, active);
+    }
+    // Entering Updates requests a fresh manifest, subject to the same global
+    // cooldown as manual and scheduled checks. It never downloads an artifact.
+    // The offline visual fixture has no API client and does not hit the network.
+    if active == SettingsPanel::Updates
+        && (first_frame || previous_panel != active)
+        && app.client.is_some()
+        && app.update.progress.is_none()
+    {
+        app.check_for_updates(false);
+    }
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(PANEL_ID), active));
+}
 
-            ui.add_space(8.0);
-            page_title(ui, t!(app.locale, "Settings"), palette);
-            ui.add_space(8.0);
-
-            // Direct section links avoid making users scroll through every
-            // unrelated setting to reach security or updates.
-            let mut jump = None;
-            ui.horizontal_wrapped(|ui| {
-                for (label, target) in [
-                    (t!(app.locale, "Profile"), 0_u8),
-                    (t!(app.locale, "Application"), 1),
-                    (t!(app.locale, "Appearance"), 2),
-                    (t!(app.locale, "Servers"), 3),
-                    (t!(app.locale, "Security"), 4),
-                    (t!(app.locale, "Updates and about"), 5),
+fn settings_navigation(
+    app: &mut AtlasApp,
+    ui: &mut egui::Ui,
+    ctx: &Context,
+    palette: &Palette,
+    active: &mut SettingsPanel,
+) {
+    let mut query = ctx
+        .data(|data| data.get_temp::<String>(egui::Id::new(SEARCH_ID)))
+        .unwrap_or_default();
+    let search_width = ui.available_width();
+    widgets::search_field(
+        ui,
+        &mut query,
+        t!(app.locale, "Search settings"),
+        search_width,
+    );
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(SEARCH_ID), query.clone()));
+    ui.add_space(10.0);
+    let name = app
+        .session
+        .as_ref()
+        .map(|session| {
+            if session.display_name.is_empty() {
+                session.username.as_str()
+            } else {
+                session.display_name.as_str()
+            }
+        })
+        .unwrap_or("");
+    let initial = name
+        .chars()
+        .next()
+        .unwrap_or('A')
+        .to_uppercase()
+        .collect::<String>();
+    let account = card(palette)
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                avatar(
+                    ui,
+                    app.avatar_texture_uri.as_deref(),
+                    &initial,
+                    36.0,
+                    palette.surface_active,
+                    palette.text,
+                    palette.outline,
+                );
+                ui.vertical(|ui| {
+                    ui.set_max_width(ui.available_width());
+                    ui.add(
+                        egui::Label::new(RichText::new(name).strong().color(palette.text))
+                            .truncate(),
+                    );
+                    let host = app
+                        .session
+                        .as_ref()
+                        .map(|s| atlas_core::ServerUrl::host(&s.server_url))
+                        .unwrap_or_default();
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(format!("{} · {}", role_label(app), host))
+                                .small()
+                                .color(palette.secondary),
+                        )
+                        .truncate(),
+                    );
+                });
+            });
+        });
+    if account.response.interact(egui::Sense::click()).clicked() {
+        *active = SettingsPanel::Profile;
+    }
+    ui.add_space(6.0);
+    let status = if app.update.checking {
+        t!(app.locale, "Checking for updates…")
+    } else if app.update.last_manifest.is_some() || app.update.ready_version.is_some() {
+        t!(app.locale, "Update available")
+    } else if app.update.up_to_date_at.is_some() && app.update.error.is_none() {
+        t!(app.locale, "You are on the latest version.")
+    } else {
+        t!(app.locale, "Updates and about")
+    };
+    let update_card = card(palette)
+        .fill(if *active == SettingsPanel::Updates {
+            palette.surface_active
+        } else {
+            palette.surface
+        })
+        .stroke(egui::Stroke::new(
+            1.0,
+            if *active == SettingsPanel::Updates {
+                palette.copper_border
+            } else {
+                palette.outline
+            },
+        ))
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let mark_pos = ui.next_widget_position();
+                crate::branding::mark(ui, palette, 36.0);
+                if app.update.up_to_date_at.is_some()
+                    && app.update.error.is_none()
+                    && app.update.last_manifest.is_none()
+                    && app.update.ready_version.is_none()
+                {
+                    let center = mark_pos + egui::vec2(31.0, 31.0);
+                    ui.painter()
+                        .circle_filled(center, 7.0, egui::Color32::from_rgb(34, 197, 94));
+                    ui.painter().line_segment(
+                        [
+                            center + egui::vec2(-3.0, 0.0),
+                            center + egui::vec2(-1.0, 2.0),
+                        ],
+                        egui::Stroke::new(1.5, egui::Color32::WHITE),
+                    );
+                    ui.painter().line_segment(
+                        [
+                            center + egui::vec2(-1.0, 2.0),
+                            center + egui::vec2(3.0, -2.0),
+                        ],
+                        egui::Stroke::new(1.5, egui::Color32::WHITE),
+                    );
+                }
+                ui.vertical(|ui| {
+                    ui.set_max_width(ui.available_width());
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(status)
+                                .strong()
+                                .color(palette.text)
+                                .size(12.0),
+                        )
+                        .truncate(),
+                    );
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(format!("v{} · Desktop", env!("CARGO_PKG_VERSION")))
+                                .small()
+                                .color(palette.secondary),
+                        )
+                        .truncate(),
+                    );
+                });
+            });
+        });
+    if update_card
+        .response
+        .interact(egui::Sense::click())
+        .clicked()
+    {
+        *active = SettingsPanel::Updates;
+    }
+    let needle = crate::shortcuts::normalize(query.trim());
+    if !needle.is_empty() {
+        egui::ScrollArea::vertical()
+            .id_salt("settings-search-results")
+            .max_height(ui.available_height().max(1.0))
+            .show(ui, |ui| {
+                let mut count = 0;
+                for (panel, key) in [
+                    (SettingsPanel::Profile, "Profile"),
+                    (SettingsPanel::General, "Application"),
+                    (SettingsPanel::Appearance, "Appearance"),
+                    (SettingsPanel::Agent, "AI Agent"),
+                    (SettingsPanel::Attendance, "Attendance settings"),
+                    (SettingsPanel::Server, "Server"),
+                    (SettingsPanel::Integrations, "Integrations"),
+                    (SettingsPanel::Security, "Security"),
+                    (SettingsPanel::Updates, "Updates and about"),
                 ] {
-                    if secondary_button(ui, label, palette) {
-                        jump = Some(target);
+                    if matches!(
+                        panel,
+                        SettingsPanel::Integrations | SettingsPanel::Attendance
+                    ) && !is_admin(app)
+                    {
+                        continue;
+                    }
+                    let label = crate::i18n::gettext(app.locale, key);
+                    if settings_search_matches(&needle, key, &label) {
+                        count += 1;
+                        if secondary_button(ui, label, palette) {
+                            *active = panel;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(egui::Id::new(SEARCH_TARGET_ID), String::new());
+                            });
+                        }
                     }
                 }
-            });
-            ui.add_space(12.0);
-
-            if focus == SettingsFocus::Profile || jump == Some(0) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            profile_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if jump == Some(1) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            application_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if jump == Some(2) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            appearance_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            assist_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if is_admin(app) {
-                if focus == SettingsFocus::Integrations {
-                    ui.scroll_to_cursor(Some(egui::Align::Min));
+                for &(panel, key) in SEARCHABLE_SETTINGS {
+                    if panel == SettingsPanel::Attendance && !is_admin(app) {
+                        continue;
+                    }
+                    let label = crate::i18n::gettext(app.locale, key);
+                    if !settings_search_matches(&needle, key, &label) {
+                        continue;
+                    }
+                    count += 1;
+                    if secondary_button(ui, label, palette) {
+                        *active = panel;
+                        ctx.data_mut(|data| {
+                            data.insert_temp(egui::Id::new(SEARCH_TARGET_ID), key.to_owned());
+                            data.insert_temp(egui::Id::new(SEARCH_SCROLL_ID), true);
+                        });
+                    }
                 }
-                integrations_section(app, ui, palette);
-                ui.add_space(18.0);
+                if count == 0 {
+                    ui.label(
+                        RichText::new(t!(app.locale, "No matching settings."))
+                            .color(palette.secondary),
+                    );
+                }
+            });
+        return;
+    }
+    let groups: &[(&str, &[(SettingsPanel, &str)])] = &[
+        (
+            "Your account",
+            &[
+                (SettingsPanel::Profile, "Profile"),
+                (SettingsPanel::Agent, "AI Agent"),
+            ],
+        ),
+        (
+            "Your workspace",
+            &[
+                (SettingsPanel::General, "Application"),
+                (SettingsPanel::Appearance, "Appearance"),
+            ],
+        ),
+        (
+            "Company",
+            &[(SettingsPanel::Attendance, "Attendance settings")],
+        ),
+        (
+            "Connections and security",
+            &[
+                (SettingsPanel::Server, "Server"),
+                (SettingsPanel::Integrations, "Integrations"),
+                (SettingsPanel::Security, "Security"),
+            ],
+        ),
+        (
+            "Maintenance",
+            &[(SettingsPanel::Updates, "Updates and about")],
+        ),
+    ];
+    egui::ScrollArea::vertical()
+        .id_salt("settings-navigation-list")
+        .max_height(ui.available_height().max(1.0))
+        .show(ui, |ui| {
+            for (group, entries) in groups {
+                let visible: Vec<_> = entries
+                    .iter()
+                    .filter(|(panel, label)| {
+                        (!matches!(
+                            *panel,
+                            SettingsPanel::Integrations | SettingsPanel::Attendance
+                        ) || is_admin(app))
+                            && (needle.is_empty()
+                                || crate::i18n::gettext(app.locale, label)
+                                    .to_lowercase()
+                                    .contains(&needle)
+                                || crate::i18n::gettext(app.locale, group)
+                                    .to_lowercase()
+                                    .contains(&needle)
+                                || crate::i18n::gettext(app.locale, panel_details(*panel).1)
+                                    .to_lowercase()
+                                    .contains(&needle))
+                    })
+                    .collect();
+                if visible.is_empty() {
+                    continue;
+                }
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new(crate::i18n::gettext(app.locale, group).to_uppercase())
+                        .size(10.5)
+                        .color(palette.secondary),
+                );
+                for (panel, label) in visible {
+                    let (glyph, subtitle) = panel_details(*panel);
+                    let selected = *active == *panel;
+                    let row = egui::Frame::NONE
+                        .fill(if selected {
+                            palette.surface_active
+                        } else {
+                            palette.surface
+                        })
+                        .stroke(egui::Stroke::new(1.0, palette.outline))
+                        .corner_radius(12.0)
+                        .inner_margin(egui::Margin::same(9))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                icon(ui, glyph, palette.secondary, 18.0);
+                                ui.vertical(|ui| {
+                                    ui.set_max_width(ui.available_width());
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(crate::i18n::gettext(app.locale, label))
+                                                .strong()
+                                                .color(palette.text)
+                                                .size(12.5),
+                                        )
+                                        .truncate(),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(crate::i18n::gettext(
+                                                app.locale, subtitle,
+                                            ))
+                                            .color(palette.secondary)
+                                            .size(11.0),
+                                        )
+                                        .truncate(),
+                                    );
+                                });
+                            });
+                        });
+                    if row.response.interact(egui::Sense::click()).clicked() {
+                        *active = *panel;
+                    }
+                    ui.add_space(3.0);
+                }
             }
+        });
+}
 
-            if jump == Some(3) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            servers_section(app, ui, palette);
-            ui.add_space(18.0);
+fn panel_details(panel: SettingsPanel) -> (Icon, &'static str) {
+    match panel {
+        SettingsPanel::Profile => (Icon::User, "Account and profile"),
+        SettingsPanel::General => (Icon::Settings, "Language, startup and notifications"),
+        SettingsPanel::Appearance => (Icon::Palette, "Theme, scale and motion"),
+        SettingsPanel::Agent => (Icon::Bot, "Assistant preferences"),
+        SettingsPanel::Attendance => (Icon::Clock, "Company attendance module"),
+        SettingsPanel::Server => (Icon::Server, "Server and connection"),
+        SettingsPanel::Integrations => (Icon::KeyRound, "API keys and integrations"),
+        SettingsPanel::Security => (Icon::ShieldCheck, "Trusted devices and security"),
+        SettingsPanel::Updates => (Icon::Download, "Updates and release notes"),
+    }
+}
 
-            if jump == Some(4) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            security_section(app, ui, palette);
-            ui.add_space(18.0);
-
-            if focus == SettingsFocus::About || jump == Some(5) {
-                ui.scroll_to_cursor(Some(egui::Align::Min));
-            }
-            updates_section(app, ui, palette);
-            ui.add_space(24.0);
-
-            if app.created_key.is_some() {
-                draw_created_key_modal(app, ui, palette);
+fn settings_content(
+    app: &mut AtlasApp,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    active: SettingsPanel,
+) {
+    let (title, description) = match active {
+        SettingsPanel::Profile => ("Profile", "Profile and access to your account."),
+        SettingsPanel::General => (
+            "Application",
+            "Personalize the app and how it behaves on this computer.",
+        ),
+        SettingsPanel::Appearance => (
+            "Appearance",
+            "Personalize the app and how it behaves on this computer.",
+        ),
+        SettingsPanel::Agent => ("AI Agent", "Your workspace"),
+        SettingsPanel::Attendance => (
+            "Attendance settings",
+            "Configure attendance for the company.",
+        ),
+        SettingsPanel::Server => (
+            "Server",
+            "Review your server, integrations and connected devices.",
+        ),
+        SettingsPanel::Integrations => (
+            "Integrations",
+            "Review your server, integrations and connected devices.",
+        ),
+        SettingsPanel::Security => (
+            "Security",
+            "Review your server, integrations and connected devices.",
+        ),
+        SettingsPanel::Updates => (
+            "Updates and about",
+            "Updates and information about Atlas Commerce.",
+        ),
+    };
+    ui.horizontal(|ui| {
+        egui::Frame::NONE
+            .fill(palette.surface)
+            .stroke(egui::Stroke::new(1.0, palette.outline))
+            .corner_radius(255.0)
+            .inner_margin(egui::Margin::symmetric(14, 7))
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(crate::i18n::gettext(app.locale, title))
+                        .strong()
+                        .color(palette.text),
+                );
+            });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::icon_circle_button(ui, palette, Icon::X, true)
+                .on_hover_text(t!(app.locale, "Close"))
+                .clicked()
+            {
+                app.settings_dialog_open = false;
             }
         });
     });
+    ui.add_space(12.0);
+    let remaining = ui.available_height().max(1.0);
+    egui::ScrollArea::vertical()
+        .id_salt(("settings-content", active as u8))
+        .max_height(remaining)
+        .show(ui, |ui| {
+            ui.set_max_width(680.0);
+            group_heading(
+                ui,
+                palette,
+                crate::i18n::gettext(app.locale, title),
+                crate::i18n::gettext(app.locale, description),
+            );
+            match active {
+                SettingsPanel::Profile => profile_section(app, ui, palette),
+                SettingsPanel::General => application_section(app, ui, palette),
+                SettingsPanel::Appearance => appearance_section(app, ui, palette),
+                SettingsPanel::Agent => assist_section(app, ui, palette),
+                SettingsPanel::Attendance if is_admin(app) => attendance_section(app, ui, palette),
+                SettingsPanel::Attendance => {}
+                SettingsPanel::Server => servers_section(app, ui, palette),
+                SettingsPanel::Integrations if is_admin(app) => {
+                    integrations_section(app, ui, palette)
+                }
+                SettingsPanel::Integrations => {}
+                SettingsPanel::Security => security_section(app, ui, palette),
+                SettingsPanel::Updates => updates_section(app, ui, palette),
+            }
+        });
+}
+
+fn attendance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+    search_anchor(ui, palette, app.locale, "Enable attendance");
+    let disabled = app
+        .attendance
+        .last_error
+        .as_ref()
+        .is_some_and(|error| error.code.as_deref() == Some("ATTENDANCE_DISABLED"));
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(
+            RichText::new(t!(app.locale, "Attendance module"))
+                .strong()
+                .color(palette.text),
+        );
+        if app.attendance.loading {
+            ui.label(t!(app.locale, "Checking attendance status…"));
+        } else if disabled {
+            ui.label(
+                RichText::new(t!(app.locale, "Attendance is disabled.")).color(palette.secondary),
+            );
+            if primary_button(
+                ui,
+                t!(app.locale, "Enable attendance"),
+                palette,
+                !app.attendance_action.loading && app.attendance_action.error.is_none(),
+            ) {
+                app.confirm_dialog = Some(Confirm {
+                    title: t!(app.locale, "Enable attendance?").into_owned(),
+                    body: t!(
+                        app.locale,
+                        "This enables attendance for the entire company."
+                    )
+                    .into_owned(),
+                    confirm_label: t!(app.locale, "Enable now").into_owned(),
+                    danger: false,
+                    action: ConfirmAction::EnableAttendance,
+                });
+            }
+        } else if let Some(error) = &app.attendance.error {
+            error_banner(ui, error, palette);
+        } else if app.attendance.data.is_some() {
+            ui.label(
+                RichText::new(t!(app.locale, "Attendance is enabled."))
+                    .color(palette.finance_positive),
+            );
+        } else {
+            ui.label(
+                RichText::new(t!(app.locale, "Attendance status is unknown."))
+                    .color(palette.secondary),
+            );
+        }
+        if let Some(error) = &app.attendance_action.error {
+            error_banner(ui, error, palette);
+            ui.label(
+                RichText::new(t!(
+                    app.locale,
+                    "Refresh before retrying: the server may have saved the change."
+                ))
+                .color(palette.secondary),
+            );
+        }
+        if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
+            app.load_attendance();
+        }
+    });
+}
+
+fn group_heading(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    title: impl AsRef<str>,
+    description: impl AsRef<str>,
+) {
+    ui.label(
+        RichText::new(title.as_ref())
+            .color(palette.text)
+            .strong()
+            .size(18.0),
+    );
+    ui.label(
+        RichText::new(description.as_ref())
+            .color(palette.secondary)
+            .size(12.5),
+    );
+    ui.add_space(12.0);
 }
 
 fn is_admin(app: &AtlasApp) -> bool {
@@ -128,10 +709,17 @@ fn is_admin(app: &AtlasApp) -> bool {
     )
 }
 
-fn role_label(app: &AtlasApp) -> String {
-    match app.session.as_ref().map(|session| session.role.as_str()) {
-        Some("owner") => t!(app.locale, "Owner").into_owned(),
-        Some("admin") => t!(app.locale, "Administrator").into_owned(),
+pub(super) fn role_label(app: &AtlasApp) -> String {
+    let role = app
+        .session
+        .as_ref()
+        .map(|session| session.role.to_ascii_lowercase())
+        .unwrap_or_default();
+    match role.as_str() {
+        "owner" => t!(app.locale, "Owner").into_owned(),
+        "admin" => t!(app.locale, "Administrator").into_owned(),
+        "secretaire" => t!(app.locale, "Secretary").into_owned(),
+        "stock" => t!(app.locale, "Warehouse keeper").into_owned(),
         _ => t!(app.locale, "User").into_owned(),
     }
 }
@@ -296,6 +884,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
+        search_anchor(ui, palette, app.locale, "Keep running in the notification area when closed");
         if switch_row(
             ui,
             palette,
@@ -314,6 +903,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        search_anchor(ui, palette, app.locale, "Start at login");
         let mut autostart = app.settings.autostart;
         if switch_row(
             ui,
@@ -360,6 +950,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        search_anchor(ui, palette, app.locale, "Native notifications for stock alerts");
         let notifications_were_enabled = app.settings.notifications_enabled;
         if switch_row(
             ui,
@@ -416,6 +1007,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(10.0);
+        search_anchor(ui, palette, app.locale, "Reduce animations");
         let reduced_motion = app.settings.reduced_motion;
         if switch_row(
             ui,
@@ -429,6 +1021,7 @@ fn application_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette)
         }
 
         ui.add_space(12.0);
+        search_anchor(ui, palette, app.locale, "Refresh interval");
         ui.label(
             RichText::new(t!(app.locale, "Refresh interval"))
                 .color(palette.text)
@@ -463,6 +1056,34 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
     card(palette).show(ui, |ui| {
         ui.set_width(ui.available_width());
 
+        search_anchor(ui, palette, app.locale, "Interface size");
+        ui.label(
+            RichText::new(t!(app.locale, "Interface size"))
+                .color(palette.text)
+                .strong()
+                .size(13.5),
+        );
+        ui.label(
+            RichText::new(t!(
+                app.locale,
+                "Adjust the size of text and controls on this device."
+            ))
+            .color(palette.dim)
+            .size(11.5),
+        );
+        ui.add_space(6.0);
+        let options = [
+            ("90 %", 90_u16),
+            ("100 %", 100),
+            ("110 %", 110),
+            ("125 %", 125),
+        ];
+        if let Some(scale) = segmented(ui, palette, &options, Some(app.settings.ui_scale_percent)) {
+            app.settings.ui_scale_percent = scale;
+            app.save_settings();
+        }
+        ui.add_space(12.0);
+        search_anchor(ui, palette, app.locale, "Language");
         setting_row(
             ui,
             palette,
@@ -485,6 +1106,7 @@ fn appearance_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) 
         );
 
         ui.add_space(12.0);
+        search_anchor(ui, palette, app.locale, "Theme");
         setting_row(
             ui,
             palette,
@@ -778,7 +1400,7 @@ fn key_editor_card(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 }
 
 /// One-time reveal of the freshly generated secret.
-fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
+pub(super) fn draw_created_key_modal(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
     let Some(created) = app.created_key.clone() else {
         return;
     };
@@ -1079,130 +1701,158 @@ fn security_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
 // ── Self-update and about ──────────────────────────────────────────────────
 
 fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
-    section_header(ui, palette, t!(app.locale, "Updates and about"));
-    card(palette).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-
-        ui.horizontal(|ui| {
-            crate::branding::mark(ui, palette, 32.0);
-            ui.vertical(|ui| {
+    let channel = match app.settings.update_channel {
+        UpdateChannel::Stable => t!(app.locale, "Stable"),
+        UpdateChannel::Prerelease => t!(app.locale, "Pre-release"),
+    };
+    let title = if app.update.checking {
+        t!(app.locale, "Checking for updates…").into_owned()
+    } else if let Some(version) = &app.update.ready_version {
+        format!(
+            "{} · v{version}",
+            t!(app.locale, "Update downloaded. Restart to install.")
+        )
+    } else if let Some(manifest) = &app.update.last_manifest {
+        format!(
+            "{} · v{}",
+            t!(app.locale, "Update available"),
+            manifest.version
+        )
+    } else if app.update.error.is_none() && app.update.up_to_date_at.is_some() {
+        t!(app.locale, "You are on the latest version.").into_owned()
+    } else {
+        t!(app.locale, "Updates and about").into_owned()
+    };
+    card(palette)
+        .inner_margin(egui::Margin::same(24))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                if app.update.checking && !app.settings.reduced_motion {
+                    super::spinner(ui, palette);
+                } else if (app.update.up_to_date_at.is_some()
+                    && app.update.error.is_none()
+                    && app.update.last_manifest.is_none()
+                    && app.update.ready_version.is_none())
+                    || app.update.last_manifest.is_some()
+                    || app.update.ready_version.is_some()
+                {
+                    let current =
+                        app.update.last_manifest.is_none() && app.update.ready_version.is_none();
+                    let (badge, _) =
+                        ui.allocate_exact_size(egui::vec2(48.0, 48.0), egui::Sense::hover());
+                    ui.painter().circle_filled(
+                        badge.center(),
+                        24.0,
+                        if current {
+                            egui::Color32::from_rgb(34, 197, 94)
+                        } else {
+                            palette.accent
+                        },
+                    );
+                    widgets::overlay_at(
+                        ui,
+                        egui::Rect::from_center_size(badge.center(), egui::vec2(24.0, 24.0)),
+                        |ui| {
+                            icon(
+                                ui,
+                                if current { Icon::Check } else { Icon::Download },
+                                if current {
+                                    egui::Color32::WHITE
+                                } else {
+                                    palette.on_accent
+                                },
+                                24.0,
+                            );
+                        },
+                    );
+                } else {
+                    crate::branding::mark(ui, palette, 48.0);
+                }
+                ui.add_space(8.0);
+                ui.label(RichText::new(title).color(palette.text).strong().size(16.0));
                 ui.label(
-                    RichText::new(t!(app.locale, "Atlas Commerce Desktop"))
-                        .color(palette.text)
-                        .strong()
-                        .size(14.5),
-                );
-                ui.label(
-                    RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
-                        .color(palette.dim)
+                    RichText::new(format!("v{} · {}", env!("CARGO_PKG_VERSION"), channel))
+                        .color(palette.secondary)
                         .size(12.0),
                 );
-            });
-        });
-        ui.add_space(10.0);
-
-        // Explicit check status, whatever the answer was.
-        if app.update.checking {
-            ui.horizontal(|ui| {
-                super::spinner(ui, palette);
-                ui.label(
-                    RichText::new(t!(app.locale, "Checking for updates…"))
-                        .color(palette.secondary)
-                        .size(13.0),
-                );
-            });
-        } else if let Some(manifest) = app.update.last_manifest.clone() {
-            card(palette)
-                .inner_margin(egui::Margin::same(14))
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        icon(ui, Icon::Download, palette.accent, 18.0);
-                        ui.label(
-                            RichText::new(format!(
-                                "{} v{}",
-                                t!(app.locale, "Update available"),
-                                manifest.version
-                            ))
-                            .color(palette.text)
-                            .strong()
-                            .size(13.5),
-                        );
-                    });
-                    ui.add_space(8.0);
-                    crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
-                    if app.update.ready_version.is_none() && app.update.progress.is_none() {
-                        ui.add_space(8.0);
-                        if primary_button(ui, t!(app.locale, "Download and install update"), palette, true) {
-                            app.start_update_download();
-                        }
+                ui.add_space(10.0);
+                if app.update.ready_version.is_some() {
+                    if primary_button(ui, t!(app.locale, "Restart and install"), palette, true) {
+                        app.update.dialog_open = true;
                     }
-                });
-        }
-        if let Some((received, total)) = app.update.progress {
-            ui.add_space(8.0);
-            let progress = if total > 0 { (received as f32 / total as f32).clamp(0.0, 1.0) } else { 0.0 };
-            ui.label(RichText::new(&app.update.stage).color(palette.secondary));
-            ui.add(egui::ProgressBar::new(progress).show_percentage());
-        }
-        if let Some(version) = app.update.ready_version.clone() {
-            ui.add_space(10.0);
-            ui.horizontal_wrapped(|ui| {
-                icon(ui, Icon::Download, palette.accent, 18.0);
-                ui.label(
-                    RichText::new(format!(
-                        "{} · v{version}",
-                        t!(app.locale, "Update downloaded. Restart to install.")
-                    ))
-                    .color(palette.text)
-                    .size(13.0),
-                );
-                if primary_button(ui, t!(app.locale, "Restart and install"), palette, true) {
-                    app.start_update_download();
+                } else if app.update.last_manifest.is_some() && app.update.progress.is_none() {
+                    if primary_button(
+                        ui,
+                        t!(app.locale, "Download and install update"),
+                        palette,
+                        true,
+                    ) {
+                        app.update.dialog_open = true;
+                    }
+                } else {
+                    let remaining = app
+                        .update
+                        .last_check_started
+                        .map_or(std::time::Duration::ZERO, |(at, _)| {
+                            crate::state::update_check_cooldown_remaining(at.elapsed())
+                        });
+                    let cooling_down = !remaining.is_zero();
+                    if cooling_down {
+                        ui.ctx().request_repaint_after(remaining);
+                    }
+                    ui.add_enabled_ui(
+                        !app.update.checking && app.update.progress.is_none() && !cooling_down,
+                        |ui| {
+                            if secondary_button(
+                                ui,
+                                t!(app.locale, "Check for updates now"),
+                                palette,
+                            ) {
+                                app.check_for_updates(false);
+                            }
+                        },
+                    );
                 }
             });
-        }
-        if app.update.last_manifest.is_none()
-            && app.update.ready_version.is_none()
-            && app.update.up_to_date_at.is_some()
-        {
-            ui.horizontal(|ui| {
-                icon(ui, Icon::CircleCheck, palette.accent, 18.0);
-                ui.label(
-                    RichText::new(t!(app.locale, "You are on the latest version."))
-                        .color(palette.text)
-                        .size(13.0),
+            if let Some(manifest) = &app.update.last_manifest {
+                if !manifest.published_at.is_empty() {
+                    ui.label(RichText::new(&manifest.published_at).color(palette.secondary));
+                }
+                widgets::update_metadata(
+                    ui,
+                    app.update.desktop_release.as_ref(),
+                    palette,
+                    app.locale,
                 );
-            });
-        }
-        if app.update.last_manifest.is_none()
-            && let Some(manifest) = &app.update.release_notes
-            && !manifest.notes.trim().is_empty()
-        {
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new(format!(
-                    "{} · v{}",
-                    t!(app.locale, "Release notes"),
-                    manifest.version
-                ))
-                .color(palette.text)
-                .strong(),
-            );
-            crate::widgets::release_notes(ui, &manifest.notes, palette, 180.0);
-        }
-        if let Some(error) = app.update.error.clone() {
-            ui.add_space(8.0);
-            error_banner(ui, &error, palette);
-        }
+            }
+            if let Some((received, total)) = app.update.progress {
+                ui.add_space(8.0);
+                let progress = if total > 0 {
+                    (received as f32 / total as f32).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                ui.label(RichText::new(&app.update.stage).color(palette.secondary));
+                ui.add(egui::ProgressBar::new(progress).show_percentage());
+            }
+            if let Some(error) = app.update.error.clone() {
+                ui.add_space(8.0);
+                error_banner(ui, &error, palette);
+            }
+        });
 
-        ui.add_space(12.0);
+    ui.add_space(12.0);
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        search_anchor(ui, palette, app.locale, "Check for updates automatically");
         if switch_row(
             ui,
             palette,
             t!(app.locale, "Check for updates automatically"),
             Some(&t!(
                 app.locale,
-                "GitHub Releases are the only update source; checks reuse an ETag and respect the API quota."
+                "Checks run on startup and periodically; downloads are always manual."
             )),
             &mut app.settings.update_check_on_start,
             app.settings.reduced_motion,
@@ -1213,55 +1863,29 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 app.maybe_auto_check_updates();
             }
         }
-
         if app.settings.update_check_on_start {
-            ui.add_space(10.0);
-            setting_row(
-                ui,
-                palette,
-                t!(app.locale, "Check every"),
-                Some(&t!(
-                    app.locale,
-                    "Longer delays keep several machines behind one connection far below GitHub's hourly limit."
-                )),
-                |ui| {
-                    let six = t!(app.locale, "6 hours");
-                    let twelve = t!(app.locale, "12 hours");
-                    let day = t!(app.locale, "24 hours");
-                    let options = [
-                        (six.as_ref(), 6_u64),
-                        (twelve.as_ref(), 12),
-                        (day.as_ref(), 24),
-                    ];
-                    if let Some(hours) =
-                        segmented(ui, palette, &options, Some(app.settings.update_check_interval_hours))
-                    {
-                        app.settings.update_check_interval_hours = hours;
-                        app.save_settings();
-                        app.schedule_update_checks();
-                    }
-                },
-            );
+            setting_row(ui, palette, t!(app.locale, "Check every"), None, |ui| {
+                let six = t!(app.locale, "6 hours");
+                let twelve = t!(app.locale, "12 hours");
+                let day = t!(app.locale, "24 hours");
+                let options = [
+                    (six.as_ref(), 6_u64),
+                    (twelve.as_ref(), 12),
+                    (day.as_ref(), 24),
+                ];
+                if let Some(hours) = segmented(
+                    ui,
+                    palette,
+                    &options,
+                    Some(app.settings.update_check_interval_hours),
+                ) {
+                    app.settings.update_check_interval_hours = hours;
+                    app.save_settings();
+                    app.schedule_update_checks();
+                }
+            });
         }
-
-        ui.add_space(10.0);
-        if switch_row(
-            ui,
-            palette,
-            t!(app.locale, "Download updates automatically"),
-            Some(&t!(
-                app.locale,
-                "A verified copy is prepared in the background; installation waits for a restart. Downloads come from release assets, not the API."
-            )),
-            &mut app.settings.update_auto_download,
-            app.settings.reduced_motion,
-        ) {
-            app.save_settings();
-            // The next check starts a background download; changing this
-            // preference must never restart the app unexpectedly.
-        }
-
-        ui.add_space(10.0);
+        search_anchor(ui, palette, app.locale, "Channel");
         setting_row(ui, palette, t!(app.locale, "Channel"), None, |ui| {
             let stable = t!(app.locale, "Stable");
             let prerelease = t!(app.locale, "Pre-release");
@@ -1269,85 +1893,208 @@ fn updates_section(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                 (stable.as_ref(), UpdateChannel::Stable),
                 (prerelease.as_ref(), UpdateChannel::Prerelease),
             ];
-            if let Some(channel) =
-                segmented(ui, palette, &options, Some(app.settings.update_channel))
+            let selection = ui
+                .add_enabled_ui(
+                    !app.update.checking && app.update.progress.is_none(),
+                    |ui| segmented(ui, palette, &options, Some(app.settings.update_channel)),
+                )
+                .inner;
+            if let Some(channel) = selection
+                && app.settings.update_channel != channel
             {
                 app.settings.update_channel = channel;
+                app.update.last_manifest = None;
+                app.update.desktop_release = None;
+                app.update.release_notes = None;
+                app.update.up_to_date_at = None;
+                app.update.ready_version = None;
                 app.save_settings();
-                app.check_for_updates(false);
-            }
-        });
-
-        ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.add_enabled_ui(!app.update.checking, |ui| {
-                if secondary_button(ui, t!(app.locale, "Check for updates now"), palette) {
+                let remaining = app
+                    .update
+                    .last_check_started
+                    .map_or(std::time::Duration::ZERO, |(at, _)| {
+                        crate::state::update_check_cooldown_remaining(at.elapsed())
+                    });
+                if remaining.is_zero() {
                     app.check_for_updates(false);
-                }
-            });
-            if secondary_button(ui, t!(app.locale, "Release notes"), palette)
-                && let Err(error) = open::that(RELEASES_URL)
-            {
-                log::warn!("could not open releases: {error}");
-            }
-            if secondary_button(ui, t!(app.locale, "Source repository"), palette)
-                && let Err(error) = open::that(REPOSITORY_URL)
-            {
-                log::warn!("could not open repository: {error}");
-            }
-        });
-
-        // Per-run logs (fastframe-log): the current run and the previous one,
-        // which fastframe-log keeps beside it after a forced restart so a
-        // frozen/killed run still has its log for a bug report.
-        ui.add_space(14.0);
-        section_header(ui, palette, t!(app.locale, "Logs"));
-        card(palette).show(ui, |ui| {
-            ui.label(
-                RichText::new(t!(
-                    app.locale,
-                    "Plain-text per-run logs, useful when reporting a problem."
-                ))
-                .color(palette.secondary)
-                .size(12.5),
-            );
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                widgets::no_wrap_scope(ui, |ui| {
-                    if secondary_button(ui, t!(app.locale, "Open the current log"), palette) {
-                        let path = app.paths.log_file();
-                        if let Err(error) = open::that(if path.exists() {
-                            path
-                        } else {
-                            app.paths.logs_dir()
-                        }) {
-                            log::warn!("could not open the log file: {error}");
-                        }
-                    }
-                    let previous = app.paths.previous_log_file();
-                    if previous.exists()
-                        && secondary_button(
-                            ui,
-                            t!(app.locale, "Open the previous run's log"),
-                            palette,
+                } else {
+                    app.update.error = Some(
+                        t!(
+                            app.locale,
+                            "Update checks are temporarily limited. Try again in one minute."
                         )
-                        && let Err(error) = open::that(previous)
-                    {
-                        log::warn!("could not open the previous log: {error}");
+                        .into_owned(),
+                    );
+                    if app.settings.update_check_on_start {
+                        app.update.next_check_at = Some(std::time::Instant::now() + remaining);
                     }
-                });
-            });
+                }
+            }
         });
+    });
 
-        ui.add_space(12.0);
+    // Release notes are supplied by the actual release feed, not a hard-coded
+    // list of features which may not exist in the running build.
+    if let Some(manifest) = app
+        .update
+        .last_manifest
+        .as_ref()
+        .or(app.update.release_notes.as_ref())
+        && !manifest.notes.trim().is_empty()
+    {
+        ui.add_space(18.0);
+        section_header(
+            ui,
+            palette,
+            format!(
+                "{} · v{}",
+                t!(app.locale, "Release notes"),
+                manifest.version
+            ),
+        );
+        card(palette).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            widgets::release_notes(ui, &manifest.notes, palette, 300.0);
+        });
+    }
+
+    ui.add_space(18.0);
+    section_header(ui, palette, t!(app.locale, "About your version"));
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        version_row(
+            ui,
+            palette,
+            &t!(app.locale, "Version"),
+            env!("CARGO_PKG_VERSION"),
+        );
+        version_row(ui, palette, &t!(app.locale, "Channel"), &channel);
+        version_row(
+            ui,
+            palette,
+            &t!(app.locale, "Platform"),
+            &format!("{} · {}", std::env::consts::OS, std::env::consts::ARCH),
+        );
+        if let Some(first) = app.settings.first_observed_version.as_deref() {
+            version_row(
+                ui,
+                palette,
+                &t!(app.locale, "First version recorded"),
+                first,
+            );
+        }
+    });
+
+    ui.add_space(18.0);
+    search_anchor(ui, palette, app.locale, "Version history");
+    section_header(ui, palette, t!(app.locale, "Version history"));
+    ui.label(
+        RichText::new(t!(
+            app.locale,
+            "Versions observed on this device; earlier installations may not appear."
+        ))
+        .color(palette.secondary)
+        .size(11.5),
+    );
+    if app.settings.update_history.is_empty() {
+        ui.label(
+            RichText::new(t!(app.locale, "No version history recorded.")).color(palette.secondary),
+        );
+    } else {
+        for (index, entry) in app.settings.update_history.iter().rev().enumerate() {
+            ui.add_space(6.0);
+            card(palette)
+                .inner_margin(egui::Margin::same(12))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            RichText::new(format!("Atlas Commerce {}", entry.version))
+                                .strong()
+                                .color(palette.text),
+                        );
+                        if index == 0 && entry.version == env!("CARGO_PKG_VERSION") {
+                            pill(
+                                ui,
+                                t!(app.locale, "Current"),
+                                palette.finance_positive_soft,
+                                palette.finance_positive,
+                            );
+                        }
+                        if entry.observed_unix > 0
+                            && let Ok(seconds) = i64::try_from(entry.observed_unix)
+                            && let Some(date) =
+                                chrono::DateTime::<chrono::Utc>::from_timestamp(seconds, 0)
+                        {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        RichText::new(date.format("%Y-%m-%d").to_string())
+                                            .color(palette.secondary),
+                                    );
+                                },
+                            );
+                        }
+                    });
+                });
+        }
+    }
+
+    ui.add_space(14.0);
+    ui.horizontal_wrapped(|ui| {
+        if secondary_button(ui, t!(app.locale, "Release notes"), palette)
+            && let Err(error) = open::that(RELEASES_URL)
+        {
+            log::warn!("could not open releases: {error}");
+        }
+        if secondary_button(ui, t!(app.locale, "Source repository"), palette)
+            && let Err(error) = open::that(REPOSITORY_URL)
+        {
+            log::warn!("could not open repository: {error}");
+        }
+    });
+    ui.add_space(14.0);
+    section_header(ui, palette, t!(app.locale, "Logs"));
+    card(palette).show(ui, |ui| {
+        ui.set_width(ui.available_width());
         ui.label(
             RichText::new(t!(
                 app.locale,
-                "Native Rust client for the Atlas Commerce platform. No telemetry."
+                "Plain-text per-run logs, useful when reporting a problem."
             ))
-            .color(palette.dim)
-            .size(11.5),
+            .color(palette.secondary)
+            .size(12.5),
         );
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, t!(app.locale, "Open the current log"), palette) {
+                let path = app.paths.log_file();
+                if let Err(error) = open::that(if path.exists() {
+                    path
+                } else {
+                    app.paths.logs_dir()
+                }) {
+                    log::warn!("could not open the log file: {error}");
+                }
+            }
+            let previous = app.paths.previous_log_file();
+            if previous.exists()
+                && secondary_button(ui, t!(app.locale, "Open the previous run's log"), palette)
+                && let Err(error) = open::that(previous)
+            {
+                log::warn!("could not open the previous log: {error}");
+            }
+        });
+    });
+}
+
+fn version_row(ui: &mut egui::Ui, palette: &Palette, label: &str, value: &str) {
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [130.0, 22.0],
+            egui::Label::new(RichText::new(label).color(palette.secondary)),
+        );
+        ui.label(RichText::new(value).color(palette.text));
     });
 }
 
@@ -1371,4 +2118,17 @@ fn apply_autostart(enabled: bool, hidden: bool) {
             log::warn!("autostart registration failed: {error}");
         }
     });
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::settings_search_matches;
+
+    #[test]
+    fn search_matches_translated_and_source_labels_without_accents() {
+        assert!(settings_search_matches("  echelle ", "Scale", "Échelle"));
+        assert!(settings_search_matches("scale", "Scale", "Échelle"));
+        assert!(!settings_search_matches("password", "Scale", "Échelle"));
+        assert!(!settings_search_matches(" ", "Scale", "Échelle"));
+    }
 }

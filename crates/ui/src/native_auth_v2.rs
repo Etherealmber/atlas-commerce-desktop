@@ -241,7 +241,9 @@ async fn run(
     )
     .await?;
     if !validate_capability(&caps) {
-        return Err("L’approbation téléphone v2 n’est pas disponible sur ce serveur.");
+        return Err(
+            "Le serveur n’annonce pas l’approbation téléphone v2. Vérifiez ses capacités et sa configuration ; vous pouvez choisir une autre méthode.",
+        );
     }
     if cancelled.load(Ordering::Relaxed) {
         return Err("Connexion annulée.");
@@ -370,11 +372,7 @@ async fn run(
 }
 
 pub(crate) fn start(app: &mut AtlasApp) {
-    if app.native_login.active
-        || app.browser_login.active
-        || app.login.busy
-        || app.requires_password
-    {
+    if app.native_login.active || app.login.busy || app.requires_password {
         return;
     }
     let Some(base) = app.server_store.selected_url().map(str::to_owned) else {

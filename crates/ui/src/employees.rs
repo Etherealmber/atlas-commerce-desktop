@@ -53,7 +53,8 @@ pub struct Employee {
     pub cycle_days: i64,
     #[serde(default)]
     pub last_paid_at: Option<String>,
-    #[serde(default)]
+    // nextDue returns null when no pay cycle is configured.
+    #[serde(default, deserialize_with = "null_string")]
     pub next_due: String,
     #[serde(default)]
     pub pay_overdue: bool,
@@ -77,6 +78,10 @@ pub struct Employee {
     pub can_advance: bool,
     #[serde(default)]
     pub max_advance: f64,
+}
+
+fn null_string<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    Option::<String>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 impl Employee {
@@ -575,5 +580,20 @@ mod tests {
         assert!(employee.is_active());
         assert_eq!(employee.label(), "Amina");
         assert_eq!(employee.cycle_label(), "Tous les 7 j");
+    }
+}
+
+#[cfg(test)]
+mod nullable_contract_tests {
+    use super::*;
+
+    #[test]
+    fn worker_employee_with_no_due_date_is_readable() {
+        let payload = r#"{"success":true,"data":[{"id":7,"name":"Exemple","active":1,"next_due":null,"last_paid_at":null,"period_from":null,"pay_overdue":false,"can_advance":false}],"categories":[]}"#;
+        let envelope: Envelope<Vec<Employee>> = serde_json::from_str(payload).unwrap();
+        let employee = &envelope.data.unwrap()[0];
+        assert_eq!(employee.id, 7);
+        assert!(employee.next_due.is_empty());
+        assert!(employee.last_paid_at.is_none());
     }
 }

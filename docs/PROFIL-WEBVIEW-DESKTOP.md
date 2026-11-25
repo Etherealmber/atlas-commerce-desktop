@@ -30,7 +30,7 @@ Le client conserve le parcours navigateur système. Les hôtes intégrés WebVie
 
 ## Diagnostic de la capture
 
-La chaîne « Réponse de connexion invalide. » provient de `crates/ui/src/browser_auth.rs` : JSON d'enveloppe illisible, champs de création invalides, contexte/intervalle du poll invalide ou statut inattendu. La capture seule ne distingue pas HTML de proxy, JSON incorrect, mauvaise version réellement déployée, contexte non conforme ou autres causes. Aucun corps ni URL complète ne doit être collecté. Pour un futur diagnostic : étape fixe, statut HTTP, catégorie Content-Type, catégorie de schéma et durée seulement ; aucun secret ni corps brut.
+La chaîne « Réponse de connexion invalide. » provient de l’ancien module de connexion hébergée (supprimé) : JSON d'enveloppe illisible, champs de création invalides, contexte/intervalle du poll invalide ou statut inattendu. La capture seule ne distingue pas HTML de proxy, JSON incorrect, mauvaise version réellement déployée, contexte non conforme ou autres causes. Aucun corps ni URL complète ne doit être collecté. Pour un futur diagnostic : étape fixe, statut HTTP, catégorie Content-Type, catégorie de schéma et durée seulement ; aucun secret ni corps brut.
 
 ## Recette réelle (non exécutée)
 
