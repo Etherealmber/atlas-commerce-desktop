@@ -54,7 +54,7 @@ def main():
             if not match:
                 continue
             rows.append((match.group(1), match.group(2), folder + '/' + filename, 'Non capturé au même état', '—', '—'))
-    out = ['# Parité web — état des vérifications', '',
+    out = ['# Parité web — état des vérifications', '', 'Audit fonctionnel précédent : [PARITE-WEB-HISTORIQUE.md](PARITE-WEB-HISTORIQUE.md).', '',
            'Références web : branche main. Captures de connexion fictives : `f2cb86d`.',
            'Différence = pourcentage de pixels dont ΔE CIE76 > 4 (Lab D65); région = carré de 100×100 avec le plus de pixels différents.',
            'Les valeurs et éléments non mesurés restent non vérifiés ; aucune ligne ne passe sans relevé des éléments.', '',
