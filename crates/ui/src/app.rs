@@ -956,31 +956,6 @@ impl AtlasApp {
         );
     }
 
-    /// Optional system-browser link to the web client's filtered list.
-    pub fn open_client_invoices_in_browser(&mut self, client: &atlas_api::models::Client) {
-        let Some(api) = self.client.clone() else {
-            return;
-        };
-        // Only the stable client ID goes in the query: a `q` name search
-        // would hide older invoices after the client is renamed (the web
-        // page treats `q` as an additional text filter, not part of the key).
-        let url = match url::Url::parse_with_params(
-            &format!("{}/invoices", api.base_url()),
-            &[("client", client.id.to_string())],
-        ) {
-            Ok(url) => url,
-            Err(error) => {
-                log::warn!("invalid invoices link: {error}");
-                self.notice(t!(self.locale, "Invalid report link.").into_owned());
-                return;
-            }
-        };
-        if let Err(error) = open::that(url.as_str()) {
-            log::warn!("open browser invoices: {error}");
-            self.notice(t!(self.locale, "The system could not open the browser.").into_owned());
-        }
-    }
-
     /// Show an offline, fictional receivables report in the visual fixture only.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]

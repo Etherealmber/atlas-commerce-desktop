@@ -645,9 +645,6 @@ fn client_detail(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
             if crate::buttons::refresh_button(ui, t!(app.locale, "Refresh"), palette) {
                 app.open_client_invoices(client);
             }
-            if secondary_button(ui, t!(app.locale, "Open in browser"), palette) {
-                app.open_client_invoices_in_browser(client);
-            }
         });
         if app.client_invoices.loading {
             super::centered_spinner(ui, palette);
