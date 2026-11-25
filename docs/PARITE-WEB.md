@@ -1,219 +1,306 @@
-# Parité avec le ERP web Atlas Commerce
+# Parité web — état des vérifications
 
-État de référence généré le 2026-10-23 à partir du dépôt `Etherealmber/atlas-commerce`
-(branche `main`) : `worker/index.ts` + `worker/routes/*.ts` font foi pour le
-contrat d'API, et `src/pages/` pour les écrans. Le client desktop ne consomme
-que ces endpoints — aucun contrat n'est deviné.
+Références web : branche main. Captures de connexion fictives : `f2cb86d`.
+Différence = pourcentage de pixels dont ΔE CIE76 > 4 (Lab D65); région = carré de 100×100 avec le plus de pixels différents.
+Les valeurs et éléments non mesurés restent non vérifiés ; aucune ligne ne passe sans relevé des éléments.
 
-## Audit fonctionnel web de référence
-
-L'audit fourni par l'utilisateur porte sur le web au commit
-`cf951397553dc8749f15c96b33abf02d4a360e35` (analyse statique, sans captures
-ni test natif). Il complète l'inventaire d'endpoints ci-dessous ; ses
-recommandations P0–P2 ne sont pas des comportements observés du web.
-
-- Une vente rapide créée n'est pas nécessairement encaissée : le desktop
-  l'indique et vérifie chaque ligne avant l'envoi. L'encaissement séparé n'est
-  pas encore implémenté dans l'écran natif.
-- Le web déclenche le bon de livraison depuis une facture. Le desktop garde
-  son écran et son créateur de BL autonome existants : ce n'est pas une parité
-  du parcours facture → BL.
-- Les dépenses sont une section de « Solde & mouvements » sur le web ; le
-  desktop conserve actuellement son écran distinct. Notifications restent une
-  page native ; l'agent s'ouvre désormais dans un panneau latéral droit.
-- Les rôles web `owner`, `admin` et `secretaire` ont accès aux tâches bureau ;
-  `stock` est orienté produits/scan et ne voit pas les montants. Le desktop
-  masque les vues financières et les prix aux magasiniers, y compris dans la
-  palette et les raccourcis. Par prudence, les formulaires de création produit
-  natifs contenant des prix leur sont masqués ; l'ajustement du stock reste
-  disponible. Les contrôles d'interface ne remplacent jamais les permissions
-  côté serveur ; des tests sur serveur réel restent nécessaires.
-- Les réglages desktop restent des cartes, pas les 13 onglets web. L'audit
-  recommande une gestion cohérente des dialogues (focus, superposition,
-  brouillons et opérations en cours), mais ces garanties ne sont pas encore
-  généralisées à tous les formulaires natifs.
-
-Les chiffres de couverture ci-dessous reflètent l'inventaire à sa date de
-rédaction, pas une nouvelle mesure effectuée lors de cet audit.
-
-## Couverture actuelle
-
-- **328 endpoints** uniques côté worker (méthode + chemin, identifiants
-  normalisés en `:id`).
-- Le desktop en couvre **44**, soit environ 13 %. Tous les endpoints appelés
-  par le client existent à l'identique dans le worker : aucun appel hors
-  contrat. Le ticket `GET /api/reports/link-ticket` sert à ouvrir les
-  rapports imprimables dans le navigateur système sans exposer le JWT.
-- Écrans web : **32 pages** dans `src/pages/` ; écrans desktop natifs :
-  connexion (avec OTP, lien magique et session QR), tableau de bord, produits
-  (avec barre de scan code-barres/SKU et création produit rapide),
-  catalogue (catégories et unités), clients (CRM), fournisseurs,
-  dépenses/recettes, bons de livraison, ventes/factures (liste),
-  notifications, agent, paramètres, coquille.
-
-## Matrice par domaine
-
-| Domaine | Couverts | Total |
-|---|--:|--:|
-| `admin` | 0 | 39 |
-| `auth` | 10 | 29 |
-| `invoices` | 4 | 24 |
-| `inventory` | 0 | 17 |
-| `reports` | 1 | 17 |
-| `products` | 3 | 16 |
-| `bills` | 2 | 15 |
-| `employees` | 7 | 14 |
-| `public` | 0 | 13 |
-| `clients` | 3 | 12 |
-| `settings` | 1 | 11 |
-| `attendance` | 0 | 9 |
-| `receipts` | 2 | 9 |
-| `catalog` | 0 | 8 |
-| `assist` | 1 | 7 |
-| `stock` | 0 | 7 |
-| `v1` (API partenaire externe) | 0 | 7 |
-| `export` | 0 | 6 |
-| `integrations` | 3 | 6 |
-| `mobile-actions` | 0 | 6 |
-| `vendors` | 3 | 6 |
-| `expenses` | 2 | 5 |
-| `categories` | 3 | 4 |
-| `units` | 3 | 4 |
-| `agent` | 1 | 3 |
-| `delivery-notes` | 2 | 3 |
-| `kits` | 0 | 3 |
-| `webhooks` | 0 | 3 |
-| `atlas` | 0 | 2 |
-| `fiscal` | 0 | 2 |
-| `import` | 0 | 2 |
-| `integrity` | 0 | 2 |
-| `ledger` | 0 | 2 |
-| `scan` | 2 | 2 |
-| `alerts` | 1 | 1 |
-| `bank` | 0 | 1 |
-| `canary` | 1 | 1 |
-| `cron` | 0 | 1 |
-| `dashboard` | 1 | 1 |
-| `health` | 1 | 1 |
-| `hub` | 0 | 1 |
-| `me` | 0 | 1 |
-| `media` | 0 | 1 |
-| `nav-badges` | 1 | 1 |
-| `print` | 0 | 1 |
-| `push` | 0 | 1 |
-| `assetlinks.json` | 0 | 1 |
-
-## Écrans web et sort desktop
-
-| Page web (`src/pages/`) | Équivalent desktop |
-|---|---|
-| `Login`, `LoginQr` | Partiel — connexion OTP/lien/QR déjà présente ; manque webauthn |
-| `Dashboard` | Oui |
-| `Products`, `ProductHistory` | Partiel — lecture + ajustement de stock ; manque CRUD, variantes, images, historique mouvements |
-| `Invoices`, `InvoiceDetail` | Partiel — liste, détail natif, impression et PDF officiels ouverts dans le navigateur via un ticket `rt` de 30 minutes ; manque création, paiements, statuts et UBL |
-| `Quotes` | Partiel — liste en lecture seule dans Ventes, recherche, détail et impression officiels ; création, édition, conversion et suppression restent dans le web |
-| `QuickSale`, `QuickSaleDetail` | Non (vente comptoir) |
-| `Receipts` | Partiel — liste en lecture seule, ouverture de la facture liée et impression officielle via ticket ; création et suppression restent à couvrir |
-| `Clients` | Partiel — liste, recherche, solde dû, création et modification ; `Factures` affiche les factures standard filtrées par identifiant et leur détail natif, avec option navigateur ; `Situation` affiche les valeurs du rapport serveur en synthèse ou détail produits, avec impression officielle via ticket `link-ticket`. Prix par client, imports et suppressions OTP restent à couvrir |
-| `Vendors`, `Bills` | Partiel — fournisseurs en liste/recherche/création/modification ; factures fournisseurs en lecture seule avec impression/PDF officiels. Création, paiements, réception et rapprochement restent à couvrir |
-| `InventoryOps` | Non (opérations de stock multi-emplacements) |
-| `Employees`, `Attendance` | Partiel — liste, recherche, statut et catégorie, détail avec historique des paiements, paiement, acompte, démission et réactivation, fiche d'embauche et situation RH imprimables ; création réduite aux champs essentiels. Manquent édition complète, pièce d'identité chiffrée et pointage |
-| `Reports`, `Balance` | Partiel — `client-situation` et les rapports officiels de créances clients et dettes fournisseurs sont lus dans l’application ; impression officielle ouverte dans le navigateur via `link-ticket`. Les autres rapports et la balance restent à couvrir |
-| `Bank` | Non (rapprochement CSV) |
-| `Reimbursements` | Partiel — les avoirs `remboursement` sont listés dans Ventes (recherche numéro/client, ouverture de la facture liée, impression officielle) ; création, suppression OTP et envoi d'e-mail restent dans le web |
-| `Scan` | Oui — barre de scan dans Produits : recherche code-barres/SKU (`GET /api/scan/barcode/:code`) et création produit rapide avec gestion du 409 `DUPLICATE_PRODUCT` (`POST /api/scan/quick-product`) |
-| `ImportData` | Non (imports validés en deux temps) |
-| `Actions` | Non (file d'actions mobile) |
-| `Settings` | Partiel — réglages locaux seuls ; manque les réglages serveur |
-| `AccessPage` | Non (administration des utilisateurs) |
-| Documents imprimables | Les pages HTML officielles du serveur (facture, PDF, reçu, facture fournisseur, fiche d'embauche, situation RH) s'ouvrent dans le navigateur système avec un ticket `rt` de 30 minutes, limité par le serveur aux chemins d'impression. Le jeton de session n'apparaît jamais dans l'URL ; aucun rendu local ne prétend remplacer ces pages. |
-
-| `About`, `Welcome`, `WhatsNew`, `Privacy`, `Terms`, `EmailVerify` | Partiel — le menu profil propose `Nouveautés` (notes de version dans les réglages, option navigateur) et `À propos` (section réglages) ; les pages juridiques et Welcome restent à exclure |
-
-## Exclusions proposées (non transposables au desktop)
-
-- `cron/*`, `.well-known/assetlinks.json`, `push/register`,
-  `auth/login-biometric`, `public/*` (portail client sans session) : liés au
-  navigateur, à Android ou aux tâches planifiées du worker.
-- `v1/*` (`partner-v1`) : API ouverte pour intégrations externes, pas un
-  écran de l'application.
-- `print/thermal/*` : l'impression thermique dépend d'un imprimant réseau ;
-  à réévaluer après les écrans métier.
-
-## Feuille de route par phases
-
-Chaque phase ajoute endpoints + modèles typés + écran egui monochrome +
-entrée de navigation, et ne modifie jamais le contrat du worker.
-
-1. **Vente et CRM** — `clients` (liste, fiche, CRUD, prix par client),
-   `invoices` (création, détail, paiements, statuts, PDF), `Quotes`,
-   `QuickSale`, `receipts`, `delivery-notes`. *Premier livrable livré :
-   écran Clients avec liste, recherche, solde dû, création et modification
-   (`GET/POST/PUT /api/clients`). Restent les prix par client, les imports
-   et les suppressions OTP.*
-2. **Catalogue et stock** — CRUD `products` avec variantes et images
-   (`catalog`), `categories`, `units`, `kits`, `inventory` (emplacements,
-   lots, inventaires cycliques, réappro, valorisation), `scan`,
-   historique des mouvements. *Catégories et unités déjà livrées
-   (liste, création, modification ; les suppressions à confirmation de mot
-   de passe restent à venir). Produits : lecture, recherche, création et
-   ajustement de stock déjà livrés ; variantes, images et suppressions à
-   venir.*
-3. **Achats** — `vendors`, `bills` (réception, paiements, rapprochement),
-   `expenses`, demandes de stock. *Le CRUD fournisseurs
-   (`GET/POST/PUT /api/vendors`) est déjà livré ; restent les suppressions
-   à confirmation de mot de passe, les factures et les dépenses.*
-4. **RH** — `employees` (embauche, documents, avances, paie), `attendance`
-   (pointage, absences, exports), formulaires imprimables.
-5. **Finance et pilotage** — les 17 `reports`, `balance`, `bank`
-   (rapprochement CSV), `ledger`, `fiscal` (clôture de période), `export/*`.
-6. **Administration et réglages** — `admin` (utilisateurs, audit,
-   sauvegardes, configuration, webhooks), `settings` serveur, `integrity`,
-   `import` de données, `mobile-actions`. *Les clés d'intégration
-   (`GET/POST/DELETE /api/integrations/keys`) et l'état du fournisseur
-   d'assistance (`GET /api/settings/assist-provider`) sont livrés ; restent
-   les webhooks et la sauvegarde/restauration.*
-7. **Compléments d'authentification** — webauthn, appareils de confiance,
-   et les écrans natifs remplaçant About/WhatsNew. *L'édition du profil
-   (`PATCH /api/auth/me`, nom affiché, e-mail, téléphone, note, URL d'avatar)
-   est livrée ; le mot de passe reste verrouillé côté serveur.*
-
-## Audit du blueprint desktop et de l'application Android
-
-Audit statique des dépôts `atlas-commerce` à `cf951397553dc8749f15c96b33abf02d4a360e35`
-et `atlas-commerce-android` à `21aa6cf3435f694ee54366674d4bd4d2bfc48060`.
-Le desktop actuel utilise Rust/egui, pas Tauri, React ou Axum. Son coffre v1
-utilise le magasin d'identifiants du système, pas une base SQLite chiffrée.
-
-Les migrations D1 réelles sont `0001_audit_indexes_and_money.sql`,
-`0002_phase2_indexes.sql`, `0003_phase3_observability.sql`,
-`0004_last_purchase_cost.sql`, `0005_qr_privacy.sql`,
-`0006_receipt_client_situation.sql`, `0007_product_list_indexes.sql` et
-`0008_app_users_profile_columns.sql`. Leurs noms et contenus diffèrent de
-ceux du blueprint ; `0001` documente notamment les montants en unités
-majeures, et `0006` ajoute un champ à `receipts`. Elles dépendent du schéma D1
-serveur et ne constituent pas un moteur de synchronisation local. Les recopier
-sur une base desktop vide ou recalculer les finances en centimes ne prouverait
-pas la parité et pourrait créer des écarts financiers.
-
-Sur Android, `OfflineCache.kt` chiffre des instantanés produits et financiers
-et les isole par serveur et compte ; `ShellViewModel.kt` interroge les alertes
-et actions mobiles toutes les 25 secondes, avec filtrage par rôle et auteur.
-Ce constat ne démontre pas l'existence d'une file locale de mutations ni d'un
-protocole de résolution de conflits. Le desktop ne prétend donc pas fournir
-une synchronisation hors ligne ou des notifications Android équivalentes.
-La recherche de stock dispose de `Ctrl/⌘+Maj+K` dans la fenêtre active ;
-ce n'est pas un raccourci global du système. La création de factures, les
-raccourcis système globaux, l'impression ESC/POS
-et les tests matériels restent à réaliser et à valider sur chaque plateforme.
-
-### Rapport natif de valorisation du stock
-
-Depuis Produits, owner/admin peuvent consulter le rapport officiel
-`GET /api/reports/stock?location_id=all` ou l'identifiant d'un entrepôt actif :
-valeurs et catégories proviennent exclusivement du serveur, en HTML rendu
-comme texte et tableaux inertes. Les emplacements proposés sont ceux du
-sélecteur officiel du rapport ; les champs et tickets cachés ne sont pas lus.
-L'inventaire vide reste un rapport valide. L'impression ouvre le même rapport
-avec un ticket court, sans JWT dans l'URL. La permission côté interface ne
-remplace pas celle du serveur.
+| # | Écran | Thème | PNG référence | Capture desktop | Diff % | Pire région | Décalage max | Manquants | Extras | Texte | Statut |
+|---|---|---|---|---|---:|---|---|---|---|---|---|
+| 1 | Login default | light | `desktop-login-reference/default-light-1280x800.png` | `docs/parity/shots/login-reference-default-light-1280x800.png` | 7.35% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 2 | Login default | dark | `desktop-login-reference/default-dark-1280x800.png` | `docs/parity/shots/login-reference-default-dark-1280x800.png` | 3.78% | (900,200) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 3 | Login error | light | `desktop-login-reference/error-light-1280x800.png` | `docs/parity/shots/login-reference-error-light-1280x800.png` | 10.02% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 4 | Login error | dark | `desktop-login-reference/error-dark-1280x800.png` | `docs/parity/shots/login-reference-error-dark-1280x800.png` | 8.49% | (900,400) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 5 | Login otp | light | `desktop-login-reference/otp-light-1280x800.png` | `docs/parity/shots/login-reference-otp-light-1280x800.png` | 7.71% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 6 | Login otp | dark | `desktop-login-reference/otp-dark-1280x800.png` | `docs/parity/shots/login-reference-otp-dark-1280x800.png` | 5.32% | (400,500) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 7 | Login claimed | light | `desktop-login-reference/claimed-light-1280x800.png` | `docs/parity/shots/login-reference-claimed-light-1280x800.png` | 7.28% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 8 | Login claimed | dark | `desktop-login-reference/claimed-dark-1280x800.png` | `docs/parity/shots/login-reference-claimed-dark-1280x800.png` | 2.57% | (900,200) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 9 | Login focus | light | `desktop-login-reference/focus-light-1280x800.png` | `docs/parity/shots/login-reference-focus-light-1280x800.png` | 7.63% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 10 | Login focus | dark | `desktop-login-reference/focus-dark-1280x800.png` | `docs/parity/shots/login-reference-focus-dark-1280x800.png` | 7.11% | (300,300) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 11 | Login checked | light | `desktop-login-reference/checked-light-1280x800.png` | `docs/parity/shots/login-reference-checked-light-1280x800.png` | 9.24% | (1100,0) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 12 | Login checked | dark | `desktop-login-reference/checked-dark-1280x800.png` | `docs/parity/shots/login-reference-checked-dark-1280x800.png` | 6.97% | (400,400) 100×100 | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ éléments non mesurés |
+| 13 | agent-open-conversation | dark | `desktop-pages-reference/agent-open-conversation-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 14 | agent-open-conversation | light | `desktop-pages-reference/agent-open-conversation-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 15 | agent-open-empty | dark | `desktop-pages-reference/agent-open-empty-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 16 | agent-open-empty | light | `desktop-pages-reference/agent-open-empty-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 17 | page-actions | dark | `desktop-pages-reference/page-actions-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 18 | page-actions | light | `desktop-pages-reference/page-actions-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 19 | page-actions-y720 | dark | `desktop-pages-reference/page-actions-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 20 | page-actions-y720 | light | `desktop-pages-reference/page-actions-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 21 | page-attendance | dark | `desktop-pages-reference/page-attendance-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 22 | page-attendance | light | `desktop-pages-reference/page-attendance-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 23 | page-balance | dark | `desktop-pages-reference/page-balance-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 24 | page-balance | light | `desktop-pages-reference/page-balance-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 25 | page-balance-y720 | dark | `desktop-pages-reference/page-balance-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 26 | page-balance-y720 | light | `desktop-pages-reference/page-balance-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 27 | page-bills | dark | `desktop-pages-reference/page-bills-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 28 | page-bills | light | `desktop-pages-reference/page-bills-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 29 | page-bills-y720 | dark | `desktop-pages-reference/page-bills-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 30 | page-bills-y720 | light | `desktop-pages-reference/page-bills-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 31 | page-cash-shifts | dark | `desktop-pages-reference/page-cash-shifts-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 32 | page-cash-shifts | light | `desktop-pages-reference/page-cash-shifts-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 33 | page-cash-shifts-y1440 | dark | `desktop-pages-reference/page-cash-shifts-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 34 | page-cash-shifts-y1440 | light | `desktop-pages-reference/page-cash-shifts-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 35 | page-cash-shifts-y720 | dark | `desktop-pages-reference/page-cash-shifts-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 36 | page-cash-shifts-y720 | light | `desktop-pages-reference/page-cash-shifts-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 37 | page-clients | dark | `desktop-pages-reference/page-clients-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 38 | page-clients | light | `desktop-pages-reference/page-clients-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 39 | page-clients-y720 | dark | `desktop-pages-reference/page-clients-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 40 | page-clients-y720 | light | `desktop-pages-reference/page-clients-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 41 | page-dashboard | dark | `desktop-pages-reference/page-dashboard-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 42 | page-dashboard | light | `desktop-pages-reference/page-dashboard-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 43 | page-dashboard-y1440 | dark | `desktop-pages-reference/page-dashboard-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 44 | page-dashboard-y1440 | light | `desktop-pages-reference/page-dashboard-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 45 | page-dashboard-y2160 | dark | `desktop-pages-reference/page-dashboard-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 46 | page-dashboard-y2160 | light | `desktop-pages-reference/page-dashboard-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 47 | page-dashboard-y720 | dark | `desktop-pages-reference/page-dashboard-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 48 | page-dashboard-y720 | light | `desktop-pages-reference/page-dashboard-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 49 | page-employees | dark | `desktop-pages-reference/page-employees-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 50 | page-employees | light | `desktop-pages-reference/page-employees-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 51 | page-employees-y720 | dark | `desktop-pages-reference/page-employees-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 52 | page-employees-y720 | light | `desktop-pages-reference/page-employees-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 53 | page-inventory-ops | dark | `desktop-pages-reference/page-inventory-ops-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 54 | page-inventory-ops | light | `desktop-pages-reference/page-inventory-ops-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 55 | page-inventory-ops-y1440 | dark | `desktop-pages-reference/page-inventory-ops-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 56 | page-inventory-ops-y1440 | light | `desktop-pages-reference/page-inventory-ops-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 57 | page-inventory-ops-y2160 | dark | `desktop-pages-reference/page-inventory-ops-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 58 | page-inventory-ops-y2160 | light | `desktop-pages-reference/page-inventory-ops-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 59 | page-inventory-ops-y720 | dark | `desktop-pages-reference/page-inventory-ops-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 60 | page-inventory-ops-y720 | light | `desktop-pages-reference/page-inventory-ops-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 61 | page-invoices | dark | `desktop-pages-reference/page-invoices-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 62 | page-invoices | light | `desktop-pages-reference/page-invoices-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 63 | page-invoices-y720 | dark | `desktop-pages-reference/page-invoices-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 64 | page-invoices-y720 | light | `desktop-pages-reference/page-invoices-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 65 | page-payroll | dark | `desktop-pages-reference/page-payroll-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 66 | page-payroll | light | `desktop-pages-reference/page-payroll-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 67 | page-products | dark | `desktop-pages-reference/page-products-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 68 | page-products | light | `desktop-pages-reference/page-products-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 69 | page-products-y720 | dark | `desktop-pages-reference/page-products-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 70 | page-products-y720 | light | `desktop-pages-reference/page-products-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 71 | page-quick-sale | dark | `desktop-pages-reference/page-quick-sale-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 72 | page-quick-sale | light | `desktop-pages-reference/page-quick-sale-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 73 | page-quotes | dark | `desktop-pages-reference/page-quotes-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 74 | page-quotes | light | `desktop-pages-reference/page-quotes-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 75 | page-receipts | dark | `desktop-pages-reference/page-receipts-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 76 | page-receipts | light | `desktop-pages-reference/page-receipts-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 77 | page-reimbursements | dark | `desktop-pages-reference/page-reimbursements-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 78 | page-reimbursements | light | `desktop-pages-reference/page-reimbursements-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 79 | page-reports | dark | `desktop-pages-reference/page-reports-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 80 | page-reports | light | `desktop-pages-reference/page-reports-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 81 | page-reports-y1440 | dark | `desktop-pages-reference/page-reports-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 82 | page-reports-y1440 | light | `desktop-pages-reference/page-reports-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 83 | page-reports-y720 | dark | `desktop-pages-reference/page-reports-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 84 | page-reports-y720 | light | `desktop-pages-reference/page-reports-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 85 | page-vendors | dark | `desktop-pages-reference/page-vendors-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 86 | page-vendors | light | `desktop-pages-reference/page-vendors-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 87 | settings-admin | dark | `desktop-pages-reference/settings-admin-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 88 | settings-admin | light | `desktop-pages-reference/settings-admin-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 89 | settings-admin-y1440 | dark | `desktop-pages-reference/settings-admin-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 90 | settings-admin-y1440 | light | `desktop-pages-reference/settings-admin-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 91 | settings-admin-y2160 | dark | `desktop-pages-reference/settings-admin-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 92 | settings-admin-y2160 | light | `desktop-pages-reference/settings-admin-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 93 | settings-admin-y2880 | dark | `desktop-pages-reference/settings-admin-y2880-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 94 | settings-admin-y2880 | light | `desktop-pages-reference/settings-admin-y2880-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 95 | settings-admin-y720 | dark | `desktop-pages-reference/settings-admin-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 96 | settings-admin-y720 | light | `desktop-pages-reference/settings-admin-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 97 | settings-agent | dark | `desktop-pages-reference/settings-agent-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 98 | settings-agent | light | `desktop-pages-reference/settings-agent-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 99 | settings-agent-y1440 | dark | `desktop-pages-reference/settings-agent-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 100 | settings-agent-y1440 | light | `desktop-pages-reference/settings-agent-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 101 | settings-agent-y720 | dark | `desktop-pages-reference/settings-agent-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 102 | settings-agent-y720 | light | `desktop-pages-reference/settings-agent-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 103 | settings-app | dark | `desktop-pages-reference/settings-app-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 104 | settings-app | light | `desktop-pages-reference/settings-app-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 105 | settings-app-y1440 | dark | `desktop-pages-reference/settings-app-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 106 | settings-app-y1440 | light | `desktop-pages-reference/settings-app-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 107 | settings-app-y720 | dark | `desktop-pages-reference/settings-app-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 108 | settings-app-y720 | light | `desktop-pages-reference/settings-app-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 109 | settings-attendance | dark | `desktop-pages-reference/settings-attendance-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 110 | settings-attendance | light | `desktop-pages-reference/settings-attendance-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 111 | settings-attendance-y1440 | dark | `desktop-pages-reference/settings-attendance-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 112 | settings-attendance-y1440 | light | `desktop-pages-reference/settings-attendance-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 113 | settings-attendance-y2160 | dark | `desktop-pages-reference/settings-attendance-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 114 | settings-attendance-y2160 | light | `desktop-pages-reference/settings-attendance-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 115 | settings-attendance-y720 | dark | `desktop-pages-reference/settings-attendance-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 116 | settings-attendance-y720 | light | `desktop-pages-reference/settings-attendance-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 117 | settings-audit | dark | `desktop-pages-reference/settings-audit-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 118 | settings-audit | light | `desktop-pages-reference/settings-audit-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 119 | settings-audit-y720 | dark | `desktop-pages-reference/settings-audit-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 120 | settings-audit-y720 | light | `desktop-pages-reference/settings-audit-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 121 | settings-categories | dark | `desktop-pages-reference/settings-categories-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 122 | settings-categories | light | `desktop-pages-reference/settings-categories-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 123 | settings-categories-y720 | dark | `desktop-pages-reference/settings-categories-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 124 | settings-categories-y720 | light | `desktop-pages-reference/settings-categories-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 125 | settings-company | dark | `desktop-pages-reference/settings-company-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 126 | settings-company | light | `desktop-pages-reference/settings-company-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 127 | settings-company-y1440 | dark | `desktop-pages-reference/settings-company-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 128 | settings-company-y1440 | light | `desktop-pages-reference/settings-company-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 129 | settings-company-y720 | dark | `desktop-pages-reference/settings-company-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 130 | settings-company-y720 | light | `desktop-pages-reference/settings-company-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 131 | settings-documents | dark | `desktop-pages-reference/settings-documents-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 132 | settings-documents | light | `desktop-pages-reference/settings-documents-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 133 | settings-documents-y720 | dark | `desktop-pages-reference/settings-documents-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 134 | settings-documents-y720 | light | `desktop-pages-reference/settings-documents-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 135 | settings-dunning | dark | `desktop-pages-reference/settings-dunning-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 136 | settings-dunning | light | `desktop-pages-reference/settings-dunning-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 137 | settings-fec | dark | `desktop-pages-reference/settings-fec-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 138 | settings-fec | light | `desktop-pages-reference/settings-fec-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 139 | settings-integrations | dark | `desktop-pages-reference/settings-integrations-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 140 | settings-integrations | light | `desktop-pages-reference/settings-integrations-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 141 | settings-integrations-y1440 | dark | `desktop-pages-reference/settings-integrations-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 142 | settings-integrations-y1440 | light | `desktop-pages-reference/settings-integrations-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 143 | settings-integrations-y720 | dark | `desktop-pages-reference/settings-integrations-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 144 | settings-integrations-y720 | light | `desktop-pages-reference/settings-integrations-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 145 | settings-invoicing | dark | `desktop-pages-reference/settings-invoicing-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 146 | settings-invoicing | light | `desktop-pages-reference/settings-invoicing-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 147 | settings-invoicing-y1440 | dark | `desktop-pages-reference/settings-invoicing-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 148 | settings-invoicing-y1440 | light | `desktop-pages-reference/settings-invoicing-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 149 | settings-invoicing-y2160 | dark | `desktop-pages-reference/settings-invoicing-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 150 | settings-invoicing-y2160 | light | `desktop-pages-reference/settings-invoicing-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 151 | settings-invoicing-y720 | dark | `desktop-pages-reference/settings-invoicing-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 152 | settings-invoicing-y720 | light | `desktop-pages-reference/settings-invoicing-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 153 | settings-legal | dark | `desktop-pages-reference/settings-legal-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 154 | settings-legal | light | `desktop-pages-reference/settings-legal-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 155 | settings-legal-y1440 | dark | `desktop-pages-reference/settings-legal-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 156 | settings-legal-y1440 | light | `desktop-pages-reference/settings-legal-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 157 | settings-legal-y2160 | dark | `desktop-pages-reference/settings-legal-y2160-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 158 | settings-legal-y2160 | light | `desktop-pages-reference/settings-legal-y2160-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 159 | settings-legal-y720 | dark | `desktop-pages-reference/settings-legal-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 160 | settings-legal-y720 | light | `desktop-pages-reference/settings-legal-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 161 | settings-payroll | dark | `desktop-pages-reference/settings-payroll-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 162 | settings-payroll | light | `desktop-pages-reference/settings-payroll-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 163 | settings-profile | dark | `desktop-pages-reference/settings-profile-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 164 | settings-profile | light | `desktop-pages-reference/settings-profile-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 165 | settings-profile-y1440 | dark | `desktop-pages-reference/settings-profile-y1440-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 166 | settings-profile-y1440 | light | `desktop-pages-reference/settings-profile-y1440-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 167 | settings-profile-y720 | dark | `desktop-pages-reference/settings-profile-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 168 | settings-profile-y720 | light | `desktop-pages-reference/settings-profile-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 169 | settings-warehouse | dark | `desktop-pages-reference/settings-warehouse-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 170 | settings-warehouse | light | `desktop-pages-reference/settings-warehouse-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 171 | settings-warehouse-y720 | dark | `desktop-pages-reference/settings-warehouse-y720-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 172 | settings-warehouse-y720 | light | `desktop-pages-reference/settings-warehouse-y720-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 173 | ui-compact-invoices | dark | `desktop-pages-reference/ui-compact-invoices-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 174 | ui-compact-invoices | light | `desktop-pages-reference/ui-compact-invoices-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 175 | ui-compact-products | dark | `desktop-pages-reference/ui-compact-products-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 176 | ui-compact-products | light | `desktop-pages-reference/ui-compact-products-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 177 | ui-language-soon | dark | `desktop-pages-reference/ui-language-soon-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 178 | ui-language-soon | light | `desktop-pages-reference/ui-language-soon-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 179 | ui-logout-confirm | dark | `desktop-pages-reference/ui-logout-confirm-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 180 | ui-logout-confirm | light | `desktop-pages-reference/ui-logout-confirm-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 181 | ui-onboarding-dashboard | dark | `desktop-pages-reference/ui-onboarding-dashboard-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 182 | ui-onboarding-dashboard | light | `desktop-pages-reference/ui-onboarding-dashboard-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 183 | ui-onboarding-products | dark | `desktop-pages-reference/ui-onboarding-products-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 184 | ui-onboarding-products | light | `desktop-pages-reference/ui-onboarding-products-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 185 | ui-onboarding-sidebar | dark | `desktop-pages-reference/ui-onboarding-sidebar-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 186 | ui-onboarding-sidebar | light | `desktop-pages-reference/ui-onboarding-sidebar-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 187 | ui-user-menu | dark | `desktop-pages-reference/ui-user-menu-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 188 | ui-user-menu | light | `desktop-pages-reference/ui-user-menu-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 189 | dashboard | dark | `desktop-shell-reference/dashboard-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 190 | dashboard | light | `desktop-shell-reference/dashboard-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 191 | dashboard-scroll2-y600 | dark | `desktop-shell-reference/dashboard-scroll2-y600-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 192 | dashboard-scroll2-y600 | light | `desktop-shell-reference/dashboard-scroll2-y600-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 193 | dashboard-scroll3-y1200 | dark | `desktop-shell-reference/dashboard-scroll3-y1200-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 194 | dashboard-scroll3-y1200 | light | `desktop-shell-reference/dashboard-scroll3-y1200-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 195 | dashboard-scroll4-y1800 | dark | `desktop-shell-reference/dashboard-scroll4-y1800-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 196 | dashboard-scroll4-y1800 | light | `desktop-shell-reference/dashboard-scroll4-y1800-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 197 | dashboard-scroll5-y2400 | dark | `desktop-shell-reference/dashboard-scroll5-y2400-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 198 | dashboard-scroll5-y2400 | light | `desktop-shell-reference/dashboard-scroll5-y2400-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 199 | sidebar-expanded | dark | `desktop-shell-reference/sidebar-expanded-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 200 | sidebar-expanded | light | `desktop-shell-reference/sidebar-expanded-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 201 | sidebar-hover | dark | `desktop-shell-reference/sidebar-hover-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 202 | sidebar-hover | light | `desktop-shell-reference/sidebar-hover-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 203 | topbar-compact | dark | `desktop-shell-reference/topbar-compact-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 204 | topbar-compact | light | `desktop-shell-reference/topbar-compact-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 205 | topbar-notifications | dark | `desktop-shell-reference/topbar-notifications-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 206 | topbar-notifications | light | `desktop-shell-reference/topbar-notifications-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 207 | topbar-user-menu | dark | `desktop-shell-reference/topbar-user-menu-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 208 | topbar-user-menu | light | `desktop-shell-reference/topbar-user-menu-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 209 | wizard-balance-depense-step1 | dark | `desktop-shell-reference/wizard-balance-depense-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 210 | wizard-balance-depense-step1 | light | `desktop-shell-reference/wizard-balance-depense-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 211 | wizard-balance-depense-step2 | dark | `desktop-shell-reference/wizard-balance-depense-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 212 | wizard-balance-depense-step2 | light | `desktop-shell-reference/wizard-balance-depense-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 213 | wizard-balance-recette-step1 | dark | `desktop-shell-reference/wizard-balance-recette-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 214 | wizard-balance-recette-step1 | light | `desktop-shell-reference/wizard-balance-recette-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 215 | wizard-balance-recette-step2 | dark | `desktop-shell-reference/wizard-balance-recette-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 216 | wizard-balance-recette-step2 | light | `desktop-shell-reference/wizard-balance-recette-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 217 | wizard-balance-reports-dialog-step1 | dark | `desktop-shell-reference/wizard-balance-reports-dialog-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 218 | wizard-balance-reports-dialog-step1 | light | `desktop-shell-reference/wizard-balance-reports-dialog-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 219 | wizard-bill-step1 | dark | `desktop-shell-reference/wizard-bill-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 220 | wizard-bill-step1 | light | `desktop-shell-reference/wizard-bill-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 221 | wizard-bill-step2 | dark | `desktop-shell-reference/wizard-bill-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 222 | wizard-bill-step2 | light | `desktop-shell-reference/wizard-bill-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 223 | wizard-bill-step3 | dark | `desktop-shell-reference/wizard-bill-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 224 | wizard-bill-step3 | light | `desktop-shell-reference/wizard-bill-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 225 | wizard-client-step1 | dark | `desktop-shell-reference/wizard-client-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 226 | wizard-client-step1 | light | `desktop-shell-reference/wizard-client-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 227 | wizard-client-step2 | dark | `desktop-shell-reference/wizard-client-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 228 | wizard-client-step2 | light | `desktop-shell-reference/wizard-client-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 229 | wizard-client-step3 | dark | `desktop-shell-reference/wizard-client-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 230 | wizard-client-step3 | light | `desktop-shell-reference/wizard-client-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 231 | wizard-employee-step1 | dark | `desktop-shell-reference/wizard-employee-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 232 | wizard-employee-step1 | light | `desktop-shell-reference/wizard-employee-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 233 | wizard-employee-step2 | dark | `desktop-shell-reference/wizard-employee-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 234 | wizard-employee-step2 | light | `desktop-shell-reference/wizard-employee-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 235 | wizard-employee-step3 | dark | `desktop-shell-reference/wizard-employee-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 236 | wizard-employee-step3 | light | `desktop-shell-reference/wizard-employee-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 237 | wizard-employee-step4 | dark | `desktop-shell-reference/wizard-employee-step4-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 238 | wizard-employee-step4 | light | `desktop-shell-reference/wizard-employee-step4-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 239 | wizard-employee-step5 | dark | `desktop-shell-reference/wizard-employee-step5-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 240 | wizard-employee-step5 | light | `desktop-shell-reference/wizard-employee-step5-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 241 | wizard-employee-step6 | dark | `desktop-shell-reference/wizard-employee-step6-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 242 | wizard-employee-step6 | light | `desktop-shell-reference/wizard-employee-step6-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 243 | wizard-employee-step7 | dark | `desktop-shell-reference/wizard-employee-step7-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 244 | wizard-employee-step7 | light | `desktop-shell-reference/wizard-employee-step7-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 245 | wizard-employee-step8 | dark | `desktop-shell-reference/wizard-employee-step8-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 246 | wizard-employee-step8 | light | `desktop-shell-reference/wizard-employee-step8-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 247 | wizard-employee-step9 | dark | `desktop-shell-reference/wizard-employee-step9-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 248 | wizard-employee-step9 | light | `desktop-shell-reference/wizard-employee-step9-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 249 | wizard-invoice-step1 | dark | `desktop-shell-reference/wizard-invoice-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 250 | wizard-invoice-step1 | light | `desktop-shell-reference/wizard-invoice-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 251 | wizard-invoice-step2 | dark | `desktop-shell-reference/wizard-invoice-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 252 | wizard-invoice-step2 | light | `desktop-shell-reference/wizard-invoice-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 253 | wizard-invoice-step3 | dark | `desktop-shell-reference/wizard-invoice-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 254 | wizard-invoice-step3 | light | `desktop-shell-reference/wizard-invoice-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 255 | wizard-product-edit-history-step1 | dark | `desktop-shell-reference/wizard-product-edit-history-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 256 | wizard-product-edit-history-step1 | light | `desktop-shell-reference/wizard-product-edit-history-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 257 | wizard-product-edit-history-step2 | dark | `desktop-shell-reference/wizard-product-edit-history-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 258 | wizard-product-edit-history-step2 | light | `desktop-shell-reference/wizard-product-edit-history-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 259 | wizard-product-edit-history-step3 | dark | `desktop-shell-reference/wizard-product-edit-history-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 260 | wizard-product-edit-history-step3 | light | `desktop-shell-reference/wizard-product-edit-history-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 261 | wizard-product-step1 | dark | `desktop-shell-reference/wizard-product-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 262 | wizard-product-step1 | light | `desktop-shell-reference/wizard-product-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 263 | wizard-product-step2 | dark | `desktop-shell-reference/wizard-product-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 264 | wizard-product-step2 | light | `desktop-shell-reference/wizard-product-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 265 | wizard-product-step3 | dark | `desktop-shell-reference/wizard-product-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 266 | wizard-product-step3 | light | `desktop-shell-reference/wizard-product-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 267 | wizard-product-step4 | dark | `desktop-shell-reference/wizard-product-step4-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 268 | wizard-product-step4 | light | `desktop-shell-reference/wizard-product-step4-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 269 | wizard-product-step5 | dark | `desktop-shell-reference/wizard-product-step5-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 270 | wizard-product-step5 | light | `desktop-shell-reference/wizard-product-step5-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 271 | wizard-quick-sale-step1 | dark | `desktop-shell-reference/wizard-quick-sale-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 272 | wizard-quick-sale-step1 | light | `desktop-shell-reference/wizard-quick-sale-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 273 | wizard-quick-sale-step2 | dark | `desktop-shell-reference/wizard-quick-sale-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 274 | wizard-quick-sale-step2 | light | `desktop-shell-reference/wizard-quick-sale-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 275 | wizard-quick-sale-step3 | dark | `desktop-shell-reference/wizard-quick-sale-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 276 | wizard-quick-sale-step3 | light | `desktop-shell-reference/wizard-quick-sale-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 277 | wizard-quote-step1 | dark | `desktop-shell-reference/wizard-quote-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 278 | wizard-quote-step1 | light | `desktop-shell-reference/wizard-quote-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 279 | wizard-quote-step2 | dark | `desktop-shell-reference/wizard-quote-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 280 | wizard-quote-step2 | light | `desktop-shell-reference/wizard-quote-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 281 | wizard-quote-step3 | dark | `desktop-shell-reference/wizard-quote-step3-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 282 | wizard-quote-step3 | light | `desktop-shell-reference/wizard-quote-step3-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 283 | wizard-receipt-step1 | dark | `desktop-shell-reference/wizard-receipt-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 284 | wizard-receipt-step1 | light | `desktop-shell-reference/wizard-receipt-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 285 | wizard-receipt-step2 | dark | `desktop-shell-reference/wizard-receipt-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 286 | wizard-receipt-step2 | light | `desktop-shell-reference/wizard-receipt-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 287 | wizard-refund-wr-step1 | dark | `desktop-shell-reference/wizard-refund-wr-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 288 | wizard-refund-wr-step1 | light | `desktop-shell-reference/wizard-refund-wr-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 289 | wizard-refund-wr-step2 | dark | `desktop-shell-reference/wizard-refund-wr-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 290 | wizard-refund-wr-step2 | light | `desktop-shell-reference/wizard-refund-wr-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 291 | wizard-stock-adjust-step1 | dark | `desktop-shell-reference/wizard-stock-adjust-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 292 | wizard-stock-adjust-step1 | light | `desktop-shell-reference/wizard-stock-adjust-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 293 | wizard-stock-adjust-step2 | dark | `desktop-shell-reference/wizard-stock-adjust-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 294 | wizard-stock-adjust-step2 | light | `desktop-shell-reference/wizard-stock-adjust-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 295 | wizard-vendor-step1 | dark | `desktop-shell-reference/wizard-vendor-step1-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 296 | wizard-vendor-step1 | light | `desktop-shell-reference/wizard-vendor-step1-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 297 | wizard-vendor-step2 | dark | `desktop-shell-reference/wizard-vendor-step2-dark.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |
+| 298 | wizard-vendor-step2 | light | `desktop-shell-reference/wizard-vendor-step2-light.png` | `Non capturé au même état` | — | — | Non mesuré | Non vérifié | Non vérifié | Non vérifié | ❌ capture manquante |

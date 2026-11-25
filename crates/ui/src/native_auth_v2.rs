@@ -372,11 +372,7 @@ async fn run(
 }
 
 pub(crate) fn start(app: &mut AtlasApp) {
-    if app.native_login.active
-        || app.browser_login.active
-        || app.login.busy
-        || app.requires_password
-    {
+    if app.native_login.active || app.login.busy || app.requires_password {
         return;
     }
     let Some(base) = app.server_store.selected_url().map(str::to_owned) else {

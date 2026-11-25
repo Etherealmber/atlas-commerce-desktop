@@ -1015,17 +1015,6 @@ impl AtlasApp {
         }
     }
 
-    /// Display the pre-authorization waiting state without making a request.
-    #[cfg(feature = "visual-fixtures")]
-    #[doc(hidden)]
-    pub fn show_fictional_browser_wait(&mut self) {
-        self.browser_login = crate::browser_auth::fictional_wait(
-            self.server_store.selected_url().map(str::to_owned),
-        );
-        self.login.busy = true;
-        self.login.browser_auto_started = true;
-    }
-
     /// Show an offline, fictional stock report in the visual fixture only.
     #[cfg(feature = "visual-fixtures")]
     #[doc(hidden)]
@@ -1668,8 +1657,6 @@ impl AtlasApp {
                 && !self.requires_password
                 && self.login.job_link.is_none()
             {
-                // A deep link supersedes an in-flight hosted login.
-                crate::browser_auth::cancel(self);
                 crate::native_auth_v2::cancel(self);
                 self.qr = Default::default();
                 self.login.pending_link = Some(link);
@@ -1679,7 +1666,6 @@ impl AtlasApp {
                 && !self.requires_password
                 && self.login.job_link.is_none()
             {
-                crate::browser_auth::cancel(self);
                 crate::native_auth_v2::cancel(self);
                 self.login.pending_link = None;
                 self.qr = Default::default();
@@ -2230,10 +2216,6 @@ impl Resident for AtlasApp {
 
     fn window_gone(&mut self) {
         self.show_requested = false;
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        if self.browser_login.embedded {
-            crate::browser_auth::cancel(self);
-        }
     }
 
     fn headless_frame(&mut self, ctx: &Context) -> Headless {
@@ -2305,12 +2287,6 @@ pub struct EframeShell {
     #[cfg(target_os = "windows")]
     material_request: Option<(bool, bool)>,
     first_frame: bool,
-    #[cfg(target_os = "windows")]
-    login_view: Option<crate::webview_auth::LoginView>,
-    #[cfg(target_os = "linux")]
-    login_view: Option<crate::webview_auth_linux::LoginView>,
-    #[cfg(target_os = "macos")]
-    login_view: Option<atlas_webview_macos::LoginView>,
 }
 
 impl EframeShell {
@@ -2347,8 +2323,6 @@ impl EframeShell {
             material: None,
             #[cfg(target_os = "windows")]
             material_request: None,
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            login_view: None,
         }
     }
 }
@@ -2490,132 +2464,6 @@ impl eframe::App for EframeShell {
         if let Some(at) = self.held.update.next_check_at {
             ctx.request_repaint_after(at.saturating_duration_since(Instant::now()));
         }
-        #[cfg(target_os = "windows")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else if let Some(window) = frame.winit_window() {
-                let size = window.inner_size();
-                let geometry = (size.width, size.height, window.scale_factor());
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    match crate::webview_auth::LoginView::open(
-                        window.as_ref(),
-                        geometry,
-                        &url,
-                        &server,
-                        &self.held.paths.dirs.cache,
-                    ) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
-                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = &self.login_view {
-                    view.resize(geometry.0, geometry.1, geometry.2);
-                }
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else {
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    let code = self
-                        .held
-                        .browser_login
-                        .pairing_code
-                        .as_deref()
-                        .unwrap_or_default();
-                    match crate::webview_auth_linux::LoginView::open(&url, &server, code) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(crate::webview_auth_linux::UNAVAILABLE) => {
-                            crate::browser_auth::fallback_to_browser(
-                                &mut self.held,
-                                url,
-                                crate::webview_auth_linux::UNAVAILABLE,
-                            );
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = self.login_view.as_mut() {
-                    match view.pump() {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            self.login_view = None;
-                            crate::browser_auth::cancel(&mut self.held);
-                        }
-                        Err(()) => {
-                            self.login_view = None;
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(
-                                "Connexion intégrée indisponible. Utilisez le navigateur système."
-                                    .to_owned(),
-                            );
-                        }
-                    }
-                }
-                if self.login_view.is_some() {
-                    ctx.request_repaint_after(Duration::from_millis(16));
-                }
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            if !crate::browser_auth::embedded_active(&self.held) {
-                self.login_view = None;
-            } else if let Some(window) = frame.winit_window() {
-                let size = window.inner_size();
-                let geometry = (size.width, size.height, window.scale_factor());
-                if let Some(url) = self.held.browser_login.pending_url.take() {
-                    let server = self
-                        .held
-                        .server_store
-                        .selected_url()
-                        .unwrap_or_default()
-                        .to_owned();
-                    match atlas_webview_macos::LoginView::open(
-                        window.as_ref(),
-                        geometry,
-                        &url,
-                        &server,
-                    ) {
-                        Ok(view) => self.login_view = Some(view),
-                        Err(message) if crate::browser_auth::fallback_allowed(message) => {
-                            crate::browser_auth::fallback_to_browser(&mut self.held, url, message);
-                        }
-                        Err(message) => {
-                            crate::browser_auth::cancel(&mut self.held);
-                            self.held.login.error = Some(message.to_owned());
-                        }
-                    }
-                }
-                if let Some(view) = &self.login_view {
-                    view.resize(geometry.0, geometry.1, geometry.2);
-                }
-            }
-        }
         // Unlike viewport.visible(), this also handles minimized, occluded,
         // and hidden windows. Consume the request only in the windowed loop:
         // the headless loop needs it to recreate the window instead.
@@ -2628,16 +2476,7 @@ impl eframe::App for EframeShell {
         // Keep repainting while any job runs, so spinners and poll results
         // appear without user input.
         if self.held.busy() {
-            // React promptly to the verified authorization URL, without
-            // continuously redrawing at high frequency during browser polling.
-            let delay = if self.held.browser_login.active
-                && self.held.browser_login.pairing_code.is_none()
-            {
-                30
-            } else {
-                250
-            };
-            ctx.request_repaint_after(Duration::from_millis(delay));
+            ctx.request_repaint_after(Duration::from_millis(250));
         }
     }
 
@@ -2686,54 +2525,6 @@ impl eframe::App for EframeShell {
                         },
                     );
                 });
-        }
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        if self.login_view.is_some() && crate::browser_auth::embedded_active(&self.held) {
-            #[cfg(target_os = "windows")]
-            let (loading, offer_browser) = self
-                .login_view
-                .as_ref()
-                .map(|view| (view.loading(), view.waiting_long()))
-                .unwrap_or_default();
-            #[cfg(target_os = "macos")]
-            let (loading, offer_browser) = (false, false);
-            #[cfg(target_os = "windows")]
-            if loading || !offer_browser {
-                ctx.request_repaint_after(Duration::from_millis(250));
-            }
-            let response = egui::CentralPanel::default()
-                .frame(
-                    egui::Frame::NONE
-                        .fill(palette.window)
-                        .inner_margin(egui::Margin::symmetric(16, 0)),
-                )
-                .show(ui, |ui| {
-                    // The WebView begins 48 points below the title bar.
-                    // Keep native controls in that reserved strip.
-                    ui.set_max_height(48.0);
-                    screens::auth::draw_embedded_header(
-                        &mut self.held,
-                        ui,
-                        &palette,
-                        loading,
-                        offer_browser,
-                    )
-                });
-            #[cfg(target_os = "windows")]
-            if response.inner
-                && let Some(view) = self.login_view.take()
-            {
-                let url = view.authorization_url();
-                drop(view);
-                crate::browser_auth::fallback_to_browser(
-                    &mut self.held,
-                    url,
-                    "Connexion poursuivie dans le navigateur.",
-                );
-            }
-            #[cfg(target_os = "macos")]
-            let _ = response;
-            return;
         }
         if matches!(self.held.screen, Screen::Shell(_)) {
             // The shell creates its own top/left/central panels; wrapping it

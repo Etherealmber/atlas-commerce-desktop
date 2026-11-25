@@ -22,14 +22,10 @@ class NativeLoginGuardTests(unittest.TestCase):
         self.assertIn('"Bon retour"', layout)
         self.assertIn('"Connexion avec un QR"', layout)
 
-    def test_old_browser_flow_cannot_open_a_browser(self):
-        browser = (ROOT / "crates/ui/src/browser_auth.rs").read_text()
-        for forbidden in ("open::", "webbrowser", "ShellExecute", "xdg-open"):
-            self.assertNotIn(forbidden, browser)
-        embedded = browser.split("pub(crate) fn embedded_active(", 1)[1].split(
-            "pub(crate) fn poll(", 1
-        )[0]
-        self.assertIn("false", embedded)
+    def test_hosted_auth_modules_are_absent(self):
+        ui = ROOT / "crates/ui/src"
+        self.assertFalse((ui / ("browser_" + "auth.rs")).exists())
+        self.assertFalse(list(ui.glob("webview_" + "auth*.rs")))
 
     def test_legacy_qr_view_does_not_open_browser(self):
         auth = (ROOT / "crates/ui/src/screens/auth.rs").read_text()

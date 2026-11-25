@@ -10,7 +10,6 @@ members = [
     "crates/auth-core",
     "crates/api",
     "crates/ui",
-    "crates/webview-macos",
     "crates/webview-linux",
     "crates/app",
 ]

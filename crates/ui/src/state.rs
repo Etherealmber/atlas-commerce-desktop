@@ -528,7 +528,6 @@ pub struct AtlasApp {
     pub requires_password: bool,
     /// Browser-v1 tokens remain in memory until OS-vault storage is available.
     pub transient_session: bool,
-    pub(crate) browser_login: crate::browser_auth::BrowserLogin,
     pub(crate) native_login: crate::native_auth_v2::NativeLogin,
     pub(crate) vault_worker: atlas_core::vault_worker::VaultWorker,
     pub(crate) vault_restore: Option<VaultRestore>,
@@ -763,7 +762,6 @@ impl AtlasApp {
             server_form: ServerSetupForm::default(),
             requires_password: false,
             transient_session: false,
-            browser_login: Default::default(),
             native_login: Default::default(),
             vault_worker,
             vault_restore: None,

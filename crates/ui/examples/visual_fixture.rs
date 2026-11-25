@@ -175,11 +175,6 @@ fn build(route: &str) -> AtlasApp {
         }
     }
     #[cfg(feature = "visual-fixtures")]
-    if route == "login-wait" {
-        app.login.error = None;
-        app.show_fictional_browser_wait();
-    }
-    #[cfg(feature = "visual-fixtures")]
     if route == "login-v2" {
         app.login.error = None;
         app.show_fictional_native_v2();
