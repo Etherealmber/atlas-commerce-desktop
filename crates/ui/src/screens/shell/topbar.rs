@@ -191,14 +191,12 @@ pub(super) fn draw_titlebar(
         ui.set_clip_rect(ui.clip_rect().intersect(dock));
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            if t < 0.25 {
-                if show_back {
-                    let back = widgets::icon_circle_button(ui, palette, Icon::ArrowLeft, true)
-                        .on_hover_text(t!(app.locale, "Back"));
-                    focus_ids.push(back.id);
-                    if back.clicked() {
-                        back_to_parent(app, route);
-                    }
+            if t < 0.25 && show_back {
+                let back = widgets::icon_circle_button(ui, palette, Icon::ArrowLeft, true)
+                    .on_hover_text(t!(app.locale, "Back"));
+                focus_ids.push(back.id);
+                if back.clicked() {
+                    back_to_parent(app, route);
                 }
             }
             let title_space = if t < 0.25 {

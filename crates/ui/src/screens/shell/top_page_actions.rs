@@ -240,27 +240,27 @@ pub(super) fn draw(app: &mut AtlasApp, ui: &mut egui::Ui, palette: &Palette) {
                         app.attendance.last_error.as_ref().is_some_and(|error| {
                             error.code.as_deref() == Some("ATTENDANCE_DISABLED")
                         });
-                    if disabled {
-                        if primary_button(
+                    if disabled
+                        && primary_button(
                             ui,
                             t!(app.locale, "Enable now"),
                             palette,
                             !app.attendance.loading
                                 && !app.attendance_action.loading
                                 && app.attendance_action.error.is_none(),
-                        ) {
-                            app.confirm_dialog = Some(Confirm {
-                                title: t!(app.locale, "Enable attendance?").into_owned(),
-                                body: t!(
-                                    app.locale,
-                                    "This enables attendance for the entire company."
-                                )
-                                .into_owned(),
-                                confirm_label: t!(app.locale, "Enable now").into_owned(),
-                                danger: false,
-                                action: ConfirmAction::EnableAttendance,
-                            });
-                        }
+                        )
+                    {
+                        app.confirm_dialog = Some(Confirm {
+                            title: t!(app.locale, "Enable attendance?").into_owned(),
+                            body: t!(
+                                app.locale,
+                                "This enables attendance for the entire company."
+                            )
+                            .into_owned(),
+                            confirm_label: t!(app.locale, "Enable now").into_owned(),
+                            danger: false,
+                            action: ConfirmAction::EnableAttendance,
+                        });
                     }
                     if secondary_button(ui, t!(app.locale, "Refresh"), palette) {
                         app.load_attendance();
